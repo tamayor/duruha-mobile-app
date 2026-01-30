@@ -1,1 +1,0 @@
-dirikita frontend
