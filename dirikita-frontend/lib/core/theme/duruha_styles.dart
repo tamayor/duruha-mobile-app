@@ -36,11 +36,11 @@ class DuruhaStyles {
       ),
       hintText: hintText,
       errorText: errorText,
-      errorStyle: TextStyle(color: colorScheme.onError),
+      errorStyle: TextStyle(color: colorScheme.error),
 
       filled: true,
       // Background is 30% Surface Container
-      fillColor: colorScheme.primaryContainer.withOpacity(0.3),
+      fillColor: colorScheme.primaryContainer.withValues(alpha: 0.3),
 
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
 

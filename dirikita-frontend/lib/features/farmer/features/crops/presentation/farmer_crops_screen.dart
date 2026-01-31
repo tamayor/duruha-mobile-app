@@ -1,6 +1,6 @@
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/features/my_crops/data/selected_crops_repository.dart';
-import 'package:duruha/features/farmer/features/my_crops/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/features/crops/data/selected_crops_repository.dart';
+import 'package:duruha/features/farmer/features/crops/domain/selected_crop_summary.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
 import 'package:flutter/material.dart';
 
@@ -147,9 +147,9 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
                           labelBuilder: (SortOption option) {
                             switch (option) {
                               case SortOption.rankAsc:
-                                return 'Rank (High to Low)';
+                                return 'Rank (0-9)';
                               case SortOption.rankDesc:
-                                return 'Rank (Low to High)';
+                                return 'Rank (9-0)';
                               case SortOption.nameAsc:
                                 return 'Name (A-Z)';
                               case SortOption.nameDesc:

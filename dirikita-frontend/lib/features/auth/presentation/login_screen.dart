@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:duruha/features/auth/data/auth_repository.dart';
+import 'package:duruha/features/auth/domain/auth_models.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -13,7 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  void _login() {
+  Future<void> _login() async {
     // Basic Validation
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       DuruhaSnackBar.showError(context, "Please enter both email and password");
@@ -25,21 +27,30 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     // API Payload Preparation
-    final loginData = {
-      'email': _emailController.text.trim(),
-      'password': _passwordController.text,
-    };
+    final request = LoginRequest(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+    );
 
-    debugPrint('🚀 [API PREP] Login Payload: $loginData');
+    debugPrint('🚀 [API PREP] Login Payload: ${request.toJson()}');
 
-    // Simulate login delay
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      final authRepo = AuthRepository();
+      await authRepo.login(request);
+
       if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
       Navigator.pushReplacementNamed(context, '/');
-    });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      DuruhaSnackBar.showError(
+        context,
+        "Login failed. Please check your credentials.",
+      );
+    }
   }
 
   @override

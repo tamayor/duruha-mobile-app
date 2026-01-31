@@ -64,7 +64,7 @@ class FarmerNavigation extends StatelessWidget {
         selectedIcon: Icons.dashboard,
       ),
       _NavItem(
-        label: 'My Crops',
+        label: 'Crops',
         route: '/farmer/crops',
         icon: Icons.agriculture_outlined,
         selectedIcon: Icons.agriculture,
@@ -72,14 +72,14 @@ class FarmerNavigation extends StatelessWidget {
       _NavItem(
         label: 'Biz',
         route: '/farmer/biz',
-        icon: Icons.list_alt_outlined,
-        selectedIcon: Icons.list_alt,
+        icon: Icons.attach_money,
+        selectedIcon: Icons.attach_money,
       ),
       _NavItem(
-        label: 'Monitor',
-        route: '/farmer/monitor',
-        icon: Icons.monitor_outlined,
-        selectedIcon: Icons.monitor,
+        label: 'Programs',
+        route: '/farmer/programs',
+        icon: Icons.list_alt_outlined,
+        selectedIcon: Icons.list_alt,
       ),
       _NavItem(
         label: 'Profile',

@@ -45,7 +45,7 @@ class DuruhaDropdown<T> extends StatelessWidget {
     final Color contentColor = colorScheme.onPrimary;
 
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       isExpanded: true,
       // We assume your decoration here uses the Primary color as the 'fillColor'
       decoration:
@@ -58,7 +58,7 @@ class DuruhaDropdown<T> extends StatelessWidget {
             fillColor: colorScheme
                 .primary, // The background is now the Primary brand color
             // Label text needs to be visible on Primary
-            labelStyle: TextStyle(color: contentColor.withOpacity(0.8)),
+            labelStyle: TextStyle(color: contentColor.withValues(alpha: 0.8)),
             floatingLabelStyle: TextStyle(color: contentColor),
             // Icon color in the decoration
             prefixIconColor: contentColor,

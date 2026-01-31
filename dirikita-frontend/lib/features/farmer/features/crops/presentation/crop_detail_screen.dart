@@ -1,10 +1,10 @@
 import 'package:duruha/shared/produce/data/produce_repository.dart';
-import 'package:duruha/core/theme/duruha_status.dart';
+import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/features/my_crops/data/crop_details_repository.dart';
-import 'package:duruha/features/farmer/features/my_crops/data/selected_crops_repository.dart';
-import 'package:duruha/features/farmer/features/my_crops/domain/crop_detail_models.dart';
-import 'package:duruha/features/farmer/features/my_crops/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/features/crops/data/crop_details_repository.dart';
+import 'package:duruha/features/farmer/features/crops/data/selected_crops_repository.dart';
+import 'package:duruha/features/farmer/features/crops/domain/crop_detail_models.dart';
+import 'package:duruha/features/farmer/features/crops/domain/selected_crop_summary.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -89,7 +89,7 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
 
                       shadows: [
                         Shadow(
-                          color: Colors.black.withOpacity(0.5),
+                          color: Colors.black.withValues(alpha: 0.5),
                           blurRadius: 10,
                         ),
                       ],
@@ -173,20 +173,72 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
 
                       const SizedBox(height: 24),
 
-                      // PLEDGE HISTORY
-                      DuruhaSectionContainer(
-                        title: "Pledge History",
-                        children: [
-                          ...history.map((p) => _buildPledgeTile(context, p)),
-                          if (history.isEmpty)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(16.0),
-                                child: Text("No pledges yet."),
+                      // PLEDGE HISTORY (Sold Only)
+                      () {
+                        final soldHistory = history
+                            .where((p) => p.status == 'Sold')
+                            .toList();
+                        final totalEarnings = soldHistory.fold<double>(
+                          0,
+                          (sum, p) => sum + (p.amount * (p.price ?? 0)),
+                        );
+
+                        return DuruhaSectionContainer(
+                          title: "Sales History",
+                          subtitle:
+                              "Past records of harvested and sold pledges.",
+                          action: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.green.withValues(alpha: 0.3),
                               ),
                             ),
-                        ],
-                      ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  "TOTAL EARNINGS",
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade700,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                Text(
+                                  DuruhaFormatter.formatCurrency(totalEarnings),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          children: [
+                            ...soldHistory.map(
+                              (p) => _buildPledgeTile(context, p),
+                            ),
+                            if (soldHistory.isEmpty)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(24.0),
+                                  child: Text(
+                                    "No sales records yet.",
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      }(),
 
                       const SizedBox(height: 80), // Bottom padding
                     ],
@@ -196,14 +248,6 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
             ],
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // Pre-select crop? Mock implementation just goes to form
-          Navigator.pushNamed(context, '/farmer/pledge/create');
-        },
-        icon: const Icon(Icons.add),
-        label: const Text("New Pledge"),
       ),
     );
   }
@@ -220,7 +264,7 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
               context,
               width,
               "Market Price",
-              "₱${p.priceMinHistorical.toStringAsFixed(0)} - ₱${p.priceMaxHistorical.toStringAsFixed(0)}",
+              "${DuruhaFormatter.formatCurrency(p.priceMinHistorical, decimalDigits: 0)} - ${DuruhaFormatter.formatCurrency(p.priceMaxHistorical, decimalDigits: 0)}",
               Icons.attach_money,
             ),
             _buildInfoCard(
@@ -241,7 +285,7 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
               context,
               width,
               "Fair Guide",
-              "₱${p.currentFairMarketGuideline.toStringAsFixed(0)}/${p.unitOfMeasure}",
+              "${DuruhaFormatter.formatCurrency(p.currentFairMarketGuideline, decimalDigits: 0)}/${p.unitOfMeasure}",
               Icons.balance,
             ),
           ],
@@ -262,9 +306,9 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
       width: width,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,64 +335,74 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
 
   Widget _buildPledgeTile(BuildContext context, CropPledgeHistoryItem p) {
     final theme = Theme.of(context);
-    final statusColor = DuruhaStatus.getColor(p.status);
-    final isPending = p.status == DuruhaStatus.pending;
+    final colorScheme = theme.colorScheme;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isPending ? Icons.hourglass_empty : Icons.check,
-              color: statusColor,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "${p.amount} ${p.unit} • ${p.variety}",
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "${DuruhaFormatter.formatNumber(p.amount)} ${p.unit}",
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                    if (p.price != null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            DuruhaFormatter.formatCurrency(p.amount * p.price!),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                          Text(
+                            "@ ₱${DuruhaFormatter.formatNumber(p.price!)}/unit",
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
-                Text(
-                  DateFormat('MMM d, yyyy').format(p.date),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      p.variety,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      DateFormat('MMM d, yyyy').format(p.date),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: statusColor.withOpacity(0.3)),
-            ),
-            child: Text(
-              p.status,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: statusColor,
-                fontWeight: FontWeight.bold,
-              ),
             ),
           ),
         ],

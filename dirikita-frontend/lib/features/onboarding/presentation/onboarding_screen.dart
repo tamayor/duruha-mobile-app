@@ -5,6 +5,7 @@ import 'package:duruha/features/onboarding/presentation/components/terms_and_con
 import 'package:duruha/features/onboarding/presentation/components/role_selection_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/basic_info_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/onboarding_success_view.dart';
+
 import 'package:duruha/main.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/core/data/dialects.dart';
@@ -54,13 +55,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   List<String> _waterSources = [];
 
   // Dialect Data
-  List<String> _selectedDialects = [];
+  final List<String> _selectedDialects = [];
   final List<String> _dialectOptions = dialectOptions;
 
   // Logistics & Payment
-  List<String> _paymentMethods = [];
+  final List<String> _paymentMethods = [];
   String? _deliveryWindow;
-  List<String> _operatingDays = [];
+  final List<String> _operatingDays = [];
   final List<String> _daysOptions = [
     'Mon',
     'Tue',

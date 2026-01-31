@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:duruha/features/auth/data/auth_repository.dart';
+import 'package:duruha/features/auth/domain/auth_models.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -15,7 +17,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
 
-  void _signup() {
+  Future<void> _signup() async {
     // Basic Validation
     if (_nameController.text.isEmpty ||
         _emailController.text.isEmpty ||
@@ -35,24 +37,30 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     // API Payload Preparation
-    final signupData = {
-      'name': _nameController.text.trim(),
-      'email': _emailController.text.trim(),
-      'password': _passwordController.text, // Hash this in real app/backend
-    };
+    final request = SignupRequest(
+      fullName: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      confirmPassword: _confirmPasswordController.text,
+    );
 
-    debugPrint('🚀 [API PREP] Signup Payload: $signupData');
+    debugPrint('🚀 [API PREP] Signup Payload: ${request.toJson()}');
 
-    // Simulate signup delay
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      // Call Repository
+      final authRepo = AuthRepository();
+      await authRepo.signup(request);
+
       if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
 
       // Navigate to Onboarding
       Navigator.pushReplacementNamed(context, '/onboarding');
-    });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      DuruhaSnackBar.showError(context, "Signup failed. Please try again.");
+    }
   }
 
   @override

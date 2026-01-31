@@ -1,4 +1,6 @@
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
+import 'package:duruha/shared/produce/domain/produce_model.dart';
+import 'package:duruha/shared/user/domain/user_models.dart';
 
 class FarmerProfileRepositoryImpl {
   Future<FarmerProfile> getFarmerProfile(String farmerId) async {
@@ -21,7 +23,42 @@ class FarmerProfileRepositoryImpl {
       landArea: 2.5,
       accessibilityType: 'Truck',
       waterSources: ['Irrigation Canal', 'Rain Catchment'],
+      pledgedCrops: List.generate(
+        10,
+        (i) => ProduceItem(
+          id: 'prod_${i + 1}',
+          nameEnglish: 'Crop ${i + 1}',
+          nameScientific: 'Scientific Name',
+          category: ProduceCategory.fruitVeg,
+          namesByDialect: {},
+          availableVarieties: [],
+          imageHeroUrl: '',
+          imageThumbnailUrl: '',
+          iconUrl: '',
+          gradeGuideUrl: '',
+          unitOfMeasure: 'kg',
+          priceMinHistorical: 0,
+          priceMaxHistorical: 0,
+          currentFairMarketGuideline: 0,
+          perishabilityIndex: 1,
+          shelfLifeDays: 7,
+          requiresColdChain: false,
+          avgWeightPerUnitKg: 1,
+          growingCycleDays: 30,
+          seasonalityStart: 'Jan',
+          seasonalityEnd: 'Dec',
+          isNativeToRegion: true,
+        ),
+      ),
+      trustScore: 982,
+      cropPoints: 14500,
+      unlockedBadgeIds: [
+        'legacy_lvl_3',
+        'active_lvl_2',
+        'titan_lvl_4',
+        'spec_lvl_4',
+        'trust_lvl_3',
+      ],
     );
-    ;
   }
 }

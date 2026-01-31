@@ -1,6 +1,7 @@
 import 'package:duruha/core/theme/app_theme.dart';
 import 'package:duruha/features/auth/presentation/login_screen.dart';
 import 'package:duruha/features/auth/presentation/signup_screen.dart';
+
 import 'package:duruha/features/farmer/shared/presentation/create_pledge_screen.dart';
 import 'package:duruha/features/landing/presentation/landing_screen.dart';
 import 'package:duruha/features/onboarding/presentation/onboarding_screen.dart';
@@ -11,7 +12,14 @@ import 'package:duruha/features/farmer/features/farm/presentation/farmer_dashboa
 import 'package:duruha/features/farmer/features/farm/presentation/crop_study_screen.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_navigation.dart';
-import 'package:duruha/features/farmer/features/my_crops/presentation/farmer_crops_screen.dart';
+import 'package:duruha/features/farmer/features/crops/presentation/farmer_crops_screen.dart';
+import 'package:duruha/features/farmer/features/crops/presentation/crop_detail_screen.dart';
+import 'package:duruha/features/farmer/features/monitor/presentation/pledge_monitor_screen.dart';
+import 'package:duruha/features/farmer/features/monitor/presentation/pledge_detail_screen.dart';
+import 'package:duruha/features/farmer/features/biz/presentation/biz_screen.dart';
+import 'package:duruha/features/farmer/features/programs/presentation/programs_screen.dart';
+import 'package:duruha/features/farmer/features/profile/presentation/ratings_screen.dart';
+import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
 // Placeholder for missing screens
@@ -38,7 +46,7 @@ class DuruhaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, mode, __) {
+      builder: (_, mode, _) {
         return MaterialApp(
           title: 'Duruha',
           theme: DuruhaTheme.lightTheme,
@@ -133,13 +141,34 @@ class DuruhaApp extends StatelessWidget {
               case '/farmer/crops':
                 screen = const FarmerCropsScreen();
                 break;
+              case '/farmer/biz':
+                screen = const FarmerBizScreen();
+                break;
+              case '/farmer/monitor':
+                screen = const MonitorPledgeScreen();
+                break;
+              case '/farmer/programs':
+                screen = const FarmerProgramsScreen();
+                break;
+              case '/farmer/profile/ratings':
+                screen = const FarmerProfileRatingsScreen();
+                break;
               default:
-                print('Navigating to default: $routeName');
+                if (routeName.startsWith('/farmer/biz/monitor/')) {
+                  final id = routeName.replaceFirst('/farmer/biz/monitor/', '');
+                  final pledge = args is HarvestPledge ? args : null;
+                  screen = PledgeDetailScreen(pledgeId: id, pledge: pledge);
+                } else if (routeName.startsWith('/farmer/biz/crops/')) {
+                  final id = routeName.replaceFirst('/farmer/biz/crops/', '');
+                  screen = CropDetailScreen(cropId: id);
+                } else {
+                  //  print('Navigating to default: $routeName');
+                }
             }
             if (screen != null) {
               return PageRouteBuilder(
                 settings: settings,
-                pageBuilder: (_, __, ___) => screen!,
+                pageBuilder: (_, _, _) => screen!,
                 transitionDuration: Duration.zero,
                 reverseTransitionDuration: Duration.zero,
               );

@@ -1,6 +1,3 @@
-import 'package:duruha/shared/produce/data/produce_repository.dart';
-import 'package:duruha/shared/user/domain/user_models.dart';
-
 class Produce {
   // 1. Core Identity
   final String id;

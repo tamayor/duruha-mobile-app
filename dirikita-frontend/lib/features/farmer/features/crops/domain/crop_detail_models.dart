@@ -5,6 +5,7 @@ class CropPledgeHistoryItem {
   final String unit;
   final String status;
   final String variety;
+  final double? price;
 
   CropPledgeHistoryItem({
     required this.id,
@@ -13,5 +14,6 @@ class CropPledgeHistoryItem {
     required this.unit,
     required this.status,
     required this.variety,
+    this.price,
   });
 }

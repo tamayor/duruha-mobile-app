@@ -4,6 +4,7 @@ enum DuruhaContainerStyle { filled, outlined }
 
 class DuruhaSectionContainer extends StatelessWidget {
   final String? title;
+  final String? subtitle;
   final Widget? action;
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
@@ -20,6 +21,7 @@ class DuruhaSectionContainer extends StatelessWidget {
   const DuruhaSectionContainer({
     super.key,
     this.title,
+    this.subtitle,
     this.action,
     required this.children,
     this.padding = const EdgeInsets.all(16),
@@ -39,13 +41,13 @@ class DuruhaSectionContainer extends StatelessWidget {
 
     // Determine Background Color
     final Color? effectiveBgColor = style == DuruhaContainerStyle.filled
-        ? (backgroundColor ?? colorScheme.surfaceContainerLow.withOpacity(0.5))
+        ? (backgroundColor ?? colorScheme.surfaceContainerLow.withValues(alpha: 0.5))
         : null;
 
     // Determine Border
     Border? border;
     if (style == DuruhaContainerStyle.outlined) {
-      final Color borderColor = colorScheme.outline.withOpacity(0.2);
+      final Color borderColor = colorScheme.outline.withValues(alpha: 0.2);
       border = Border(
         top: borderTop ? BorderSide(color: borderColor) : BorderSide.none,
         bottom: borderBottom ? BorderSide(color: borderColor) : BorderSide.none,
@@ -55,7 +57,7 @@ class DuruhaSectionContainer extends StatelessWidget {
     } else {
       // Preserving previous 'filled' behavior which had a subtle border:
       border = Border.all(
-        color: colorScheme.outline.withOpacity(0.2),
+        color: colorScheme.outline.withValues(alpha: 0.2),
         width: 1,
       );
     }
@@ -78,12 +80,24 @@ class DuruhaSectionContainer extends StatelessWidget {
               children: [
                 if (title != null)
                   Expanded(
-                    child: Text(
-                      title!,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title!,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                        if (subtitle != null)
+                          Text(
+                            subtitle!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 if (action != null) action!,

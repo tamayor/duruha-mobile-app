@@ -1,3 +1,4 @@
+import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 
 import 'package:duruha/features/farmer/features/farm/data/study_repository.dart';
@@ -93,7 +94,11 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                   Image.network(
                     p.imageHeroUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(color: Colors.grey),
+                    // _ is context, __ is the error object, ___ is the stack trace
+                    errorBuilder: (_, _, _) => Container(
+                      color: Colors.grey.shade200,
+                      child: const Icon(Icons.broken_image, color: Colors.grey),
+                    ),
                   ),
                   Container(
                     decoration: BoxDecoration(
@@ -357,7 +362,7 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
             ),
             Text(
-              "${fulfilled.toInt()} / ${demand.toInt()} kg",
+              "${DuruhaFormatter.formatNumber(fulfilled.toInt())} / ${DuruhaFormatter.formatNumber(demand.toInt())} kg",
               style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],

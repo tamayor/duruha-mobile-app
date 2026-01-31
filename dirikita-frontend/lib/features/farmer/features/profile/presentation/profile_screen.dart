@@ -1,9 +1,11 @@
+import 'package:duruha/core/helpers/duruha_formatter.dart';
+import 'package:duruha/core/widgets/duruha_theme_toggle_button.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
 import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
-import 'package:duruha/shared/user/domain/user_models.dart';
+import 'package:duruha/core/data/duruha_badges.dart';
 
 class FarmerProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -122,6 +124,12 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                 ),
 
                 const SizedBox(height: 32),
+                // --- PERFORMANCE STATS ---
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: _buildPerformanceStats(context, profile),
+                ),
+                const SizedBox(height: 32),
 
                 // --- STATS / DETAILS CARD ---
                 Padding(
@@ -131,6 +139,14 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
 
                 const SizedBox(height: 32),
 
+                // --- BADGES PREVIEW ---
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: _buildBadgesPreview(context, profile),
+                ),
+
+                const SizedBox(height: 32),
+                DuruhaThemeToggleButton(),
                 // --- MENU OPTIONS ---
                 _buildMenuOption(
                   context,
@@ -140,15 +156,29 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                 ),
                 _buildMenuOption(
                   context,
-                  icon: Icons.notifications_outlined,
-                  title: "Notifications",
+                  icon: Icons.help_outline,
+                  title: "Help & Support",
                   onTap: () {},
                 ),
                 _buildMenuOption(
                   context,
-                  icon: Icons.help_outline,
-                  title: "Help & Support",
-                  onTap: () {},
+                  icon: Icons.insights_rounded,
+                  title: "Performance & Ratings",
+                  onTap: () {
+                    Navigator.pushNamed(context, '/farmer/profile/ratings');
+                  },
+                ),
+                _buildMenuOption(
+                  context,
+                  icon: Icons.list_alt_outlined,
+                  title: "Duruha Programs",
+                  onTap: () {
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/farmer/programs',
+                      (r) => false,
+                    );
+                  },
                 ),
                 const Divider(height: 48),
                 _buildMenuOption(
@@ -164,13 +194,190 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                     );
                   },
                 ),
-
                 const SizedBox(height: 40),
               ],
             ),
           );
         },
       ),
+    );
+  }
+
+  Widget _buildPerformanceStats(BuildContext context, FarmerProfile profile) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return InkWell(
+      onTap: () => Navigator.pushNamed(context, '/farmer/profile/ratings'),
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: colorScheme.outline.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: theme.shadowColor.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildStatColumn(
+                  context,
+                  label: "Trust Score",
+                  value: profile.trustScore.toString(),
+                  icon: Icons.verified_user_rounded,
+                  color: Colors.blue.shade700,
+                ),
+                _buildVerticalDivider(context),
+                _buildStatColumn(
+                  context,
+                  label: "Crop Points",
+                  value: DuruhaFormatter.formatNumber(profile.cropPoints),
+                  icon: Icons.stars_rounded,
+                  color: Colors.orange.shade700,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatColumn(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBadgesPreview(BuildContext context, FarmerProfile profile) {
+    final theme = Theme.of(context);
+    final earnedBadges = DuruhaBadges.all
+        .where((b) => profile.unlockedBadgeIds.contains(b.id))
+        .take(3)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Badges & Achievements",
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pushNamed(context, '/farmer/profile/ratings'),
+              child: const Text("View All"),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: earnedBadges.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final badge = earnedBadges[index];
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: badge.color.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(badge.icon, color: badge.color, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              badge.title,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.verified_rounded,
+                              color: badge.color,
+                              size: 14,
+                            ),
+                          ],
+                        ),
+                        Text(
+                          badge.criteria,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVerticalDivider(BuildContext context) {
+    return Container(
+      height: 40,
+      width: 1,
+      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
     );
   }
 
@@ -187,7 +394,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
       _DetailItem('Dialect', profile.dialect, Icons.language),
       _DetailItem(
         'Farm Size',
-        '${profile.landArea?.toStringAsFixed(1) ?? "0"} Ha',
+        '${profile.landArea != null ? DuruhaFormatter.formatNumber(profile.landArea!) : "0"} Ha',
         Icons.landscape,
       ),
       _DetailItem(
@@ -273,26 +480,34 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                item.value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  item.value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
-              ),
-              Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                Text(
+                  item.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          if (item.onTap != null)
+            Icon(
+              Icons.chevron_right,
+              size: 16,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
         ],
       ),
     );

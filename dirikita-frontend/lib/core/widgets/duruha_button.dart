@@ -39,7 +39,7 @@ class DuruhaButton extends StatelessWidget {
               onPressed: isLoading ? null : onPressed,
               style: FilledButton.styleFrom(
                 backgroundColor: colorScheme.primaryContainer,
-                foregroundColor: colorScheme.onPrimaryContainer,
+                foregroundColor: colorScheme.onPrimary,
                 shape: const StadiumBorder(),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 elevation: 2,

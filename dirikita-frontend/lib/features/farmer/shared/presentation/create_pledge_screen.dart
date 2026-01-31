@@ -3,6 +3,7 @@ import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
+import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -21,7 +22,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
   final _formKey = GlobalKey<FormState>();
   Produce? _selectedCrop;
   final List<String> _selectedVariants = [];
-  DateTime? _plantingDate;
+  DateTime? _harvestDate;
   final _quantityController = TextEditingController();
   String _selectedUnit = 'kg';
   bool _isSubmitting = false;
@@ -118,7 +119,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
 
               final date = DateTime(year, monthIndex, 1);
               setState(() {
-                _plantingDate = date;
+                _harvestDate = date;
                 _dateController.text = DateFormat('MMMM dd, yyyy').format(date);
               });
 
@@ -184,7 +185,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
   // --- LOGIC: DATE PICKER ---
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final initial = _plantingDate ?? now;
+    final initial = _harvestDate ?? now;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -207,7 +208,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
 
     if (picked != null) {
       setState(() {
-        _plantingDate = picked;
+        _harvestDate = picked;
         _dateController.text = DateFormat('MMMM dd, yyyy').format(picked);
       });
       _fetchDemand(picked);
@@ -253,7 +254,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
         cropId: _selectedCrop?.id,
         cropName: _selectedCrop?.nameEnglish ?? '',
         variants: _selectedVariants,
-        plantingDate: _plantingDate!,
+        harvestDate: _harvestDate!,
         quantity: double.tryParse(_quantityController.text) ?? 0,
         unit: _selectedUnit,
         farmerId: 'farmer-001',
@@ -360,7 +361,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
                         icon: Icons.calendar_today,
                         controller: _dateController,
                         validator: (v) =>
-                            _plantingDate == null ? 'Date is required' : null,
+                            _harvestDate == null ? 'Date is required' : null,
                       ),
                     ),
                   ),
@@ -492,11 +493,11 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
               // SECTION 3: PREVIEW (Conditional)
               if (_selectedCrop != null ||
                   _quantityController.text.isNotEmpty ||
-                  _plantingDate != null) ...[
+                  _harvestDate != null) ...[
                 DuruhaSectionContainer(
                   title: "Pledge Preview",
                   backgroundColor: theme.colorScheme.primaryContainer
-                      .withOpacity(0.3),
+                      .withValues(alpha: 0.3),
                   children: [
                     _buildPreviewRow(
                       "Target Market",
@@ -520,9 +521,9 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
                       "${_quantityController.text.isEmpty ? '-' : _quantityController.text} $_selectedUnit",
                     ),
                     _buildPreviewRow(
-                      "Planting Date",
-                      _plantingDate != null
-                          ? DateFormat('MMM d, yyyy').format(_plantingDate!)
+                      "Harvest Date",
+                      _harvestDate != null
+                          ? DateFormat('MMM d, yyyy').format(_harvestDate!)
                           : "-",
                     ),
                   ],
@@ -619,7 +620,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                "Market Forecast for ${DateFormat('MMMM dd, yyyy').format(_plantingDate!)}",
+                "Market Forecast for ${DateFormat('MMMM dd, yyyy').format(_harvestDate!)}",
                 style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.onPrimary,
@@ -744,7 +745,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
             Text(
-              "₱${price.toStringAsFixed(2)} / kg",
+              "${DuruhaFormatter.formatCurrency(price)} / kg",
               style: TextStyle(
                 color: theme.colorScheme.onSecondary,
                 fontWeight: FontWeight.bold,
@@ -763,7 +764,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          "${current.toStringAsFixed(0)} / ${max.toStringAsFixed(0)} kg fulfilled",
+          "${DuruhaFormatter.formatNumber(current.toInt())} / ${DuruhaFormatter.formatNumber(max.toInt())} kg fulfilled",
           style: TextStyle(
             color: theme.colorScheme.onSurfaceVariant,
             fontSize: 11,

@@ -15,6 +15,9 @@ class FarmerProfile extends UserProfile {
     required String accessibilityType,
     required List<String> waterSources,
     List<ProduceItem> pledgedCrops = const [],
+    this.trustScore = 0,
+    this.cropPoints = 0,
+    this.unlockedBadgeIds = const [],
   }) : super(
          role: UserRole.farmer,
          farmAlias: farmAlias,
@@ -23,6 +26,10 @@ class FarmerProfile extends UserProfile {
          waterSources: waterSources,
          pledgedCrops: pledgedCrops,
        );
+
+  final int trustScore;
+  final int cropPoints;
+  final List<String> unlockedBadgeIds;
 
   factory FarmerProfile.fromUserProfile(UserProfile user) {
     if (user.role != UserRole.farmer) {

@@ -3,22 +3,24 @@ import 'package:flutter/material.dart';
 
 class DuruhaSelectionChipGroup extends StatefulWidget {
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final List<String> options;
   final List<String> selectedValues;
   final Function(String) onToggle;
   final bool isRequired;
   final bool isNumbered;
+  final double? titleSize;
 
   const DuruhaSelectionChipGroup({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.options,
     required this.selectedValues,
     required this.onToggle,
     this.isRequired = false,
     this.isNumbered = false,
+    this.titleSize,
   });
 
   @override
@@ -98,6 +100,7 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
+                      fontSize: widget.titleSize,
                     ),
                   ),
                   if (widget.isRequired)
@@ -111,12 +114,13 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                widget.subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+              if (widget.subtitle != null)
+                Text(
+                  widget.subtitle!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -294,7 +298,7 @@ class _SearchSelectionSheetState extends State<_SearchSelectionSheet> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
             controller: widget.scrollController,
             itemCount: filteredOptions.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final option = filteredOptions[index];
               final int selectionIndex = widget.selectedValues.indexOf(option);

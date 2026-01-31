@@ -1,6 +1,5 @@
 import 'package:duruha/shared/produce/data/produce_repository.dart';
-import 'package:duruha/core/theme/duruha_status.dart';
-import 'package:duruha/features/farmer/features/my_crops/domain/crop_detail_models.dart';
+import 'package:duruha/features/farmer/features/crops/domain/crop_detail_models.dart';
 
 class CropDetailsRepository {
   Future<List<CropPledgeHistoryItem>> getPledgeHistory(String cropId) async {
@@ -21,30 +20,33 @@ class CropDetailsRepository {
         date: DateTime.now().subtract(const Duration(days: 2)),
         amount: 500,
         unit: 'kg',
-        status: DuruhaStatus.pending,
+        status: 'Grow',
         variety: produce.availableVarieties.isNotEmpty
             ? produce.availableVarieties.first
             : 'Native',
+        price: produce.currentFairMarketGuideline,
       ),
       CropPledgeHistoryItem(
         id: 'pl_002',
         date: DateTime.now().subtract(const Duration(days: 15)),
         amount: 300,
         unit: 'kg',
-        status: DuruhaStatus.confirmed,
+        status: 'Sold',
         variety: produce.availableVarieties.length > 1
             ? produce.availableVarieties.last
             : 'Native',
+        price: 72.0,
       ),
       CropPledgeHistoryItem(
         id: 'pl_003',
         date: DateTime.now().subtract(const Duration(days: 45)),
         amount: 1200,
         unit: 'kg',
-        status: DuruhaStatus.completed,
+        status: 'Sold',
         variety: produce.availableVarieties.isNotEmpty
             ? produce.availableVarieties.first
             : 'Native',
+        price: 68.5,
       ),
     ];
   }

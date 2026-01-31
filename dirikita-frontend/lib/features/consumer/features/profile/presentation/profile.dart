@@ -180,17 +180,20 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
         'Joined',
         DateFormat('MMM d yyyy').format(DateTime.now()),
         Icons.history,
+        onTap: () => {},
       ),
       _DetailItem('Dialect', profile.dialect, Icons.language),
       _DetailItem(
         'Segment',
         profile.consumerSegment ?? 'Household',
         Icons.home,
+        onTap: () => {},
       ),
       _DetailItem(
         'Cooking',
         profile.cookingFrequency ?? 'Daily',
         Icons.restaurant_menu,
+        onTap: () => {},
       ),
       _DetailItem(
         'Preference',
@@ -200,11 +203,13 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                   .first // "Class" or "Class A"
             : 'Any',
         Icons.star,
+        onTap: () => {},
       ),
       _DetailItem(
         'Demand',
         '${profile.demandCrops?.length ?? 0} Items',
         Icons.shopping_basket,
+        onTap: () => {},
       ),
     ];
 
@@ -261,7 +266,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(item.icon, size: 20, color: theme.colorScheme.primary),
@@ -282,7 +287,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                 item.label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
