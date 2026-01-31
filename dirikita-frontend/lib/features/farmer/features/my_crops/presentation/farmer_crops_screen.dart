@@ -1,0 +1,341 @@
+import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/features/farmer/features/my_crops/data/selected_crops_repository.dart';
+import 'package:duruha/features/farmer/features/my_crops/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
+import 'package:flutter/material.dart';
+
+enum SortOption { rankAsc, rankDesc, nameAsc, nameDesc }
+
+class FarmerCropsScreen extends StatefulWidget {
+  const FarmerCropsScreen({super.key});
+
+  @override
+  State<FarmerCropsScreen> createState() => _FarmerCropsScreenState();
+}
+
+class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
+  final _repository = SelectedCropsRepository();
+  final _searchController = TextEditingController();
+
+  List<SelectedCropSummary> _allCrops = [];
+  List<SelectedCropSummary> _filteredCrops = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  SortOption _sortOption = SortOption.rankAsc;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCrops();
+  }
+
+  Future<void> _fetchCrops() async {
+    try {
+      final crops = await _repository.fetchSelectedCrops();
+      if (mounted) {
+        setState(() {
+          _allCrops = crops;
+          _filteredCrops = crops;
+          _sortCrops(); // Sort initially
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _sortCrops() {
+    _filteredCrops.sort((a, b) {
+      switch (_sortOption) {
+        case SortOption.rankAsc:
+          return a.rank.compareTo(b.rank);
+        case SortOption.rankDesc:
+          return b.rank.compareTo(a.rank);
+        case SortOption.nameAsc:
+          return a.nameDialect.compareTo(b.nameDialect);
+        case SortOption.nameDesc:
+          return b.nameDialect.compareTo(a.nameDialect);
+      }
+    });
+  }
+
+  void _filterCrops(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredCrops = List.from(_allCrops);
+      } else {
+        final lowerQuery = query.toLowerCase();
+        _filteredCrops = _allCrops.where((crop) {
+          return crop.nameDialect.toLowerCase().contains(lowerQuery) ||
+              crop.nameDialect.toLowerCase().contains(lowerQuery);
+        }).toList();
+      }
+      _sortCrops(); // Re-sort after filtering
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const displayName = "Elly";
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const Text('My Pledged Crops'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      bottomNavigationBar: const FarmerNavigation(
+        name: displayName,
+        currentRoute: '/farmer/crops',
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? Center(
+              child: Text(
+                'Error: $_errorMessage',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                // --- SEARCH BAR & SORT ---
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  color: theme.scaffoldBackgroundColor,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: DuruhaTextField(
+                          label: "Search your crops",
+                          icon: Icons.search,
+                          controller: _searchController,
+                          onChanged: _filterCrops,
+                          isRequired: false, // Search is optional
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: DuruhaPopupMenu<SortOption>(
+                          tooltip: 'Sort by',
+                          items: SortOption.values,
+                          selectedValue: _sortOption,
+                          onSelected: (SortOption result) {
+                            setState(() {
+                              _sortOption = result;
+                              _filterCrops(_searchController.text);
+                            });
+                          },
+                          labelBuilder: (SortOption option) {
+                            switch (option) {
+                              case SortOption.rankAsc:
+                                return 'Rank (High to Low)';
+                              case SortOption.rankDesc:
+                                return 'Rank (Low to High)';
+                              case SortOption.nameAsc:
+                                return 'Name (A-Z)';
+                              case SortOption.nameDesc:
+                                return 'Name (Z-A)';
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // --- CROPS LIST ---
+                Expanded(
+                  child: _filteredCrops.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No crops match your search.',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(20),
+                          itemCount: _filteredCrops.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 16),
+                          itemBuilder: (context, index) {
+                            final crop = _filteredCrops[index];
+                            return _buildCropCard(context, crop);
+                          },
+                        ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildCropCard(BuildContext context, SelectedCropSummary crop) {
+    final theme = Theme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.transparent, // Background handled by Material
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: theme.colorScheme.surface,
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: theme.colorScheme.outline.withValues(alpha: 0.1),
+          ),
+        ),
+        child: InkWell(
+          onTap: () {
+            //print('Tapped crop: ${crop.id}');
+            Navigator.pushNamed(context, '/farmer/crops/${crop.id}');
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                // Rank Badge
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '#${crop.rank}',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSecondary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Image / Icon
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    image: crop.imageUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(crop.imageUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: crop.imageUrl == null
+                      ? const Center(
+                          child: Text('🌱', style: TextStyle(fontSize: 24)),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 16),
+
+                // Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        crop.nameDialect,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        crop.nameEnglish,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildTag(
+                        context,
+                        crop.pledgeCountLabel,
+                        Icons
+                            .verified_outlined, // Icon representing pledge count/order
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Arrow
+                Icon(
+                  Icons.chevron_right,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTag(BuildContext context, String text, IconData icon) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.onPrimaryContainer),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

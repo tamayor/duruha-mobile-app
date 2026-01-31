@@ -1,0 +1,366 @@
+import 'package:duruha/shared/produce/data/produce_repository.dart';
+import 'package:duruha/core/theme/duruha_status.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/features/farmer/features/my_crops/data/crop_details_repository.dart';
+import 'package:duruha/features/farmer/features/my_crops/data/selected_crops_repository.dart';
+import 'package:duruha/features/farmer/features/my_crops/domain/crop_detail_models.dart';
+import 'package:duruha/features/farmer/features/my_crops/domain/selected_crop_summary.dart';
+import 'package:duruha/shared/produce/domain/produce_model.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+class CropDetailScreen extends StatefulWidget {
+  final String cropId;
+
+  const CropDetailScreen({super.key, required this.cropId});
+
+  @override
+  State<CropDetailScreen> createState() => _CropDetailScreenState();
+}
+
+class _CropDetailScreenState extends State<CropDetailScreen> {
+  late Future<_CropDetailData> _dataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _dataFuture = _loadData();
+  }
+
+  Future<_CropDetailData> _loadData() async {
+    // 1. Fetch Summary (Rank, Pledge Label)
+    final summaries = await SelectedCropsRepository().fetchSelectedCrops();
+    final summary = summaries.firstWhere(
+      (s) => s.id == widget.cropId,
+      orElse: () => throw Exception("Crop not found in summaries"),
+    );
+
+    // 2. Fetch Metadata (Simulated from central list)
+    final allProduce = await ProduceRepository().getAllProduce();
+    final produce = allProduce.firstWhere(
+      (p) => p.id == widget.cropId,
+      orElse: () => throw Exception("Produce metadata not found"),
+    );
+
+    // 3. Fetch Pledge History (Now from Repos)
+    final history = await CropDetailsRepository().getPledgeHistory(
+      widget.cropId,
+    );
+
+    return _CropDetailData(summary, produce, history);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ... (UI code essentially same, just generic updates if any names changed)
+    // Actually internal variable names match CropPledgeHistoryItem fields.
+    // ...
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      body: FutureBuilder<_CropDetailData>(
+        future: _dataFuture,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final data = snapshot.data!;
+          final summary = data.summary;
+          final produce = data.produce;
+          final history = data.history;
+
+          return CustomScrollView(
+            slivers: [
+              // --- APP BAR ---
+              SliverAppBar(
+                expandedHeight: 250,
+                pinned: true,
+                flexibleSpace: FlexibleSpaceBar(
+                  title: Text(
+                    summary.nameDialect.toUpperCase(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24,
+
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withOpacity(0.5),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                  ),
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(produce.imageHeroUrl, fit: BoxFit.cover),
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black54],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // --- CONTENT ---
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // HEADER INFO
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  produce.nameEnglish,
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  produce.nameScientific,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontStyle: FontStyle.italic,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              "#${summary.rank} Top Pick",
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: theme.colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // METADATA GRID
+                      DuruhaSectionContainer(
+                        title: "Crop Insights",
+                        children: [_buildInfoGrid(context, produce)],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // PLEDGE HISTORY
+                      DuruhaSectionContainer(
+                        title: "Pledge History",
+                        children: [
+                          ...history.map((p) => _buildPledgeTile(context, p)),
+                          if (history.isEmpty)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text("No pledges yet."),
+                              ),
+                            ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 80), // Bottom padding
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // Pre-select crop? Mock implementation just goes to form
+          Navigator.pushNamed(context, '/farmer/pledge/create');
+        },
+        icon: const Icon(Icons.add),
+        label: const Text("New Pledge"),
+      ),
+    );
+  }
+
+  Widget _buildInfoGrid(BuildContext context, Produce p) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth / 2 - 10;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            _buildInfoCard(
+              context,
+              width,
+              "Market Price",
+              "₱${p.priceMinHistorical.toStringAsFixed(0)} - ₱${p.priceMaxHistorical.toStringAsFixed(0)}",
+              Icons.attach_money,
+            ),
+            _buildInfoCard(
+              context,
+              width,
+              "Seasonality",
+              "${p.seasonalityStart} - ${p.seasonalityEnd}",
+              Icons.calendar_month,
+            ),
+            _buildInfoCard(
+              context,
+              width,
+              "Growing Cycle",
+              "${p.growingCycleDays} days",
+              Icons.timer,
+            ),
+            _buildInfoCard(
+              context,
+              width,
+              "Fair Guide",
+              "₱${p.currentFairMarketGuideline.toStringAsFixed(0)}/${p.unitOfMeasure}",
+              Icons.balance,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoCard(
+    BuildContext context,
+    double width,
+    String label,
+    String value,
+    IconData icon,
+  ) {
+    final theme = Theme.of(context);
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.onSecondary),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPledgeTile(BuildContext context, CropPledgeHistoryItem p) {
+    final theme = Theme.of(context);
+    final statusColor = DuruhaStatus.getColor(p.status);
+    final isPending = p.status == DuruhaStatus.pending;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isPending ? Icons.hourglass_empty : Icons.check,
+              color: statusColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "${p.amount} ${p.unit} • ${p.variety}",
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  DateFormat('MMM d, yyyy').format(p.date),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: statusColor.withOpacity(0.3)),
+            ),
+            child: Text(
+              p.status,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: statusColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CropDetailData {
+  final SelectedCropSummary summary;
+  final Produce produce;
+  final List<CropPledgeHistoryItem> history;
+
+  _CropDetailData(this.summary, this.produce, this.history);
+}
