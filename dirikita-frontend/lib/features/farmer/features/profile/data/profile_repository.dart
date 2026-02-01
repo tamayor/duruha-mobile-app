@@ -16,6 +16,8 @@ class FarmerProfileRepositoryImpl {
       phone: '09171234567',
       barangay: 'Barangay 1',
       city: 'Malaybalay City',
+      province: 'Davao del Sur',
+      postalCode: '8000',
       landmark: 'Near Plaza',
       dialect: 'Cebuano',
       // Farmer Details
@@ -53,11 +55,10 @@ class FarmerProfileRepositoryImpl {
       trustScore: 982,
       cropPoints: 14500,
       unlockedBadgeIds: [
-        'legacy_lvl_3',
-        'active_lvl_2',
-        'titan_lvl_4',
-        'spec_lvl_4',
-        'trust_lvl_3',
+        'years_silver',
+        'transactions_bronze',
+        'earnings_gold',
+        'variety_gold',
       ],
     );
   }

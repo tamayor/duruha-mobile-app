@@ -9,7 +9,9 @@ class UserProfile {
   final String phone;
   final String barangay;
   final String city;
+  final String province;
   final String landmark;
+  final String postalCode;
   final UserRole role;
   final String dialect;
   // Farmer Specific
@@ -33,7 +35,9 @@ class UserProfile {
     required this.phone,
     required this.barangay,
     required this.city,
+    required this.province,
     required this.landmark,
+    required this.postalCode,
     required this.role,
     required this.dialect,
     this.farmAlias,

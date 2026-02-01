@@ -13,6 +13,7 @@ class HarvestPledge {
   final String currentStatus;
   final double totalExpenses;
   final double? sellingPrice;
+  final String imageUrl;
 
   HarvestPledge({
     this.id,
@@ -29,6 +30,7 @@ class HarvestPledge {
     this.currentStatus = 'Set',
     this.totalExpenses = 0.0,
     this.sellingPrice,
+    this.imageUrl = 'assets/images/placeholder.png',
   });
 
   Map<String, dynamic> toJson() => {
@@ -45,6 +47,7 @@ class HarvestPledge {
     'current_status': currentStatus,
     'total_expenses': totalExpenses,
     'selling_price': sellingPrice,
+    'image_url': imageUrl,
     'created_at':
         createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
   };

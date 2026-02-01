@@ -148,7 +148,9 @@ class LandingScreen extends StatelessWidget {
                           style: theme.textTheme.bodyMedium?.copyWith(
                             height: 1.6,
                             fontSize: 15,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                         ),
 
@@ -212,16 +214,6 @@ class LandingScreen extends StatelessWidget {
                             Navigator.pushNamed(context, '/signup'),
                         text: "JOIN THE REVOLUTION",
                         isOutline: true,
-                      ),
-                      const SizedBox(height: 16),
-                      DuruhaButton(
-                        onPressed: () =>
-                            Navigator.of(context).pushNamedAndRemoveUntil(
-                              '/home',
-                              (r) => false,
-                              arguments: {'role': 'Farmer', 'name': 'Elly'},
-                            ),
-                        text: 'ENTER DASHBOARD',
                       ),
                     ],
                   ),

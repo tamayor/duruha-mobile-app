@@ -1,8 +1,15 @@
+import 'package:duruha/core/widgets/duruha_button.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
 import 'package:duruha/features/farmer/features/farm/data/recommendation_repository.dart';
 import 'package:duruha/features/farmer/features/farm/domain/recommendation_model.dart';
 import 'package:duruha/features/farmer/features/farm/presentation/recommendation_card.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:flutter/services.dart';
+import 'package:duruha/core/widgets/duruha_section_container.dart';
+import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
+import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
+import 'package:duruha/features/farmer/features/monitor/presentation/widgets/pledge_card.dart';
 
 class FarmerDashboardScreen extends StatefulWidget {
   const FarmerDashboardScreen({super.key});
@@ -13,21 +20,30 @@ class FarmerDashboardScreen extends StatefulWidget {
 
 class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> {
   final _repository = CropRecommendationRepository();
+  final _pledgeRepository = PledgeRepository();
   List<CropRecommendation> _recommendations = [];
+  List<HarvestPledge> _activePledges = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadRecommendations();
+    _loadData();
   }
 
-  Future<void> _loadRecommendations() async {
+  Future<void> _loadData() async {
     try {
-      final data = await _repository.getRecommendations();
+      final recs = await _repository.getRecommendations();
+      final pledges = await _pledgeRepository.fetchMyPledges();
+
+      final now = DateTime.now();
+      final active = pledges.where((p) => p.harvestDate.isAfter(now)).toList();
+      active.sort((a, b) => a.harvestDate.compareTo(b.harvestDate));
+
       if (mounted) {
         setState(() {
-          _recommendations = data;
+          _recommendations = recs;
+          _activePledges = active;
           _isLoading = false;
         });
       }
@@ -45,12 +61,13 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> {
         currentRoute: '/farmer/farm',
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const FarmerLoadingScreen()
           : SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildRecommendationsSection(),
+                  _buildActivePledgesSection(),
 
                   const SizedBox(height: 40),
                 ],
@@ -95,6 +112,29 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActivePledgesSection() {
+    if (_activePledges.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+      child: DuruhaSectionContainer(
+        title: "Active Pledges (Top 3)",
+        children: [
+          ..._activePledges.take(3).map((pledge) {
+            return PledgeCard(pledge: pledge, isActive: true);
+          }),
+          DuruhaButton(
+            text: "View Pledge Monitor",
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              Navigator.pushNamed(context, '/farmer/monitor');
+            },
+          ),
+        ],
+      ),
     );
   }
 }

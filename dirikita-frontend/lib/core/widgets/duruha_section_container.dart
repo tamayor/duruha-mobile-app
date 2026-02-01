@@ -41,7 +41,8 @@ class DuruhaSectionContainer extends StatelessWidget {
 
     // Determine Background Color
     final Color? effectiveBgColor = style == DuruhaContainerStyle.filled
-        ? (backgroundColor ?? colorScheme.surfaceContainerLow.withValues(alpha: 0.5))
+        ? (backgroundColor ??
+              colorScheme.surfaceContainerLow.withValues(alpha: 0.5))
         : null;
 
     // Determine Border

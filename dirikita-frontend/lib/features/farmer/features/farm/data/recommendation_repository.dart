@@ -38,7 +38,7 @@ import 'package:duruha/shared/produce/data/produce_repository.dart';
 class CropRecommendationRepository {
   Future<List<CropRecommendation>> getRecommendations() async {
     // Simulate network delay for a premium feel
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 1000));
 
     final allProduce = await ProduceRepository().getAllProduce();
     final random = Random();

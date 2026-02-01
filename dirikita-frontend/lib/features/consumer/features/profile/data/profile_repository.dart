@@ -17,6 +17,8 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
       joinedAt: DateTime.now().toString(),
       barangay: 'Poblacion',
       city: 'Valencia City',
+      province: 'Valencia City',
+      postalCode: 'Valencia City',
       landmark: 'Behind City Hall',
       dialect: 'Cebuano',
 

@@ -18,6 +18,7 @@ class DuruhaTextField extends StatelessWidget {
   final String? Function(String?)?
   validator; // Custom validation logic (e.g., email check)
   final Function(String)? onChanged; // Callback for text changes
+  final FocusNode? focusNode;
 
   const DuruhaTextField({
     super.key,
@@ -31,6 +32,7 @@ class DuruhaTextField extends StatelessWidget {
     this.isRequired = true, // Defaults to required!
     this.validator,
     this.onChanged,
+    this.focusNode,
   });
 
   @override
@@ -39,6 +41,7 @@ class DuruhaTextField extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 16.0),
       child: TextFormField(
         controller: controller,
+        focusNode: focusNode,
         keyboardType: keyboardType,
         obscureText: isPassword,
         maxLines: maxLines,

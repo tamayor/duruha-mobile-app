@@ -1,3 +1,4 @@
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
@@ -46,7 +47,6 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
     final history = await CropDetailsRepository().getPledgeHistory(
       widget.cropId,
     );
-
     return _CropDetailData(summary, produce, history);
   }
 
@@ -57,23 +57,31 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
     // ...
     final theme = Theme.of(context);
 
-    return Scaffold(
-      body: FutureBuilder<_CropDetailData>(
-        future: _dataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return FutureBuilder<_CropDetailData>(
+      future: _dataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const FarmerLoadingScreen();
+        }
 
-          final data = snapshot.data!;
-          final summary = data.summary;
-          final produce = data.produce;
-          final history = data.history;
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(title: const Text("Error")),
+            body: Center(child: Text("Error: ${snapshot.error}")),
+          );
+        }
 
-          return CustomScrollView(
+        if (!snapshot.hasData) {
+          return const Scaffold(body: Center(child: FarmerLoadingScreen()));
+        }
+
+        final data = snapshot.data!;
+        final summary = data.summary;
+        final produce = data.produce;
+        final history = data.history;
+
+        return Scaffold(
+          body: CustomScrollView(
             slivers: [
               // --- APP BAR ---
               SliverAppBar(
@@ -246,9 +254,9 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -308,7 +316,9 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,7 +353,9 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
       ),
       child: Row(
         children: [

@@ -36,13 +36,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authRepo = AuthRepository();
-      await authRepo.login(request);
+      final response = await authRepo.login(request);
 
       if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      Navigator.pushReplacementNamed(context, '/');
+      Navigator.pushReplacementNamed(
+        context,
+        '/farmer/farm',
+        arguments: response.user,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);

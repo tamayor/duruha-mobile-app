@@ -1,18 +1,15 @@
-import 'package:duruha/core/helpers/duruha_monitor_helper.dart';
-import 'package:duruha/core/helpers/duruha_status_helper.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
-
+import 'package:duruha/core/helpers/duruha_status_helper.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
+import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
-import 'package:duruha/features/farmer/features/monitor/data/monitor_repository.dart';
-import 'package:duruha/features/farmer/features/monitor/domain/monitor_models.dart';
-import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
 
 class PledgeDetailScreen extends StatefulWidget {
   final String pledgeId;
@@ -25,88 +22,80 @@ class PledgeDetailScreen extends StatefulWidget {
 }
 
 class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
-  final _repository = MonitorRepository();
-  final _profileRepo = FarmerProfileRepositoryImpl();
   final _reasonController = TextEditingController();
   final _inputNameController = TextEditingController();
   final _inputCostController = TextEditingController();
-
-  Produce? _produce;
-  HarvestPledge? _pledge;
-  String _userName = "Farmer";
+  final _repository = PledgeRepository();
   bool _isLoading = true;
 
+  Produce? _produce;
+
   DateTime? _selectedNewDate;
-  String _selectedReason = '';
-  final _rescheduleReasons = MonitorDataHelper.getRescheduleReasons();
+  String _selectedReason = 'Weather Conditions';
+  final List<String> _rescheduleReasons = [
+    'Weather Conditions',
+    'Pest/Disease Issue',
+    'Delayed Maturity',
+    'Logistics Issue',
+    'Personal/Labor Shortage',
+  ];
 
-  List<Map<String, dynamic>> _dateHistory = [];
-  List<Map<String, dynamic>> _inputs = [];
+  final List<Map<String, dynamic>> _dateHistory = [];
+  final List<Map<String, dynamic>> _inputs = [];
 
-  String _selectedInputCategory = '';
-  final _inputCategories = MonitorDataHelper.getInputCategories();
+  String _selectedInputCategory = 'Fertilizer';
+  final List<String> _inputCategories = [
+    'Seeds',
+    'Fertilizer',
+    'Pesticide/Chem',
+    'Labor',
+    'Equipment/Tools',
+    'Fuel',
+    'Water/Irrigation',
+    'Others',
+  ];
 
   String _currentStatus = 'Set';
-  List<Map<String, dynamic>> _statusHistory = [];
-  final _pledgeStatuses = MonitorDataHelper.getPledgeStatuses();
+  final List<Map<String, dynamic>> _statusHistory = [];
+  final List<String> _pledgeStatuses = [
+    'Set',
+    'Cultivate',
+    'Plant',
+    'Grow',
+    'Harvest',
+    'Process',
+    'Ready to Sell',
+    'Sold',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _currentStatus = widget.pledge?.currentStatus ?? 'Set';
-    _fetchData();
-  }
-
-  Future<void> _fetchData() async {
-    try {
-      final results = await Future.wait([
-        _repository.getStatusHistory(widget.pledgeId),
-        _repository.getExpenseHistory(widget.pledgeId),
-        _repository.getScheduleHistory(widget.pledgeId),
-        _profileRepo.getFarmerProfile('current_user'),
-        if (widget.pledge == null)
-          _repository.getPledgeById(widget.pledgeId)
-        else
-          Future.value(widget.pledge),
-      ]);
-
-      if (!mounted) return;
-
-      final statusHist = results[3] as List<PledgeStatusHistory>;
-      final expenseHist = results[4] as List<PledgeExpense>;
-      final scheduleHist = results[5] as List<PledgeScheduleHistory>;
-      final profile = results[6] as dynamic;
-      final pledge = results[7] as HarvestPledge?;
-
-      setState(() {
-        _statusHistory = statusHist.map((h) => h.toMap()).toList();
-        _inputs = expenseHist.map((e) => e.toMap()).toList();
-        _dateHistory = scheduleHist.map((s) => s.toMap()).toList();
-        _userName = profile.name.split(' ').first;
-        _pledge = pledge;
-        _isLoading = false;
-      });
-
-      if (_pledge != null) {
-        _fetchProduceData();
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    _fetchProduceData();
+    // Initialize history with creation
+    _statusHistory.add({
+      'status': 'Set',
+      'timestamp': DateTime.now().subtract(const Duration(days: 2)),
+    });
   }
 
   Future<void> _fetchProduceData() async {
-    if (_pledge == null) return;
+    if (widget.pledge == null) return;
     try {
       final allProduce = await ProduceRepository().getAllProduce();
-      final produce = allProduce.firstWhere((p) => p.id == _pledge!.cropId);
+      final produce = allProduce.firstWhere(
+        (p) => p.id == widget.pledge!.cropId,
+      );
       if (mounted) {
         setState(() {
           _produce = produce;
+          _isLoading = false;
         });
       }
     } catch (e) {
-      // Error handling
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -114,7 +103,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
   void _showDatePicker() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _pledge!.harvestDate,
+      initialDate: widget.pledge!.harvestDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 90)),
     );
@@ -193,7 +182,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                                 "Original Date",
                                 DateFormat(
                                   'MMMM d, yyyy',
-                                ).format(_pledge!.harvestDate),
+                                ).format(widget.pledge!.harvestDate),
                                 icon: Icons.event,
                               ),
                               _buildRow(
@@ -300,15 +289,25 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                     child: DuruhaButton(
                       text: "Confirm New Date",
                       onPressed: () {
+                        final newDate = _selectedNewDate!;
+                        final reason = _selectedReason;
+                        final notes = _reasonController.text;
+
                         setState(() {
                           _dateHistory.insert(0, {
-                            'oldDate': _pledge!.harvestDate,
-                            'newDate': _selectedNewDate,
-                            'reason': _selectedReason,
-                            'notes': _reasonController.text,
+                            'oldDate': widget.pledge!.harvestDate,
+                            'newDate': newDate,
+                            'reason': reason,
+                            'notes': notes,
                             'timestamp': DateTime.now(),
                           });
                         });
+                        // API Call for Date Reschedule (Treating as status/update)
+                        _repository.updatePledgeStatus(
+                          widget.pledgeId,
+                          "Rescheduled: ${DateFormat('MMM d').format(newDate)}",
+                          notes: "$reason - $notes",
+                        );
                         Navigator.pop(context);
                       },
                     ),
@@ -322,7 +321,17 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
     );
   }
 
-  void _showInputsModal() {
+  void _showInputsModal({Map<String, dynamic>? expense}) {
+    if (expense != null) {
+      _inputNameController.text = expense['name'];
+      _inputCostController.text = expense['cost'].toStringAsFixed(0);
+      _selectedInputCategory = expense['category'];
+    } else {
+      _inputNameController.clear();
+      _inputCostController.clear();
+      _selectedInputCategory = _inputCategories.first; // Reset to default
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -400,7 +409,9 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                           Form(
                             key: formKey,
                             child: DuruhaSectionContainer(
-                              title: "Add New Entry",
+                              title: expense != null
+                                  ? "Edit Expense"
+                                  : "Add New Entry",
                               children: [
                                 DuruhaTextField(
                                   label: "Item Name",
@@ -437,20 +448,49 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 DuruhaButton(
-                                  text: "Add Expense",
+                                  text: expense != null
+                                      ? "Update Expense"
+                                      : "Add Expense",
                                   onPressed: () {
                                     if (formKey.currentState!.validate()) {
+                                      final newExpense = {
+                                        'id':
+                                            expense?['id'] ??
+                                            DateTime.now()
+                                                .millisecondsSinceEpoch
+                                                .toString(),
+                                        'name': _inputNameController.text,
+                                        'category': _selectedInputCategory,
+                                        'cost': double.parse(
+                                          _inputCostController.text,
+                                        ),
+                                      };
                                       setState(() {
-                                        _inputs.insert(0, {
-                                          'name': _inputNameController.text,
-                                          'category': _selectedInputCategory,
-                                          'cost': double.parse(
-                                            _inputCostController.text,
-                                          ),
-                                        });
+                                        if (expense != null) {
+                                          final index = _inputs.indexOf(
+                                            expense,
+                                          );
+                                          if (index != -1) {
+                                            _inputs[index] = newExpense;
+                                          }
+                                        } else {
+                                          _inputs.insert(0, newExpense);
+                                        }
                                         _inputNameController.clear();
                                         _inputCostController.clear();
                                       });
+
+                                      if (expense != null) {
+                                        _repository.updateExpense(
+                                          widget.pledgeId,
+                                          newExpense,
+                                        );
+                                      } else {
+                                        _repository.addExpense(
+                                          widget.pledgeId,
+                                          newExpense,
+                                        );
+                                      }
                                       setModalState(() {});
                                     }
                                   },
@@ -528,6 +568,38 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                                             color: theme.colorScheme.onSurface,
                                           ),
                                     ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.edit,
+                                        color: Colors.blue,
+                                        size: 20,
+                                      ),
+                                      onPressed: () {
+                                        Navigator.pop(context); // Close list
+                                        _showInputsModal(expense: input);
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.red,
+                                        size: 20,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _inputs.remove(input);
+                                        });
+                                        // API Call
+                                        _repository.deleteExpense(
+                                          widget.pledgeId,
+                                          input['id'] ?? 'unknown',
+                                        );
+                                        // Update modal UI
+                                        setModalState(() {});
+                                      },
+                                    ),
                                   ],
                                 ),
                               ),
@@ -549,24 +621,18 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (_pledge == null) {
-      return const Scaffold(body: Center(child: Text("Pledge not found")));
-    }
     return Scaffold(
-      appBar: AppBar(title: Text(_pledge?.id ?? "Pledge Details")),
-      bottomNavigationBar: FarmerNavigation(
-        name: _userName,
+      appBar: AppBar(title: Text(widget.pledge?.id ?? "Pledge Details")),
+      bottomNavigationBar: const FarmerNavigation(
+        name: "Elly",
         currentRoute: '/farmer/biz',
       ),
-      body: _buildDetailsTab(),
+      body: _isLoading ? const FarmerLoadingScreen() : _buildDetailsTab(),
     );
   }
 
   Widget _buildDetailsTab() {
-    final pledge = _pledge!;
+    final pledge = widget.pledge!;
     double totalInputs = _inputs.fold(0, (sum, item) => sum + item['cost']);
     final theme = Theme.of(context);
 
@@ -580,6 +646,12 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
+          // Crop Image Header - REMOVED per request
+          /*
+          if (pledge.imageUrl.isNotEmpty)
+             ...
+          */
+
           // Header Summary Card
           Container(
             width: double.infinity,
@@ -686,42 +758,70 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
           const SizedBox(height: 24),
           DuruhaSectionContainer(
             title: "Planting Details",
-            action: InkWell(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                Navigator.pushNamed(
-                  context,
-                  '/farmer/biz/crops/${pledge.cropId}',
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Text(
-                  "View Full Insights",
-                  style: TextStyle(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+            padding: EdgeInsets.zero,
+            children: [
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    Navigator.pushNamed(
+                      context,
+                      '/farmer/crops/${pledge.cropId}',
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                pledge.cropNameDialect ?? pledge.cropName,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildVariantsRow(pledge.variants, theme),
+                              const SizedBox(height: 4),
+                              _buildSimpleRow(
+                                "Market: ",
+                                pledge.targetMarket.toUpperCase(),
+                                Icons.storefront_outlined,
+                                theme,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (pledge.imageUrl.isNotEmpty) ...[
+                          const SizedBox(width: 16),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              pledge.imageUrl,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 12),
+                        Icon(
+                          Icons.chevron_right,
+                          color: theme.colorScheme.onSurfaceVariant.withAlpha(
+                            100,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            children: [
-              if (pledge.cropNameDialect != null)
-                _buildRow(
-                  "Local Name",
-                  pledge.cropNameDialect!,
-                  icon: Icons.language,
-                ),
-              _buildRow(
-                "Crop Varieties",
-                pledge.variants.join(", "),
-                icon: Icons.eco_outlined,
-              ),
-              _buildRow(
-                "Market Strategy",
-                pledge.targetMarket,
-                icon: Icons.storefront_outlined,
               ),
             ],
           ),
@@ -880,6 +980,8 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                 });
               });
               HapticFeedback.mediumImpact();
+              // API Call
+              _repository.updatePledgeStatus(widget.pledgeId, status);
             } else if (targetIndex < currentIndex) {
               DuruhaSnackBar.showWarning(
                 context,
@@ -1026,6 +1128,11 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                                       _statusHistory.first['status'];
                                 });
                                 HapticFeedback.selectionClick();
+                                // API Call
+                                _repository.deleteStatusEntry(
+                                  widget.pledgeId,
+                                  'status_entry_${item['originalIndex']}', // Mock ID
+                                );
                               },
                               color: colorScheme.error.withAlpha(150),
                               visualDensity: VisualDensity.compact,
@@ -1064,5 +1171,114 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
       default:
         return colorScheme.primary;
     }
+  }
+
+  Widget _buildSimpleRow(
+    String label,
+    String value,
+    IconData icon,
+    ThemeData theme,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              icon,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVariantsRow(List<String> variants, ThemeData theme) {
+    if (variants.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              Icons.eco_outlined,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Varieties:",
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.8,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: variants.map((variant) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: theme.colorScheme.secondary.withValues(
+                            alpha: 0.2,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        variant,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

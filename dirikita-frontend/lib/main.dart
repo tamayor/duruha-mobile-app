@@ -1,3 +1,4 @@
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/theme/app_theme.dart';
 import 'package:duruha/features/auth/presentation/login_screen.dart';
 import 'package:duruha/features/auth/presentation/signup_screen.dart';
@@ -27,8 +28,77 @@ class PlaceholderScreen extends StatelessWidget {
   final String title;
   const PlaceholderScreen(this.title, {super.key});
   @override
-  Widget build(BuildContext context) =>
-      Scaffold(body: Center(child: Text(title)));
+  Widget build(BuildContext context) {
+    return Scaffold(body: Center(child: Text(title)));
+  }
+}
+
+class ProtectedScreen extends StatelessWidget {
+  final Widget child;
+  const ProtectedScreen({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: SessionService.isLoggedIn(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.data == true) {
+          return child;
+        } else {
+          // Redirect to Landing if not logged in
+          Future.microtask(() {
+            if (context.mounted) {
+              Navigator.of(
+                context,
+              ).pushNamedAndRemoveUntil('/', (route) => false);
+            }
+          });
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+      },
+    );
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkSession();
+  }
+
+  Future<void> _checkSession() async {
+    // Check for expiry first
+    await SessionService.clearIfExpired();
+
+    final user = await SessionService.getSavedUser();
+    if (mounted) {
+      if (user != null) {
+        Navigator.pushReplacementNamed(context, '/home', arguments: user);
+      } else {
+        Navigator.pushReplacementNamed(context, '/');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
 }
 
 void main() {
@@ -52,12 +122,14 @@ class DuruhaApp extends StatelessWidget {
           theme: DuruhaTheme.lightTheme,
           darkTheme: DuruhaTheme.darkTheme,
           themeMode: mode,
-          initialRoute: '/',
+          initialRoute: '/splash',
           routes: {
+            '/splash': (context) => const SplashScreen(),
             '/': (context) => const LandingScreen(),
             '/login': (context) => const LoginScreen(),
             '/signup': (context) => const SignupScreen(),
-            '/onboarding': (context) => const OnboardingScreen(),
+            '/onboarding': (context) =>
+                const ProtectedScreen(child: OnboardingScreen()),
           },
           onGenerateRoute: (settings) {
             final args = settings.arguments;
@@ -67,100 +139,114 @@ class DuruhaApp extends StatelessWidget {
               case '/home':
                 if (args is UserProfile) {
                   if (args.role == UserRole.farmer) {
-                    screen = const FarmerDashboardScreen();
+                    screen = _protected(const FarmerDashboardScreen());
                   } else {
-                    screen = _buildPlaceholderScreen(
-                      {'role': 'Consumer', 'name': args.name},
-                      '/home',
-                      'Market',
+                    screen = _protected(
+                      _buildPlaceholderScreen(
+                        {'role': 'Consumer', 'name': args.name},
+                        '/home',
+                        'Market',
+                      ),
                     );
                   }
                 } else if (args is Map<String, dynamic>) {
                   final role = args['role'] ?? 'User';
                   if (role == 'Farmer') {
-                    screen = const FarmerDashboardScreen();
+                    screen = _protected(const FarmerDashboardScreen());
                   } else {
-                    screen = _buildPlaceholderScreen(args, '/home', 'Market');
+                    screen = _protected(
+                      _buildPlaceholderScreen(args, '/home', 'Market'),
+                    );
                   }
                 }
                 break;
               case '/profile':
                 if (args is UserProfile) {
                   if (args.role == UserRole.farmer) {
-                    screen = FarmerProfileScreen(
-                      userData: {
-                        'role': 'Farmer',
-                        'name': args.name,
-                        'id': args.id,
-                      },
+                    screen = _protected(
+                      FarmerProfileScreen(
+                        userData: {
+                          'role': 'Farmer',
+                          'name': args.name,
+                          'id': args.id,
+                        },
+                      ),
                     );
                   } else {
-                    screen = ConsumerProfileScreen(
-                      userData: {
-                        'role': 'Consumer',
-                        'name': args.name,
-                        'id': args.id,
-                      },
+                    screen = _protected(
+                      ConsumerProfileScreen(
+                        userData: {
+                          'role': 'Consumer',
+                          'name': args.name,
+                          'id': args.id,
+                        },
+                      ),
                     );
                   }
                 } else if (args is Map<String, dynamic>) {
                   final role = args['role'] ?? 'User';
                   if (role == 'Farmer') {
-                    screen = FarmerProfileScreen(userData: args);
+                    screen = _protected(FarmerProfileScreen(userData: args));
                   } else {
-                    screen = ConsumerProfileScreen(userData: args);
+                    screen = _protected(ConsumerProfileScreen(userData: args));
                   }
                 }
                 break;
               case '/orders':
-                screen = _buildPlaceholderScreen(
-                  args is Map<String, dynamic> ? args : {},
-                  routeName,
-                  'Orders',
+                screen = _protected(
+                  _buildPlaceholderScreen(
+                    args is Map<String, dynamic> ? args : {},
+                    routeName,
+                    'Orders',
+                  ),
                 );
                 break;
               case '/inventory':
-                screen = _buildPlaceholderScreen(
-                  args is Map<String, dynamic> ? args : {},
-                  routeName,
-                  'Inventory',
+                screen = _protected(
+                  _buildPlaceholderScreen(
+                    args is Map<String, dynamic> ? args : {},
+                    routeName,
+                    'Inventory',
+                  ),
                 );
                 break;
 
               case '/farmer/farm':
-                screen = const FarmerDashboardScreen();
+                screen = _protected(const FarmerDashboardScreen());
                 break;
               case '/farmer/pledge/create':
-                screen = const FarmerCreatePledgeScreen();
+                screen = _protected(const FarmerCreatePledgeScreen());
                 break;
               case '/farmer/pledge/study':
                 if (args is String) {
-                  screen = CropStudyScreen(cropId: args);
+                  screen = _protected(CropStudyScreen(cropId: args));
                 }
                 break;
               case '/farmer/crops':
-                screen = const FarmerCropsScreen();
+                screen = _protected(const FarmerCropsScreen());
                 break;
               case '/farmer/biz':
-                screen = const FarmerBizScreen();
+                screen = _protected(const FarmerBizScreen());
                 break;
               case '/farmer/monitor':
-                screen = const MonitorPledgeScreen();
+                screen = _protected(const MonitorPledgeScreen());
                 break;
               case '/farmer/programs':
-                screen = const FarmerProgramsScreen();
+                screen = _protected(const FarmerProgramsScreen());
                 break;
               case '/farmer/profile/ratings':
-                screen = const FarmerProfileRatingsScreen();
+                screen = _protected(const FarmerProfileRatingsScreen());
                 break;
               default:
-                if (routeName.startsWith('/farmer/biz/monitor/')) {
-                  final id = routeName.replaceFirst('/farmer/biz/monitor/', '');
+                if (routeName.startsWith('/farmer/monitor/')) {
+                  final id = routeName.replaceFirst('/farmer/monitor/', '');
                   final pledge = args is HarvestPledge ? args : null;
-                  screen = PledgeDetailScreen(pledgeId: id, pledge: pledge);
-                } else if (routeName.startsWith('/farmer/biz/crops/')) {
-                  final id = routeName.replaceFirst('/farmer/biz/crops/', '');
-                  screen = CropDetailScreen(cropId: id);
+                  screen = _protected(
+                    PledgeDetailScreen(pledgeId: id, pledge: pledge),
+                  );
+                } else if (routeName.startsWith('/farmer/crops/')) {
+                  final id = routeName.replaceFirst('/farmer/crops/', '');
+                  screen = _protected(CropDetailScreen(cropId: id));
                 } else {
                   //  print('Navigating to default: $routeName');
                 }
@@ -180,6 +266,9 @@ class DuruhaApp extends StatelessWidget {
       },
     );
   }
+
+  // Helper to wrap protected routes
+  Widget _protected(Widget child) => ProtectedScreen(child: child);
 
   Widget _buildPlaceholderScreen(
     Map<String, dynamic> args,

@@ -1,11 +1,12 @@
 import 'package:duruha/core/helpers/duruha_formatter.dart';
-import 'package:duruha/core/widgets/duruha_theme_toggle_button.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
 import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
-import 'package:duruha/core/data/duruha_badges.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/duruha_badges.dart';
 
 class FarmerProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -46,7 +47,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined),
+            icon: const Icon(Icons.notifications_none_rounded),
             onPressed: () {},
           ),
         ],
@@ -59,7 +60,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
         future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const FarmerLoadingScreen();
           } else if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
           } else if (!snapshot.hasData) {
@@ -69,80 +70,105 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
           final profile = snapshot.data!;
           final displayName = profile.name;
           const displayRole = 'Farmer';
-
+          final displayLocation =
+              "${profile.barangay}, ${profile.city}, \n${profile.province}, ${profile.postalCode}";
+          final displayLandmark = profile.landmark;
           return SingleChildScrollView(
             child: Column(
               children: [
                 const SizedBox(height: 20),
                 // --- HEADER ---
-                Center(
-                  child: Column(
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: DuruhaSectionContainer(
                     children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundColor: theme.colorScheme.primaryContainer,
-                        child: Text(
-                          displayName.isNotEmpty
-                              ? displayName[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onPrimaryContainer,
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundColor: theme.colorScheme.primaryContainer,
+                            child: Text(
+                              displayName.isNotEmpty
+                                  ? displayName[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayName,
+                                style: theme.textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.secondary,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  displayRole.toUpperCase(),
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onSecondary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      Text(
+                        displayLocation,
+                        textAlign: TextAlign.start,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        displayName,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.secondary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          displayRole.toUpperCase(),
-                          style: TextStyle(
-                            color: theme.colorScheme.onSecondary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            letterSpacing: 1.2,
+                      Text(
+                        displayLandmark,
+                        textAlign: TextAlign.start,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 24),
 
-                const SizedBox(height: 32),
-                // --- PERFORMANCE STATS ---
+                // --- PERFORMANCE & ACHIEVEMENTS ---
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: _buildPerformanceStats(context, profile),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                  ), // Full width usually for SectionContainer
+                  child: _buildBadgesPreview(context, profile),
                 ),
-                const SizedBox(height: 32),
 
                 // --- STATS / DETAILS CARD ---
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: _buildDetailsCard(context, profile),
-                ),
-
-                const SizedBox(height: 32),
-
-                // --- BADGES PREVIEW ---
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: _buildBadgesPreview(context, profile),
                 ),
 
                 const SizedBox(height: 32),
@@ -203,55 +229,6 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
     );
   }
 
-  Widget _buildPerformanceStats(BuildContext context, FarmerProfile profile) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return InkWell(
-      onTap: () => Navigator.pushNamed(context, '/farmer/profile/ratings'),
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: colorScheme.outline.withValues(alpha: 0.1)),
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatColumn(
-                  context,
-                  label: "Trust Score",
-                  value: profile.trustScore.toString(),
-                  icon: Icons.verified_user_rounded,
-                  color: Colors.blue.shade700,
-                ),
-                _buildVerticalDivider(context),
-                _buildStatColumn(
-                  context,
-                  label: "Crop Points",
-                  value: DuruhaFormatter.formatNumber(profile.cropPoints),
-                  icon: Icons.stars_rounded,
-                  color: Colors.orange.shade700,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatColumn(
     BuildContext context, {
     required String label,
@@ -282,92 +259,48 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
   }
 
   Widget _buildBadgesPreview(BuildContext context, FarmerProfile profile) {
-    final theme = Theme.of(context);
     final earnedBadges = DuruhaBadges.all
         .where((b) => profile.unlockedBadgeIds.contains(b.id))
-        .take(3)
         .toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return DuruhaSectionContainer(
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Text(
-              "Badges & Achievements",
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+            _buildStatColumn(
+              context,
+              label: "Trust Score",
+              value: profile.trustScore.toString(),
+              icon: Icons.verified_user_rounded,
+              color: Colors.blue.shade700,
             ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.pushNamed(context, '/farmer/profile/ratings'),
-              child: const Text("View All"),
+            _buildVerticalDivider(context),
+            _buildStatColumn(
+              context,
+              label: "Crop Points",
+              value: DuruhaFormatter.formatNumber(profile.cropPoints),
+              icon: Icons.stars_rounded,
+              color: Colors.orange.shade700,
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: earnedBadges.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final badge = earnedBadges[index];
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        SizedBox(
+          height: 120, // Approximate height for BadgeCard
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(
+              earnedBadges.length,
+              (index) => SizedBox(
+                width: 40,
+                child: BadgeCard(
+                  badge: earnedBadges[index],
+                  isUnlocked: true,
+                  iconOnly: true,
                 ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: badge.color.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(badge.icon, color: badge.color, size: 20),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              badge.title,
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.verified_rounded,
-                              color: badge.color,
-                              size: 14,
-                            ),
-                          ],
-                        ),
-                        Text(
-                          badge.criteria,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+            ),
+          ),
         ),
       ],
     );

@@ -49,13 +49,17 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       // Call Repository
       final authRepo = AuthRepository();
-      await authRepo.signup(request);
+      final response = await authRepo.signup(request);
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
       // Navigate to Onboarding
-      Navigator.pushReplacementNamed(context, '/onboarding');
+      Navigator.pushReplacementNamed(
+        context,
+        '/onboarding',
+        arguments: response.user,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);

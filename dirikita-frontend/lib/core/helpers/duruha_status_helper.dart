@@ -82,17 +82,17 @@ class DuruhaStatus {
         return 'Set';
       case 'cultivate':
         return 'Cultivating';
-      case 'Plant':
+      case 'plant':
         return 'Planting';
-      case 'Grow':
+      case 'grow':
         return 'Growing';
-      case 'Harvest':
+      case 'harvest':
         return 'Harvesting';
-      case 'Process':
+      case 'process':
         return 'Processing';
-      case 'Ready to Sell':
+      case 'ready to sell':
         return 'Marketing';
-      case 'Sold':
+      case 'sold':
         return 'Sold';
       default:
         return status;
@@ -101,22 +101,22 @@ class DuruhaStatus {
 
   /// Converts a pledge status to its past tense (e.g., Plant -> Planted)
   static String toPastTense(String status) {
-    switch (status) {
-      case 'Set':
+    switch (status.toLowerCase()) {
+      case 'set':
         return 'Planned';
-      case 'Cultivate':
+      case 'cultivate':
         return 'Cultivated';
-      case 'Plant':
+      case 'plant':
         return 'Planted';
-      case 'Grow':
+      case 'grow':
         return 'Grown';
-      case 'Harvest':
+      case 'harvest':
         return 'Harvested';
-      case 'Process':
+      case 'process':
         return 'Processed';
-      case 'Ready to Sell':
+      case 'ready to sell':
         return 'Marketed';
-      case 'Sold':
+      case 'sold':
         return 'Sold';
       default:
         return status;

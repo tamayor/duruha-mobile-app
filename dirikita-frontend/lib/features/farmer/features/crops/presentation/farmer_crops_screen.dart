@@ -2,6 +2,7 @@ import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/crops/data/selected_crops_repository.dart';
 import 'package:duruha/features/farmer/features/crops/domain/selected_crop_summary.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:flutter/material.dart';
 
 enum SortOption { rankAsc, rankDesc, nameAsc, nameDesc }
@@ -16,6 +17,9 @@ class FarmerCropsScreen extends StatefulWidget {
 class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
   final _repository = SelectedCropsRepository();
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  bool _isSearchVisible = false;
+  // Removed unused _layerLink
 
   List<SelectedCropSummary> _allCrops = [];
   List<SelectedCropSummary> _filteredCrops = [];
@@ -36,7 +40,11 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
         setState(() {
           _allCrops = crops;
           _filteredCrops = crops;
-          _sortCrops(); // Sort initially
+          if (_searchController.text.isNotEmpty) {
+            _filterCrops(_searchController.text);
+          } else {
+            _sortCrops();
+          }
           _isLoading = false;
         });
       }
@@ -80,9 +88,30 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
     });
   }
 
+  void _toggleSearch() {
+    setState(() {
+      _isSearchVisible = !_isSearchVisible;
+      if (_isSearchVisible) {
+        _searchFocusNode.requestFocus();
+      } else {
+        _searchFocusNode.unfocus();
+      }
+    });
+  }
+
+  void _removeSearch() {
+    if (_isSearchVisible) {
+      setState(() {
+        _isSearchVisible = false;
+        _searchFocusNode.unfocus();
+      });
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -98,13 +127,21 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: _toggleSearch,
+            icon: const Icon(Icons.search),
+            tooltip: "Search and Sort",
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       bottomNavigationBar: const FarmerNavigation(
         name: displayName,
         currentRoute: '/farmer/crops',
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const FarmerLoadingScreen()
           : _errorMessage != null
           ? Center(
               child: Text(
@@ -114,78 +151,110 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
                 ),
               ),
             )
-          : Column(
+          : Stack(
               children: [
-                // --- SEARCH BAR & SORT ---
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  color: theme.scaffoldBackgroundColor,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: DuruhaTextField(
-                          label: "Search your crops",
-                          icon: Icons.search,
-                          controller: _searchController,
-                          onChanged: _filterCrops,
-                          isRequired: false, // Search is optional
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        child: DuruhaPopupMenu<SortOption>(
-                          tooltip: 'Sort by',
-                          items: SortOption.values,
-                          selectedValue: _sortOption,
-                          onSelected: (SortOption result) {
-                            setState(() {
-                              _sortOption = result;
-                              _filterCrops(_searchController.text);
-                            });
-                          },
-                          labelBuilder: (SortOption option) {
-                            switch (option) {
-                              case SortOption.rankAsc:
-                                return 'Rank (0-9)';
-                              case SortOption.rankDesc:
-                                return 'Rank (9-0)';
-                              case SortOption.nameAsc:
-                                return 'Name (A-Z)';
-                              case SortOption.nameDesc:
-                                return 'Name (Z-A)';
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // --- CROPS LIST ---
-                Expanded(
-                  child: _filteredCrops.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No crops match your search.',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
+                Column(
+                  children: [
+                    // --- CROPS LIST ---
+                    Expanded(
+                      child: _filteredCrops.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No crops match your search.',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ),
                               ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(20),
+                              itemCount: _filteredCrops.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 16),
+                              itemBuilder: (context, index) {
+                                final crop = _filteredCrops[index];
+                                return _buildCropCard(context, crop);
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+                if (_isSearchVisible) ...[
+                  // Barrier
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: _removeSearch,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+                  // Search Popup
+                  Positioned(
+                    top: 1 / 2,
+                    left: 16,
+                    right: 16,
+                    child: Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(16),
+                      color: theme.colorScheme.surface,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withValues(
+                              alpha: 0.1,
                             ),
                           ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(20),
-                          itemCount: _filteredCrops.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 16),
-                          itemBuilder: (context, index) {
-                            final crop = _filteredCrops[index];
-                            return _buildCropCard(context, crop);
-                          },
                         ),
-                ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: DuruhaTextField(
+                                label: "Search your crops",
+                                icon: Icons.search,
+                                controller: _searchController,
+                                focusNode: _searchFocusNode,
+                                onChanged: _filterCrops,
+                                isRequired: false,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              child: DuruhaPopupMenu<SortOption>(
+                                tooltip: 'Sort by',
+                                items: SortOption.values,
+                                selectedValue: _sortOption,
+                                onSelected: (SortOption result) {
+                                  setState(() {
+                                    _sortOption = result;
+                                    _filterCrops(_searchController.text);
+                                  });
+                                  // Keep visible
+                                },
+                                labelBuilder: (SortOption option) {
+                                  switch (option) {
+                                    case SortOption.rankAsc:
+                                      return 'Rank (0-9)';
+                                    case SortOption.rankDesc:
+                                      return 'Rank (9-0)';
+                                    case SortOption.nameAsc:
+                                      return 'Name (A-Z)';
+                                    case SortOption.nameDesc:
+                                      return 'Name (Z-A)';
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
     );

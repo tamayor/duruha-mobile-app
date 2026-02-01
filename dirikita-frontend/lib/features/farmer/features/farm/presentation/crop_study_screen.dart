@@ -3,6 +3,7 @@ import 'package:duruha/core/widgets/duruha_widgets.dart';
 
 import 'package:duruha/features/farmer/features/farm/data/study_repository.dart';
 import 'package:duruha/features/farmer/features/farm/domain/study_model.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
@@ -56,7 +57,7 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: FarmerLoadingScreen()));
     }
 
     if (_produce == null || _marketStudy == null) {
@@ -94,7 +95,6 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                   Image.network(
                     p.imageHeroUrl,
                     fit: BoxFit.cover,
-                    // _ is context, __ is the error object, ___ is the stack trace
                     errorBuilder: (_, _, _) => Container(
                       color: Colors.grey.shade200,
                       child: const Icon(Icons.broken_image, color: Colors.grey),

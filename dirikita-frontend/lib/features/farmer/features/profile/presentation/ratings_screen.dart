@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
-import 'package:duruha/core/data/duruha_badges.dart';
-import 'package:duruha/core/models/badge_model.dart';
+
 import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
 import 'package:duruha/features/farmer/features/profile/domain/ratings_model.dart';
 import 'package:duruha/features/farmer/features/profile/data/ratings_repository.dart';
+import 'package:duruha/features/farmer/shared/presentation/duruha_badges.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 
 class FarmerProfileRatingsScreen extends StatelessWidget {

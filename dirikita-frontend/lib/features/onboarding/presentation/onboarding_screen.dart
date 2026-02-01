@@ -1,6 +1,9 @@
 import 'package:duruha/features/onboarding/presentation/components/consumer_profile_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/farmer_profile_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/produce_selection_step.dart';
+import 'package:duruha/features/auth/data/auth_repository.dart';
+import 'package:duruha/core/services/session_service.dart';
+import 'package:duruha/shared/user/domain/user_models.dart';
 import 'package:duruha/features/onboarding/presentation/components/terms_and_conditions_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/role_selection_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/basic_info_step.dart';
@@ -96,8 +99,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // --- Logic ---
 
-  void _logFormData() {
-    final formData = {
+  Map<String, dynamic> _buildSubmissionData() {
+    return {
       'role': _userRole,
       'basicInfo': {
         'name': _nameController.text,
@@ -120,6 +123,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           'segment': _consumerSegment,
           'cookingFreq': _cookingFrequency,
           'qualityPrefs': _qualityPreferences,
+          'demands': _consumerDemands,
         },
       if (_userRole == 'Farmer')
         'farmerProfile': {
@@ -127,10 +131,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           'landArea': _landAreaController.text,
           'accessibility': _accessibilityType,
           'waterSources': _waterSources,
+          'pledges': _farmerPledges,
         },
     };
-
-    debugPrint('🚀 [API PREP] Form Data: $formData');
   }
 
   void _nextPage() {
@@ -237,16 +240,39 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Future<void> _submitForm() async {
     setState(() => _isSubmitting = true);
-    await Future.delayed(const Duration(milliseconds: 500)); // Faster Mock API
-    setState(() {
-      _isSubmitting = false;
-      _generatedId = _generateUuid();
-    });
-    _logFormData(); // Log data after basic info
-  }
 
-  String _generateUuid() {
-    return 'id-no';
+    try {
+      final submissionData = _buildSubmissionData();
+      debugPrint('🚀 [ONBOARDING] Submitting Data: $submissionData');
+
+      final authRepo = AuthRepository();
+
+      // 1. Get current User ID (from session or args if we had them)
+      // For now, let's assume we are updating the current session user
+      // or creating a new profile if it's a fresh flow.
+      final currentUser = await SessionService.getSavedUser();
+      final userId =
+          currentUser?.id ??
+          'temp_new_user_${DateTime.now().millisecondsSinceEpoch}';
+
+      // 2. Update Profile & Persist Session
+      await authRepo.updateProfile(userId, submissionData);
+
+      // 3. Submit any extra KYC docs (simulated)
+      await authRepo.submitKyc(userId, {'termsAccepted': true});
+
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _generatedId = userId; // Show actuall User ID or a generated reference
+      });
+    } catch (e) {
+      debugPrint("❌ [ONBOARDING] Error: $e");
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        _showError("Failed to submit onboarding data. Please try again.");
+      }
+    }
   }
 
   // --- UI Builders ---
@@ -448,14 +474,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       generatedId: _generatedId,
       firstName: _nameController.text.split(' ')[0],
       userRole: _userRole ?? 'User', // Fallback just in case
-      onEnterDashboard: () {
+      onEnterDashboard: () async {
+        // Ensure session is valid/fresh before entering
+        final user = await SessionService.getSavedUser();
+        if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(
-          '/',
+          (user?.role == UserRole.farmer) ? '/farmer/farm' : '/home',
           (r) => false,
-          arguments: {
-            'role': _userRole ?? 'Consumer',
-            'name': _nameController.text.split(' ')[0],
-          },
+          arguments: user,
         );
       },
     );
