@@ -1,8 +1,7 @@
-import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/core/helpers/duruha_responsive.dart';
+import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/features/onboarding/presentation/components/selected_produce_summary.dart';
-import 'package:duruha/core/theme/duruha_styles.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:flutter/material.dart';
 
@@ -10,6 +9,8 @@ class ProduceSelectionStep extends StatefulWidget {
   final String userRole;
   final Map<String, Map<String, dynamic>> consumerDemands;
   final Map<String, List<String>> farmerPledges;
+  final String searchQuery;
+  final ProduceCategory? selectedCategory;
   final Function(String, bool) onItemToggled;
   final Function(String, String, bool) onFarmerPledgeChanged;
 
@@ -18,6 +19,8 @@ class ProduceSelectionStep extends StatefulWidget {
     required this.userRole,
     required this.consumerDemands,
     required this.farmerPledges,
+    required this.searchQuery,
+    required this.selectedCategory,
     required this.onItemToggled,
     required this.onFarmerPledgeChanged,
   });
@@ -27,20 +30,6 @@ class ProduceSelectionStep extends StatefulWidget {
 }
 
 class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
-  String _produceSearchQuery = '';
-  final _searchController = TextEditingController();
-  ProduceCategory? _selectedCategory; // null represents "All"
-
-  // Define category icons mapping
-  static const Map<ProduceCategory, IconData> _categoryIcons = {
-    ProduceCategory.leafy: Icons.eco,
-    ProduceCategory.fruitVeg: Icons.bakery_dining,
-    ProduceCategory.root: Icons.grass, // Using grass as proxy for root/earthy
-    ProduceCategory.spice: Icons.flare,
-    ProduceCategory.fruit: Icons.apple,
-    ProduceCategory.legume: Icons.grain,
-  };
-
   List<Produce> _produceList = [];
   bool _isLoading = true;
 
@@ -65,12 +54,6 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   void _showSummary() {
@@ -111,13 +94,14 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
     bool useList = context.isMobile;
     final filteredProduce = _produceList.where((p) {
       // Category Filter
-      if (_selectedCategory != null && p.category != _selectedCategory) {
+      if (widget.selectedCategory != null &&
+          p.category != widget.selectedCategory) {
         return false;
       }
 
       // Search Filter
-      if (_produceSearchQuery.isNotEmpty) {
-        final query = _produceSearchQuery.toLowerCase();
+      if (widget.searchQuery.isNotEmpty) {
+        final query = widget.searchQuery.toLowerCase();
         return p.nameEnglish.toLowerCase().contains(query) ||
             p.nameScientific.toLowerCase().contains(query);
       }
@@ -133,48 +117,7 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
       children: [
         Column(
           children: [
-            // Search and Filter Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  // Search Field
-                  Expanded(
-                    flex: 4,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (v) => setState(() => _produceSearchQuery = v),
-                      decoration: DuruhaStyles.fieldDecoration(
-                        context,
-                        label: "Search...",
-                        icon: Icons.search,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Category Dropdown
-                  // Category Popup Menu
-                  DuruhaPopupMenu<ProduceCategory?>(
-                    selectedValue: _selectedCategory,
-                    tooltip: "Filter by Category",
-                    items: [null, ..._categoryIcons.keys],
-                    itemIcons: {null: Icons.grid_view, ..._categoryIcons},
-                    labelBuilder: (category) {
-                      if (category == null) return "All";
-                      final name = category.name;
-                      return name.substring(0, 1).toUpperCase() +
-                          name.substring(1);
-                    },
-                    onSelected: (value) {
-                      setState(() => _selectedCategory = value);
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
+            // Note: Search and Filter Bar logic moved to parent OnboardingScreen
 
             // 2. Data Grid
             Expanded(
@@ -182,7 +125,7 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
                   ? const Center(child: CircularProgressIndicator())
                   : DuruhaDataGrid(
                       data: filteredProduce,
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                       maxCrossAxisExtent: 200,
                       isList: useList,
                       itemBuilder: (context, produce) {
@@ -194,7 +137,7 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
                           isList: useList,
                           title: produce.nameEnglish,
                           subtitle: produce.nameScientific,
-                          imageUrl: produce.imageThumbnailUrl, // Fixed imageUrl
+                          imageUrl: produce.imageThumbnailUrl,
                           isSelected: isSelected,
                           onTap: () =>
                               widget.onItemToggled(produce.id, !isSelected),

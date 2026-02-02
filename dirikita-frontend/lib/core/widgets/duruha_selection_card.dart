@@ -39,7 +39,7 @@ class DuruhaSelectionCard extends StatelessWidget {
         elevation: isSelected ? 2 : 0,
         clipBehavior: Clip.antiAlias,
         color: isSelected
-            ? colorScheme.secondaryContainer
+            ? colorScheme.primaryContainer.withValues(alpha: 0.6)
             : colorScheme.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -91,7 +91,7 @@ class DuruhaSelectionCard extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: colorScheme.onSurface,
+                    color: colorScheme.onSecondary,
                   ),
                   maxLines: 1,
                 ),
@@ -188,8 +188,8 @@ class DuruhaSelectionCard extends StatelessWidget {
     if (isBadge) {
       return CircleAvatar(
         radius: 12,
-        backgroundColor: colorScheme.primary,
-        child: Icon(Icons.check, size: 14, color: colorScheme.onPrimary),
+        backgroundColor: colorScheme.onPrimary,
+        child: Icon(Icons.check, size: 14, color: colorScheme.primary),
       );
     }
     return Icon(Icons.check_circle, color: colorScheme.onPrimary, size: 28);

@@ -65,7 +65,7 @@ class DuruhaDropdown<T> extends StatelessWidget {
           ),
 
       // Arrow color set to onPrimary
-      icon: Icon(Icons.unfold_more_rounded, color: contentColor, size: 20),
+      icon: Icon(Icons.arrow_drop_down_rounded, color: contentColor, size: 20),
 
       // Selected value text style
       style: theme.textTheme.bodyLarge?.copyWith(

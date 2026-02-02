@@ -6,12 +6,14 @@ class UserProfile {
   final String id;
   final String joinedAt;
   final String name;
+  final String? email;
   final String phone;
   final String barangay;
   final String city;
   final String province;
   final String landmark;
   final String postalCode;
+  final String? imageUrl;
   final UserRole role;
   final String dialect;
   // Farmer Specific
@@ -20,6 +22,9 @@ class UserProfile {
   final String? accessibilityType;
   final List<String>? waterSources;
   final List<ProduceItem>? pledgedCrops;
+  final List<String>? paymentMethods;
+  final List<String>? operatingDays;
+  final String? deliveryWindow;
 
   // Consumer Specific
   final String? consumerSegment; // Household, Restaurant, etc.
@@ -32,12 +37,14 @@ class UserProfile {
     required this.id,
     required this.joinedAt,
     required this.name,
+    this.email,
     required this.phone,
     required this.barangay,
     required this.city,
     required this.province,
     required this.landmark,
     required this.postalCode,
+    this.imageUrl,
     required this.role,
     required this.dialect,
     this.farmAlias,
@@ -45,6 +52,9 @@ class UserProfile {
     this.accessibilityType,
     this.waterSources,
     this.pledgedCrops,
+    this.paymentMethods,
+    this.operatingDays,
+    this.deliveryWindow,
     this.consumerSegment,
     this.segmentSize,
     this.cookingFrequency,

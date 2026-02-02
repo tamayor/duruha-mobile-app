@@ -77,7 +77,7 @@ class _FarmerProfileStepState extends State<FarmerProfileStep> {
                 controller: widget.landAreaController,
                 label: 'Total Land Area',
                 icon: Icons.landscape_outlined,
-                keyboardType: TextInputType.number,
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
                 suffix: 'sqm',
               ),
 

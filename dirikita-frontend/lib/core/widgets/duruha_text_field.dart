@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:duruha/core/theme/duruha_styles.dart'; // Make sure this import matches your file structure
 
 class DuruhaTextField extends StatelessWidget {
@@ -35,6 +36,17 @@ class DuruhaTextField extends StatelessWidget {
     this.focusNode,
   });
 
+  bool get _isNumericInput =>
+      keyboardType == TextInputType.number ||
+      keyboardType == const TextInputType.numberWithOptions(decimal: true);
+
+  /// Helper method to get clean numeric value from controller
+  /// Use this when you need to submit/process the actual number
+  /// Example: DuruhaTextField.getCleanValue(myController) returns "1234" instead of "1,234"
+  static String getCleanValue(TextEditingController controller) {
+    return controller.text.replaceAll(',', '');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -46,6 +58,7 @@ class DuruhaTextField extends StatelessWidget {
         obscureText: isPassword,
         maxLines: maxLines,
         onChanged: onChanged,
+        inputFormatters: _isNumericInput ? [_DecimalInputFormatter()] : null,
 
         // --- KEY FEATURE: INSTANT VALIDATION FIX ---
         // This ensures the error message vanishes immediately when the user types
@@ -75,5 +88,34 @@ class DuruhaTextField extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+/// Formatter that allows decimal numbers with only one decimal point
+class _DecimalInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Allow empty
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    // Check if the new text is valid
+    final text = newValue.text;
+
+    // Only allow digits and one decimal point
+    if (!RegExp(r'^[0-9]*\.?[0-9]*$').hasMatch(text)) {
+      return oldValue;
+    }
+
+    // Ensure only one decimal point
+    if (text.split('.').length > 2) {
+      return oldValue;
+    }
+
+    return newValue;
   }
 }

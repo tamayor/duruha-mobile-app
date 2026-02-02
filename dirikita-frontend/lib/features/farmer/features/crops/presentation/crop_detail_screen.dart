@@ -1,4 +1,4 @@
-import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
@@ -8,6 +8,7 @@ import 'package:duruha/features/farmer/features/crops/domain/crop_detail_models.
 import 'package:duruha/features/farmer/features/crops/domain/selected_crop_summary.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
+
 import 'package:intl/intl.dart';
 
 class CropDetailScreen extends StatefulWidget {
@@ -65,14 +66,17 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
         }
 
         if (snapshot.hasError) {
-          return Scaffold(
-            appBar: AppBar(title: const Text("Error")),
+          return DuruhaScaffold(
+            appBarTitle: "Error",
             body: Center(child: Text("Error: ${snapshot.error}")),
           );
         }
 
         if (!snapshot.hasData) {
-          return const Scaffold(body: Center(child: FarmerLoadingScreen()));
+          return const DuruhaScaffold(
+            appBarTitle: "Loading",
+            body: Center(child: FarmerLoadingScreen()),
+          );
         }
 
         final data = snapshot.data!;
@@ -80,41 +84,20 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
         final produce = data.produce;
         final history = data.history;
 
+        // Note: DuruhaScaffold handles system UI overlay style via DuruhaAppBar
+
         return Scaffold(
+          backgroundColor: theme.colorScheme.surface,
           body: CustomScrollView(
             slivers: [
-              // --- APP BAR ---
-              SliverAppBar(
-                expandedHeight: 250,
-                pinned: true,
-                flexibleSpace: FlexibleSpaceBar(
-                  title: Text(
-                    summary.nameDialect.toUpperCase(),
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurface,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24,
-                    ),
-                  ),
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.network(produce.imageHeroUrl, fit: BoxFit.cover),
-                      const DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Colors.black54],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              // 1. HERO SLIVER APPBAR
+              DuruhaSliverAppBar(
+                title: summary.nameDialect.toUpperCase(),
+                imageUrl: produce.imageHeroUrl,
+                expandedHeight: 300,
               ),
 
-              // --- CONTENT ---
+              // 2. CONTENT
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
@@ -190,8 +173,7 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                               "Past records of harvested\nand sold pledges.",
                           children: [
                             Container(
-                              width: double
-                                  .infinity, // <--- Add this to fill the screen width
+                              width: double.infinity,
                               padding: const EdgeInsets.symmetric(
                                 vertical: 24,
                                 horizontal: 16,
@@ -201,30 +183,25 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(
-                                // mainAxisAlignment centers vertically, crossAxisAlignment centers horizontally
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
                                     "TOTAL EARNINGS",
                                     style: TextStyle(
-                                      fontSize:
-                                          10, // Increased slightly for readability
+                                      fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                       color: theme.colorScheme.onSurface,
                                       letterSpacing: 1.2,
                                     ),
                                   ),
-                                  const SizedBox(
-                                    height: 4,
-                                  ), // Small gap between label and amount
+                                  const SizedBox(height: 4),
                                   Text(
                                     DuruhaFormatter.formatCurrency(
                                       totalEarnings,
                                     ),
                                     style: TextStyle(
-                                      fontSize:
-                                          24, // Made a bit bolder for your dashboard
+                                      fontSize: 24,
                                       fontWeight: FontWeight.bold,
                                       color: theme.colorScheme.onSurface,
                                     ),
@@ -232,11 +209,10 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                                 ],
                               ),
                             ),
-                            const Divider(), // Clean separator before the history list
+                            const Divider(),
                             ...soldHistory.map(
                               (p) => _buildPledgeTile(context, p),
                             ),
-                            // ... rest of your code
                           ],
                         );
                       }(),

@@ -80,14 +80,14 @@ class DuruhaTheme {
         brightness: Brightness.light,
         // Primary: Brand Identity
         primary: parchment50,
-        onPrimary: goblin600, // Text on primary
-        primaryContainer: parchment300,
-        onPrimaryContainer: goblin900,
+        onPrimary: parchment800, // Text on primary
+        primaryContainer: parchment100,
+        onPrimaryContainer: parchment950,
 
         // Secondary: Accents
         secondary: goblin50,
         onSecondary: goblin950,
-        secondaryContainer: goblin300,
+        secondaryContainer: goblin100,
         onSecondaryContainer: goblin900,
 
         // Surface: Paper background
@@ -149,7 +149,7 @@ class DuruhaTheme {
         // Primary: Brand Identity (Lighter for dark mode)
         primary: goblin950,
         onPrimary: parchment100, // Dark text on light primary
-        primaryContainer: goblin800,
+        primaryContainer: goblin700,
         onPrimaryContainer: goblin100,
 
         // Secondary: Accents

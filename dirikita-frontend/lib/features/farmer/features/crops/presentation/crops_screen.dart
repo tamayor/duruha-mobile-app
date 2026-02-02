@@ -2,7 +2,7 @@ import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/crops/data/selected_crops_repository.dart';
 import 'package:duruha/features/farmer/features/crops/domain/selected_crop_summary.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
-import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/material.dart';
 
 enum SortOption { rankAsc, rankDesc, nameAsc, nameDesc }
@@ -120,39 +120,25 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
     final theme = Theme.of(context);
     const displayName = "Elly";
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('My Pledged Crops'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            onPressed: _toggleSearch,
-            icon: const Icon(Icons.search),
-            tooltip: "Search and Sort",
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+    return DuruhaScaffold(
+      appBarTitle: 'My Pledged Crops',
+      appBarActions: [
+        IconButton(
+          onPressed: _toggleSearch,
+          icon: const Icon(Icons.search),
+          tooltip: "Search and Sort",
+        ),
+        const SizedBox(width: 8),
+      ],
       bottomNavigationBar: const FarmerNavigation(
         name: displayName,
         currentRoute: '/farmer/crops',
       ),
       body: _isLoading
           ? const FarmerLoadingScreen()
-          : _errorMessage != null
-          ? Center(
-              child: Text(
-                'Error: $_errorMessage',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
-              ),
-            )
           : Stack(
               children: [
+                // Content
                 Column(
                   children: [
                     // --- CROPS LIST ---

@@ -117,146 +117,143 @@ class _FarmerProgramsScreenState extends State<FarmerProgramsScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text("Duruha Programs"),
-        centerTitle: true,
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
-      ),
+    return DuruhaScaffold(
+      appBarTitle: 'Farmer Programs',
       bottomNavigationBar: const FarmerNavigation(
         name: "Elly",
-        currentRoute: '/farmer/programs',
+        currentRoute: '/',
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Category Selector
-          const Divider(height: 1),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildProgramHeader(context),
-                  const SizedBox(height: 24),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    spacing: 10,
+          SingleChildScrollView(
+            child: Column(
+              children: [
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
+                      _buildProgramHeader(context),
+                      const SizedBox(height: 24),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        spacing: 10,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Available for You",
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Exclusive support programs for you.",
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          DuruhaPopupMenu<String>(
+                            items: _categories,
+                            selectedValue: _selectedCategory,
+                            onSelected: (category) {
+                              setState(() {
+                                _selectedCategory = category;
+                              });
+                              HapticFeedback.selectionClick();
+                            },
+                            labelBuilder: (category) => category,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      if (_filteredPrograms.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(40.0),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.search_off,
+                                  size: 48,
+                                  color: colorScheme.outline,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  "No programs found for this category.",
+                                  style: TextStyle(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        ..._filteredPrograms.map(
+                          (program) => _buildProgramCard(context, program),
+                        ),
+
+                      const SizedBox(height: 32),
+
+                      // Suggestion Section
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer.withValues(
+                            alpha: 0.3,
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: colorScheme.primary.withValues(alpha: 0.1),
+                          ),
+                        ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Icon(
+                              Icons.lightbulb_outline,
+                              color: colorScheme.primary,
+                              size: 32,
+                            ),
+                            const SizedBox(height: 16),
                             Text(
-                              "Available for You",
-                              style: theme.textTheme.titleLarge?.copyWith(
+                              "Suggest a Program",
+                              style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: colorScheme.onSurface,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 8),
                             Text(
-                              "Exclusive support programs for you.",
+                              "Don't see what you need? Tell us how we can help your farm grow.",
+                              textAlign: TextAlign.center,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            DuruhaButton(
+                              text: "Send Suggestion",
+                              onPressed: () {},
+                              isOutline: true,
+                            ),
                           ],
                         ),
                       ),
-                      DuruhaPopupMenu<String>(
-                        items: _categories,
-                        selectedValue: _selectedCategory,
-                        onSelected: (category) {
-                          setState(() {
-                            _selectedCategory = category;
-                          });
-                          HapticFeedback.selectionClick();
-                        },
-                        labelBuilder: (category) => category,
-                      ),
+                      const SizedBox(height: 40),
                     ],
                   ),
-                  const SizedBox(height: 24),
-
-                  if (_filteredPrograms.isEmpty)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(40.0),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 48,
-                              color: colorScheme.outline,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              "No programs found for this category.",
-                              style: TextStyle(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    ..._filteredPrograms.map(
-                      (program) => _buildProgramCard(context, program),
-                    ),
-
-                  const SizedBox(height: 32),
-
-                  // Suggestion Section
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer.withValues(
-                        alpha: 0.3,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: colorScheme.primary.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.lightbulb_outline,
-                          color: colorScheme.primary,
-                          size: 32,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Suggest a Program",
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Don't see what you need? Tell us how we can help your farm grow.",
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        DuruhaButton(
-                          text: "Send Suggestion",
-                          onPressed: () {},
-                          isOutline: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
-import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 
@@ -60,72 +61,107 @@ class _MonitorPledgeScreenState extends State<MonitorPledgeScreen> {
 
     return DefaultTabController(
       length: 2,
-      child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        appBar: AppBar(
-          title: const Text("Monitor Pledge"),
-          backgroundColor: theme.colorScheme.surface,
-          elevation: 0,
-          centerTitle: true,
-          bottom: TabBar(
-            labelColor: theme.colorScheme.onPrimary,
-            unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-            indicatorColor: theme.colorScheme.primary,
-            tabs: const [
-              Tab(text: "Active Harvests"),
-              Tab(text: "Pledge History"),
-            ],
-          ),
-        ),
+      child: DuruhaScaffold(
+        appBarTitle: 'Pledge Monitor',
         bottomNavigationBar: const FarmerNavigation(
           name: "Elly", // Dynamic name later
           currentRoute: '/',
         ),
         body: _isLoading
             ? const FarmerLoadingScreen()
-            : TabBarView(
+            : Column(
                 children: [
-                  // Active Harvests Tab
-                  activePledges.isEmpty
-                      ? Center(
-                          child: Text(
-                            "No active pledges.",
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(20),
-                          itemCount: activePledges.length,
-                          itemBuilder: (context, index) {
-                            return PledgeCard(
-                              pledge: activePledges[index],
-                              isActive: true,
-                            );
-                          },
-                        ),
+                  // Tab Bar
+                  Container(
+                    color: theme.colorScheme.surface,
+                    child: TabBar(
+                      labelColor: theme.colorScheme.onPrimary,
+                      unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                      labelStyle: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      unselectedLabelStyle: theme.textTheme.titleMedium,
+                      indicatorColor: theme.colorScheme.onPrimary,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      tabs: const [
+                        Tab(text: "Active Harvests"),
+                        Tab(text: "Pledge History"),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        // Active Harvests Tab
+                        activePledges.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.eco_outlined,
+                                      size: 48,
+                                      color: theme.colorScheme.outline
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      "No active pledges.",
+                                      style: TextStyle(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(20),
+                                itemCount: activePledges.length,
+                                itemBuilder: (context, index) {
+                                  return PledgeCard(
+                                    pledge: activePledges[index],
+                                    isActive: true,
+                                  );
+                                },
+                              ),
 
-                  // Pledge History Tab
-                  historyPledges.isEmpty
-                      ? Center(
-                          child: Text(
-                            "No pledge history.",
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(20),
-                          itemCount: historyPledges.length,
-                          itemBuilder: (context, index) {
-                            return PledgeCard(
-                              pledge: historyPledges[index],
-                              isActive: false,
-                            );
-                          },
-                        ),
+                        // Pledge History Tab
+                        historyPledges.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.history_toggle_off,
+                                      size: 48,
+                                      color: theme.colorScheme.outline
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      "No pledge history.",
+                                      style: TextStyle(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(20),
+                                itemCount: historyPledges.length,
+                                itemBuilder: (context, index) {
+                                  return PledgeCard(
+                                    pledge: historyPledges[index],
+                                    isActive: false,
+                                  );
+                                },
+                              ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
       ),

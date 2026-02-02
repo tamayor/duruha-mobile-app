@@ -1,9 +1,10 @@
 import 'package:duruha/core/helpers/duruha_formatter.dart';
+import 'package:duruha/core/helpers/duruha_status_helper.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 
 import 'package:duruha/features/farmer/features/farm/data/study_repository.dart';
 import 'package:duruha/features/farmer/features/farm/domain/study_model.dart';
-import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
@@ -57,12 +58,15 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: FarmerLoadingScreen()));
+      return const DuruhaScaffold(
+        appBarTitle: "Loading",
+        body: Center(child: FarmerLoadingScreen()),
+      );
     }
 
     if (_produce == null || _marketStudy == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Error")),
+      return DuruhaScaffold(
+        appBarTitle: "Error",
         body: const Center(child: Text("Crop data not found")),
       );
     }
@@ -73,55 +77,13 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
-          // 1. Hero AppBar
-          SliverAppBar(
-            expandedHeight: 280,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(
-                p.namesByDialect['tagalog'] ?? p.nameEnglish,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
-                ),
-              ),
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    p.imageHeroUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.broken_image, color: Colors.grey),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.7),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              onPressed: () => Navigator.pop(context),
-            ),
+          DuruhaSliverAppBar(
+            title: p.namesByDialect['tagalog'] ?? p.nameEnglish,
+            imageUrl: p.imageHeroUrl,
           ),
-
-          // 2. Content
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -143,7 +105,6 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                   const SizedBox(height: 24),
 
                   // Demand vs Supply Card
-                  // Demand vs Supply Card
                   DuruhaSectionContainer(
                     title: "Demand Overview",
                     children: [
@@ -151,14 +112,14 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                         context,
                         "Local Demand",
                         study.localDemandScore,
-                        Colors.orange,
+                        DuruhaStatus.getMarketColor(context, "local"),
                       ),
                       const SizedBox(height: 16),
                       _buildComparisonRow(
                         context,
                         "National Demand",
                         study.nationalDemandScore,
-                        Colors.blue,
+                        DuruhaStatus.getMarketColor(context, "national"),
                       ),
                     ],
                   ),
@@ -178,9 +139,9 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisCount: 2,
-                    childAspectRatio: 2.5,
+                    childAspectRatio: 1.5,
                     mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
+                    crossAxisSpacing: 16,
                     children: [
                       _buildStatTile(
                         context,
@@ -190,7 +151,7 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                       _buildStatTile(
                         context,
                         "Season",
-                        "${p.seasonalityStart}-${p.seasonalityEnd}",
+                        "${p.seasonalityStart}\n${p.seasonalityEnd}",
                       ),
                       _buildStatTile(
                         context,
@@ -308,7 +269,7 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                             localData.fulfilledKg,
                             localData.demandKg,
                             localRatio,
-                            Colors.orange,
+                            DuruhaStatus.getMarketColor(context, "local"),
                           ),
                           const SizedBox(height: 8),
                           // National Bar Group
@@ -318,7 +279,7 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                             nationalData.fulfilledKg,
                             nationalData.demandKg,
                             nationalRatio,
-                            Colors.blue,
+                            DuruhaStatus.getMarketColor(context, "national"),
                           ),
                         ],
                       ),
@@ -409,7 +370,7 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
 
   Widget _buildStatTile(BuildContext context, String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),

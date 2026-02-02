@@ -1,3 +1,4 @@
+import 'package:duruha/core/helpers/duruha_status_helper.dart';
 import 'package:duruha/features/farmer/shared/data/farmer_shared_repository.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
@@ -287,259 +288,285 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("New Harvest Pledge"),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // SECTION 1: CROP SELECTION
-              DuruhaSectionContainer(
-                title: "What are you planting?",
-                children: [
-                  _isLoadingCrops
-                      ? const Center(child: CircularProgressIndicator())
-                      : DuruhaDropdown<Produce>(
-                          value: _selectedCrop,
-                          label: "Choose crop",
-                          prefixIcon: Icons.agriculture,
-                          items: _availableCrops,
-                          labelBuilder: (crop) {
-                            final dialect = _farmerDialect;
-                            final displayName =
-                                crop.namesByDialect[dialect] ??
-                                crop.namesByDialect[dialect.toLowerCase()] ??
-                                crop.namesByDialect['tagalog'] ??
-                                crop.nameEnglish;
-                            return "$displayName (${crop.nameEnglish})";
-                          },
-                          onChanged: (val) {
-                            setState(() {
-                              _selectedCrop = val;
-                              if (val != null) {
-                                _selectedVariants.clear();
-                              }
-                            });
-                          },
-                          validator: (val) =>
-                              val == null ? 'Please select a crop' : null,
-                        ),
-
-                  if (_selectedCrop != null) ...[
-                    const SizedBox(height: 24),
-                    DuruhaSelectionChipGroup(
-                      title: "Crop Variants",
-                      subtitle: "Which varieties are you planting?",
-                      options: _selectedCrop!.availableVarieties,
-                      selectedValues: _selectedVariants,
-                      onToggle: _toggleVariant,
-                    ),
-                  ],
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // SECTION 2: PLEDGE DETAILS
-              DuruhaSectionContainer(
-                title: "Harvest Details",
-                children: [
-                  GestureDetector(
-                    onTap: _pickDate,
-                    child: AbsorbPointer(
-                      child: DuruhaTextField(
-                        label: "Delivery Date",
-                        icon: Icons.calendar_today,
-                        controller: _dateController,
-                        validator: (v) =>
-                            _harvestDate == null ? 'Date is required' : null,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Simulated Demand Display
-                  if (_isLoadingDemand)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    )
-                  else
-                    _buildDemandForecastBox(context),
-
-                  if (_simulatedDemand != null &&
-                      ((_simulatedDemand!['local_fulfilled_kg'] as num) >=
-                          (_simulatedDemand!['local_demand_kg'] as num)))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
+    return DuruhaScaffold(
+      appBarTitle: 'Create Harvest Pledge',
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Column(
+              children: [
+                SizedBox(
+                  height: MediaQuery.of(context).padding.top + kToolbarHeight,
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // SECTION 1: CROP SELECTION
+                        DuruhaSectionContainer(
+                          title: "What are you planting?",
                           children: [
-                            Icon(
-                              Icons.public,
-                              color: theme.colorScheme.onSecondaryContainer,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                "Local demand full. You will be supplying the National Market.",
-                                style: TextStyle(
-                                  color: theme.colorScheme.onSecondaryContainer,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 13,
+                            _isLoadingCrops
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : DuruhaDropdown<Produce>(
+                                    value: _selectedCrop,
+                                    label: "Choose crop",
+                                    prefixIcon: Icons.agriculture,
+                                    items: _availableCrops,
+                                    labelBuilder: (crop) {
+                                      final dialect = _farmerDialect;
+                                      final displayName =
+                                          crop.namesByDialect[dialect] ??
+                                          crop.namesByDialect[dialect
+                                              .toLowerCase()] ??
+                                          crop.namesByDialect['tagalog'] ??
+                                          crop.nameEnglish;
+                                      return "$displayName (${crop.nameEnglish})";
+                                    },
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _selectedCrop = val;
+                                        if (val != null) {
+                                          _selectedVariants.clear();
+                                        }
+                                      });
+                                    },
+                                    validator: (val) => val == null
+                                        ? 'Please select a crop'
+                                        : null,
+                                  ),
+
+                            if (_selectedCrop != null) ...[
+                              const SizedBox(height: 24),
+                              DuruhaSelectionChipGroup(
+                                title: "Crop Variants",
+                                subtitle: "Which varieties are you planting?",
+                                options: _selectedCrop!.availableVarieties,
+                                selectedValues: _selectedVariants,
+                                onToggle: _toggleVariant,
+                              ),
+                            ],
+                          ],
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // SECTION 2: PLEDGE DETAILS
+                        DuruhaSectionContainer(
+                          title: "Harvest Details",
+                          children: [
+                            GestureDetector(
+                              onTap: _pickDate,
+                              child: AbsorbPointer(
+                                child: DuruhaTextField(
+                                  label: "Delivery Date",
+                                  icon: Icons.calendar_today,
+                                  controller: _dateController,
+                                  validator: (v) => _harvestDate == null
+                                      ? 'Date is required'
+                                      : null,
                                 ),
                               ),
                             ),
+
+                            const SizedBox(height: 16),
+
+                            // Simulated Demand Display
+                            if (_isLoadingDemand)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              _buildDemandForecastBox(context),
+
+                            if (_simulatedDemand != null &&
+                                ((_simulatedDemand!['local_fulfilled_kg']
+                                        as num) >=
+                                    (_simulatedDemand!['local_demand_kg']
+                                        as num)))
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.secondaryContainer,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.public,
+                                        color: theme
+                                            .colorScheme
+                                            .onSecondaryContainer,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          "Local demand full. You will be supplying the National Market.",
+                                          style: TextStyle(
+                                            color: theme
+                                                .colorScheme
+                                                .onSecondaryContainer,
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                            const SizedBox(height: 16),
+
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                DuruhaTextField(
+                                  label: "Quantity",
+                                  icon: Icons.scale,
+                                  controller: _quantityController,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (val) => setState(() {}),
+                                  validator: (val) {
+                                    if (val == null || val.isEmpty)
+                                      return 'Required';
+                                    final qty = double.tryParse(val);
+                                    if (qty == null) return 'Invalid';
+
+                                    if (_simulatedDemand != null) {
+                                      final double lDemand =
+                                          (_simulatedDemand!['local_demand_kg']
+                                                  as num)
+                                              .toDouble();
+                                      final double lFulfilled =
+                                          (_simulatedDemand!['local_fulfilled_kg']
+                                                  as num)
+                                              .toDouble();
+
+                                      // Auto-switch logic: If local is strictly full, supply national
+                                      final bool isLocalFull =
+                                          lFulfilled >= lDemand;
+
+                                      if (!isLocalFull) {
+                                        // Local Supply Logic
+                                        const double minLocalPledge = 20.0;
+                                        if (qty < minLocalPledge) {
+                                          return 'Min: ${minLocalPledge.toStringAsFixed(0)} kg';
+                                        }
+
+                                        final double lRemaining =
+                                            (lDemand - lFulfilled).clamp(
+                                              0.0,
+                                              double.infinity,
+                                            );
+
+                                        if (qty > lRemaining) {
+                                          return 'Max: ${lRemaining.toStringAsFixed(0)} kg';
+                                        }
+                                      } else {
+                                        // National Supply Logic
+                                        const double minNationalPledge = 50.0;
+                                        if (qty < minNationalPledge) {
+                                          return 'Min: ${minNationalPledge.toStringAsFixed(0)} kg';
+                                        }
+                                      }
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                DuruhaDropdown<String>(
+                                  value: _selectedUnit,
+                                  label: "Unit",
+                                  prefixIcon: Icons.straighten,
+                                  items: _units,
+                                  labelBuilder: (u) => u,
+                                  onChanged: (v) =>
+                                      setState(() => _selectedUnit = v!),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
-                      ),
+
+                        const SizedBox(height: 24),
+
+                        // SECTION 3: PREVIEW (Conditional)
+                        if (_selectedCrop != null ||
+                            _quantityController.text.isNotEmpty ||
+                            _harvestDate != null) ...[
+                          DuruhaSectionContainer(
+                            title: "Pledge Preview",
+                            backgroundColor: theme.colorScheme.primaryContainer
+                                .withValues(alpha: 0.3),
+                            children: [
+                              _buildPreviewRow(
+                                "Target Market",
+                                (_simulatedDemand != null &&
+                                        ((_simulatedDemand!['local_fulfilled_kg']
+                                                as num) >=
+                                            (_simulatedDemand!['local_demand_kg']
+                                                as num)))
+                                    ? "National"
+                                    : "Local",
+                              ),
+                              _buildPreviewRow(
+                                "Crop",
+                                _selectedCrop?.nameEnglish ?? "-",
+                              ),
+                              _buildPreviewRow(
+                                "Variety",
+                                _selectedVariants.isNotEmpty
+                                    ? _selectedVariants.join(", ")
+                                    : "-",
+                              ),
+                              _buildPreviewRow(
+                                "Quantity",
+                                "${_quantityController.text.isEmpty ? '-' : _quantityController.text} $_selectedUnit",
+                              ),
+                              _buildPreviewRow(
+                                "Harvest Date",
+                                _harvestDate != null
+                                    ? DateFormat(
+                                        'MMM d, yyyy',
+                                      ).format(_harvestDate!)
+                                    : "-",
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+
+                        // SUBMIT BUTTON
+                        DuruhaButton(
+                          text: "Confirm Pledge",
+                          isLoading: _isSubmitting,
+                          onPressed: _submitPledge,
+                        ),
+                      ],
                     ),
-
-                  const SizedBox(height: 16),
-
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: DuruhaTextField(
-                          label: "Quantity",
-                          icon: Icons.scale,
-                          controller: _quantityController,
-                          keyboardType: TextInputType.number,
-                          onChanged: (val) => setState(() {}),
-                          validator: (val) {
-                            if (val == null || val.isEmpty) return 'Required';
-                            final qty = double.tryParse(val);
-                            if (qty == null) return 'Invalid';
-
-                            if (_simulatedDemand != null) {
-                              final double lDemand =
-                                  (_simulatedDemand!['local_demand_kg'] as num)
-                                      .toDouble();
-                              final double lFulfilled =
-                                  (_simulatedDemand!['local_fulfilled_kg']
-                                          as num)
-                                      .toDouble();
-
-                              // Auto-switch logic: If local is strictly full, supply national
-                              final bool isLocalFull = lFulfilled >= lDemand;
-
-                              if (!isLocalFull) {
-                                // Local Supply Logic
-                                const double minLocalPledge = 20.0;
-                                if (qty < minLocalPledge) {
-                                  return 'Min: ${minLocalPledge.toStringAsFixed(0)} kg';
-                                }
-
-                                final double lRemaining = (lDemand - lFulfilled)
-                                    .clamp(0.0, double.infinity);
-
-                                if (qty > lRemaining) {
-                                  return 'Max: ${lRemaining.toStringAsFixed(0)} kg';
-                                }
-                              } else {
-                                // National Supply Logic
-                                const double minNationalPledge = 50.0;
-                                if (qty < minNationalPledge) {
-                                  return 'Min: ${minNationalPledge.toStringAsFixed(0)} kg';
-                                }
-                              }
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 1,
-                        child: DuruhaDropdown<String>(
-                          value: _selectedUnit,
-                          label: "Unit",
-                          prefixIcon: Icons.straighten,
-                          items: _units,
-                          labelBuilder: (u) => u,
-                          onChanged: (v) => setState(() => _selectedUnit = v!),
-                        ),
-                      ),
-                    ],
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // SECTION 3: PREVIEW (Conditional)
-              if (_selectedCrop != null ||
-                  _quantityController.text.isNotEmpty ||
-                  _harvestDate != null) ...[
-                DuruhaSectionContainer(
-                  title: "Pledge Preview",
-                  backgroundColor: theme.colorScheme.primaryContainer
-                      .withValues(alpha: 0.3),
-                  children: [
-                    _buildPreviewRow(
-                      "Target Market",
-                      (_simulatedDemand != null &&
-                              ((_simulatedDemand!['local_fulfilled_kg']
-                                      as num) >=
-                                  (_simulatedDemand!['local_demand_kg']
-                                      as num)))
-                          ? "National"
-                          : "Local",
-                    ),
-                    _buildPreviewRow("Crop", _selectedCrop?.nameEnglish ?? "-"),
-                    _buildPreviewRow(
-                      "Variety",
-                      _selectedVariants.isNotEmpty
-                          ? _selectedVariants.join(", ")
-                          : "-",
-                    ),
-                    _buildPreviewRow(
-                      "Quantity",
-                      "${_quantityController.text.isEmpty ? '-' : _quantityController.text} $_selectedUnit",
-                    ),
-                    _buildPreviewRow(
-                      "Harvest Date",
-                      _harvestDate != null
-                          ? DateFormat('MMM d, yyyy').format(_harvestDate!)
-                          : "-",
-                    ),
-                  ],
                 ),
-                const SizedBox(height: 24),
               ],
-
-              // SUBMIT BUTTON
-              DuruhaButton(
-                text: "Confirm Pledge",
-                isLoading: _isSubmitting,
-                onPressed: _submitPledge,
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -620,7 +647,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                "Market Forecast for ${DateFormat('MMMM dd, yyyy').format(_harvestDate!)}",
+                "Market Forecast for\n${DateFormat('MMMM dd, yyyy').format(_harvestDate!)}",
                 style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.onPrimary,
@@ -639,6 +666,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
             lPrice,
             lRatio,
             localFull,
+            "local",
           ),
 
           if (localFull)
@@ -653,7 +681,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    "Local demand fully met! Switch to National.",
+                    "Local demand fully met!\nSwitch to National.",
                     style: TextStyle(
                       color: theme.colorScheme.error,
                       fontSize: 12,
@@ -675,6 +703,7 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
             nPrice,
             nRatio,
             false,
+            "national",
           ),
 
           const SizedBox(height: 16),
@@ -728,11 +757,14 @@ class _FarmerCreatePledgeScreenState extends State<FarmerCreatePledgeScreen> {
     double price,
     double ratio,
     bool isFull,
+    String market,
   ) {
     final theme = Theme.of(context);
     final color = isFull
         ? theme.colorScheme.error
-        : (ratio > 0.8 ? Colors.orange : Colors.green);
+        : (ratio > 0.8
+              ? Colors.orange
+              : DuruhaStatus.getMarketColor(context, market));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

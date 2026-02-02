@@ -1,4 +1,4 @@
-import 'package:duruha/core/widgets/duruha_inkwell.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_navigation.dart';
@@ -34,19 +34,11 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
     // Initial basic info from passed arguments (fallback)
     final initialName = widget.userData['name'] ?? 'Consumer';
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Profile'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () {},
-          ),
-        ],
-      ),
+    return DuruhaScaffold(
+      appBarTitle: 'Profile',
+      appBarActions: [
+        IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () {}),
+      ],
       bottomNavigationBar: ConsumerNavigation(
         name: initialName,
         currentRoute: '/profile',
@@ -66,106 +58,114 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
           final displayName = profile.name;
           const displayRole = 'Consumer';
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                // --- HEADER ---
-                Center(
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundColor: theme.colorScheme.primaryContainer,
-                        child: Text(
-                          displayName.isNotEmpty
-                              ? displayName[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onPrimaryContainer,
+          return Stack(
+            children: [
+              SingleChildScrollView(
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height:
+                          MediaQuery.of(context).padding.top + kToolbarHeight,
+                    ),
+                    const SizedBox(height: 20),
+                    // --- HEADER ---
+                    Center(
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundColor: theme.colorScheme.primaryContainer,
+                            child: Text(
+                              displayName.isNotEmpty
+                                  ? displayName[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        displayName,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          displayRole.toUpperCase(),
-                          style: TextStyle(
-                            color: theme.colorScheme.onPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            letterSpacing: 1.2,
+                          const SizedBox(height: 16),
+                          Text(
+                            displayName,
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              displayRole.toUpperCase(),
+                              style: TextStyle(
+                                color: theme.colorScheme.onPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
 
-                const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                // --- STATS / DETAILS CARD ---
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: _buildDetailsCard(context, profile),
-                ),
+                    // --- STATS / DETAILS CARD ---
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: _buildDetailsCard(context, profile),
+                    ),
 
-                const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                // --- MENU OPTIONS ---
-                _buildMenuOption(
-                  context,
-                  icon: Icons.person_outline,
-                  title: "Edit Profile",
-                  onTap: () {},
-                ),
-                _buildMenuOption(
-                  context,
-                  icon: Icons.notifications_outlined,
-                  title: "Notifications",
-                  onTap: () {},
-                ),
-                _buildMenuOption(
-                  context,
-                  icon: Icons.help_outline,
-                  title: "Help & Support",
-                  onTap: () {},
-                ),
-                const Divider(height: 48),
-                _buildMenuOption(
-                  context,
-                  icon: Icons.logout,
-                  title: "Log Out",
-                  isDestructive: true,
-                  onTap: () {
-                    Navigator.pushNamedAndRemoveUntil(
+                    // --- MENU OPTIONS ---
+                    _buildMenuOption(
                       context,
-                      '/',
-                      (r) => false,
-                    );
-                  },
-                ),
+                      icon: Icons.person_outline,
+                      title: "Edit Profile",
+                      onTap: () {},
+                    ),
+                    _buildMenuOption(
+                      context,
+                      icon: Icons.notifications_outlined,
+                      title: "Notifications",
+                      onTap: () {},
+                    ),
+                    _buildMenuOption(
+                      context,
+                      icon: Icons.help_outline,
+                      title: "Help & Support",
+                      onTap: () {},
+                    ),
+                    const Divider(height: 48),
+                    _buildMenuOption(
+                      context,
+                      icon: Icons.logout,
+                      title: "Log Out",
+                      isDestructive: true,
+                      onTap: () {
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          '/',
+                          (r) => false,
+                        );
+                      },
+                    ),
 
-                const SizedBox(height: 40),
-              ],
-            ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),

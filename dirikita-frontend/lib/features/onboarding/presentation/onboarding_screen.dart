@@ -12,6 +12,9 @@ import 'package:duruha/features/onboarding/presentation/components/onboarding_su
 import 'package:duruha/main.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/core/data/dialects.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:duruha/shared/produce/domain/produce_model.dart'; // Import ProduceCategory
 import 'package:flutter/material.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -33,6 +36,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool _isSubmitting = false;
   String? _generatedId;
   bool _acceptedTerms = false;
+
+  // Timer for debouncing text saves
+  // Timer? _debounce;
+  // For now, we save on navigation as requested "every continue",
+  // but let's also save on toggle interactions for robust UX.
 
   // --- Controllers ---
   final _nameController = TextEditingController();
@@ -61,6 +69,22 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final List<String> _selectedDialects = [];
   final List<String> _dialectOptions = dialectOptions;
 
+  // Search Data
+  String _produceSearchQuery = '';
+  final _searchController = TextEditingController();
+  ProduceCategory? _selectedCategory;
+  bool _isSearchActive = false;
+
+  // Define category icons mapping
+  static const Map<ProduceCategory, IconData> _categoryIcons = {
+    ProduceCategory.leafy: Icons.eco,
+    ProduceCategory.fruitVeg: Icons.bakery_dining,
+    ProduceCategory.root: Icons.grass,
+    ProduceCategory.spice: Icons.flare,
+    ProduceCategory.fruit: Icons.apple,
+    ProduceCategory.legume: Icons.grain,
+  };
+
   // Logistics & Payment
   final List<String> _paymentMethods = [];
   String? _deliveryWindow;
@@ -88,6 +112,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _emailController.dispose();
     _phoneController.dispose();
     _telephoneController.dispose();
+    _searchController.dispose(); // Dispose search controller
     _streetAddressController.dispose();
     _barangayController.dispose();
     _cityController.dispose();
@@ -95,6 +120,166 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _postalCodeController.dispose();
     _landmarkController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initPersistence();
+  }
+
+  // --- Persistence ---
+
+  Future<void> _initPersistence() async {
+    await _loadSavedState();
+  }
+
+  Future<void> _saveState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // key prefix: onboarding_
+      await prefs.setInt('onboarding_page', _currentPage);
+      if (_userRole != null)
+        await prefs.setString('onboarding_role', _userRole!);
+
+      // Basic Info
+      await prefs.setString('onboarding_name', _nameController.text);
+      await prefs.setString('onboarding_email', _emailController.text);
+      await prefs.setString('onboarding_phone', _phoneController.text);
+      await prefs.setString('onboarding_telephone', _telephoneController.text);
+      await prefs.setString('onboarding_street', _streetAddressController.text);
+      await prefs.setString('onboarding_barangay', _barangayController.text);
+      await prefs.setString('onboarding_city', _cityController.text);
+      await prefs.setString('onboarding_province', _provinceController.text);
+      await prefs.setString('onboarding_postal', _postalCodeController.text);
+      await prefs.setString('onboarding_landmark', _landmarkController.text);
+
+      await prefs.setStringList('onboarding_dialects', _selectedDialects);
+      await prefs.setStringList('onboarding_payment', _paymentMethods);
+      await prefs.setStringList('onboarding_days', _operatingDays);
+      if (_deliveryWindow != null)
+        await prefs.setString('onboarding_window', _deliveryWindow!);
+
+      // Consumer
+      await prefs.setString('onboarding_segment', _consumerSegment);
+      await prefs.setString('onboarding_cooking', _cookingFrequency);
+      await prefs.setStringList('onboarding_quality', _qualityPreferences);
+      await prefs.setString('onboarding_demands', jsonEncode(_consumerDemands));
+
+      // Farmer
+      await prefs.setString('onboarding_alias', _farmAliasController.text);
+      await prefs.setString('onboarding_land', _landAreaController.text);
+      await prefs.setString('onboarding_access', _accessibilityType);
+      await prefs.setStringList('onboarding_water', _waterSources);
+      await prefs.setString('onboarding_pledges', jsonEncode(_farmerPledges));
+
+      // Terms
+      await prefs.setBool('onboarding_terms', _acceptedTerms);
+    } catch (e) {
+      debugPrint('Error saving state: $e');
+    }
+  }
+
+  Future<void> _loadSavedState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      if (mounted) {
+        setState(() {
+          _currentPage = prefs.getInt('onboarding_page') ?? 0;
+          _userRole = prefs.getString('onboarding_role');
+
+          _nameController.text = prefs.getString('onboarding_name') ?? '';
+          _emailController.text = prefs.getString('onboarding_email') ?? '';
+          _phoneController.text = prefs.getString('onboarding_phone') ?? '';
+          _telephoneController.text =
+              prefs.getString('onboarding_telephone') ?? '';
+          _streetAddressController.text =
+              prefs.getString('onboarding_street') ?? '';
+          _barangayController.text =
+              prefs.getString('onboarding_barangay') ?? '';
+          _cityController.text = prefs.getString('onboarding_city') ?? '';
+          _provinceController.text =
+              prefs.getString('onboarding_province') ?? '';
+          _postalCodeController.text =
+              prefs.getString('onboarding_postal') ?? '';
+          _landmarkController.text =
+              prefs.getString('onboarding_landmark') ?? '';
+
+          _selectedDialects.clear();
+          _selectedDialects.addAll(
+            prefs.getStringList('onboarding_dialects') ?? [],
+          );
+
+          _paymentMethods.clear();
+          _paymentMethods.addAll(
+            prefs.getStringList('onboarding_payment') ?? [],
+          );
+
+          _operatingDays.clear();
+          _operatingDays.addAll(prefs.getStringList('onboarding_days') ?? []);
+
+          _deliveryWindow = prefs.getString('onboarding_window');
+
+          // Consumer
+          _consumerSegment =
+              prefs.getString('onboarding_segment') ?? 'Household';
+          _cookingFrequency = prefs.getString('onboarding_cooking') ?? 'Weekly';
+          _qualityPreferences.clear();
+          _qualityPreferences.addAll(
+            prefs.getStringList('onboarding_quality') ?? ['Class A'],
+          );
+
+          final demandsJson = prefs.getString('onboarding_demands');
+          if (demandsJson != null) {
+            final decoded = jsonDecode(demandsJson) as Map<String, dynamic>;
+            _consumerDemands.clear();
+            decoded.forEach((key, value) {
+              _consumerDemands[key] = Map<String, dynamic>.from(value as Map);
+            });
+          }
+
+          // Farmer
+          _farmAliasController.text = prefs.getString('onboarding_alias') ?? '';
+          _landAreaController.text = prefs.getString('onboarding_land') ?? '';
+          _accessibilityType = prefs.getString('onboarding_access') ?? 'Truck';
+
+          _waterSources.clear();
+          _waterSources.addAll(prefs.getStringList('onboarding_water') ?? []);
+
+          final pledgesJson = prefs.getString('onboarding_pledges');
+          if (pledgesJson != null) {
+            final decoded = jsonDecode(pledgesJson) as Map<String, dynamic>;
+            _farmerPledges.clear();
+            decoded.forEach((key, value) {
+              _farmerPledges[key] = List<String>.from(value as List);
+            });
+          }
+
+          _acceptedTerms = prefs.getBool('onboarding_terms') ?? false;
+        });
+
+        // Restore page controller if we aren't on page 0
+        if (_currentPage > 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_pageController.hasClients) {
+              _pageController.jumpToPage(_currentPage);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading state: $e');
+    }
+  }
+
+  Future<void> _clearSavedState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('onboarding_'));
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
   }
 
   // --- Logic ---
@@ -215,6 +400,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         curve: Curves.fastOutSlowIn,
       );
       setState(() => _currentPage++);
+      _saveState(); // Save on next page
     }
   }
 
@@ -226,11 +412,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         curve: Curves.fastOutSlowIn,
       );
       setState(() => _currentPage--);
+      _saveState(); // Save on prev page too
     }
   }
 
   void _selectRole(String role) {
     setState(() => _userRole = role);
+    _saveState(); // Save role immediately
     Future.delayed(const Duration(milliseconds: 200), _nextPage);
   }
 
@@ -262,6 +450,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       await authRepo.submitKyc(userId, {'termsAccepted': true});
 
       if (!mounted) return;
+
+      await _clearSavedState(); // Clear saved state on success
+
       setState(() {
         _isSubmitting = false;
         _generatedId = userId; // Show actuall User ID or a generated reference
@@ -306,7 +497,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(_totalPages, (index) {
@@ -326,6 +517,66 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
           );
         }),
+      ),
+    );
+  }
+
+  Widget _buildFloatingSearchBar() {
+    if (!_isSearchActive) return const SizedBox.shrink();
+
+    return Positioned(
+      top: 10,
+      left: 16,
+      right: 16,
+      child: Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(30),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Search produce...',
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    hintStyle: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  onChanged: (v) => setState(() => _produceSearchQuery = v),
+                ),
+              ),
+              DuruhaPopupMenu<ProduceCategory?>(
+                selectedValue: _selectedCategory,
+                tooltip: "Filter by Category",
+                items: [null, ..._categoryIcons.keys],
+                itemIcons: {null: Icons.grid_view, ..._categoryIcons},
+                labelBuilder: (category) {
+                  if (category == null) return "All";
+                  final name = category.name;
+                  return name.substring(0, 1).toUpperCase() + name.substring(1);
+                },
+                onSelected: (value) {
+                  setState(() => _selectedCategory = value);
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  setState(() {
+                    _isSearchActive = false;
+                    _produceSearchQuery = '';
+                    _searchController.clear();
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -362,6 +613,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           } else {
             _selectedDialects.add(dialect);
           }
+          _saveState();
         });
       },
       paymentMethodOptions: const ['GCash', 'Bank Transfer', 'Cash'],
@@ -373,6 +625,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           } else {
             _paymentMethods.add(val);
           }
+          _saveState();
         });
       },
       operatingDaysOptions: _daysOptions,
@@ -384,11 +637,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           } else {
             _operatingDays.add(day);
           }
+          _saveState();
         });
       },
       deliveryWindowOptions: const ['AM', 'PM', 'Flexible'],
       selectedDeliveryWindow: _deliveryWindow,
-      onDeliveryWindowChanged: (v) => setState(() => _deliveryWindow = v),
+      onDeliveryWindowChanged: (v) {
+        setState(() => _deliveryWindow = v);
+        _saveState();
+      },
     );
   }
 
@@ -402,17 +659,32 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   initialSegment: _consumerSegment,
                   initialCookingFreq: _cookingFrequency,
                   initialQualityPrefs: _qualityPreferences,
-                  onSegmentChanged: (v) => _consumerSegment = v,
-                  onCookingFreqChanged: (v) => _cookingFrequency = v,
-                  onQualityChanged: (v) => _qualityPreferences = v,
+                  onSegmentChanged: (v) {
+                    _consumerSegment = v;
+                    _saveState();
+                  },
+                  onCookingFreqChanged: (v) {
+                    _cookingFrequency = v;
+                    _saveState();
+                  },
+                  onQualityChanged: (v) {
+                    _qualityPreferences = v;
+                    _saveState();
+                  },
                 )
               : FarmerProfileStep(
                   aliasController: _farmAliasController,
                   landAreaController: _landAreaController,
                   initialAccessibility: _accessibilityType,
                   initialWaterSources: _waterSources,
-                  onAccessibilityChanged: (v) => _accessibilityType = v,
-                  onWaterSourcesChanged: (v) => _waterSources = v,
+                  onAccessibilityChanged: (v) {
+                    _accessibilityType = v;
+                    _saveState();
+                  },
+                  onWaterSourcesChanged: (v) {
+                    _waterSources = v;
+                    _saveState();
+                  },
                 ),
         ),
         const SizedBox(height: 80),
@@ -429,6 +701,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             userRole: _userRole ?? 'Consumer',
             consumerDemands: _consumerDemands,
             farmerPledges: _farmerPledges,
+            searchQuery: _produceSearchQuery,
+            selectedCategory: _selectedCategory,
             onItemToggled: (id, isSelected) {
               setState(() {
                 if (_userRole == 'Consumer') {
@@ -440,6 +714,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       ? _farmerPledges[id] = []
                       : _farmerPledges.remove(id);
                 }
+                _saveState();
               });
             },
             onFarmerPledgeChanged: (id, variety, isSelected) {
@@ -447,6 +722,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 final list = _farmerPledges[id] ?? [];
                 isSelected ? list.add(variety) : list.remove(variety);
                 _farmerPledges[id] = list;
+                _saveState();
               });
             },
           ),
@@ -491,127 +767,96 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Meta Compact Header
-            Container(
-              height: 56, // Fixed height
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Back Button (Left)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: (_currentPage > 0 && _currentPage < 5)
-                        ? IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                            onPressed: _prevPage,
-                            padding: EdgeInsets.zero,
-                            color: Theme.of(context).colorScheme.onSurface,
-                            constraints: const BoxConstraints(),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-
-                  // Title (Center)
-                  if (_currentPage < 5)
-                    Text(
-                      _getStepTitle(),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                  // Action / Spacer (Right)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      icon: Icon(
-                        Theme.of(context).brightness == Brightness.dark
-                            ? Icons.light_mode_rounded
-                            : Icons.dark_mode_rounded,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                      onPressed: () {
-                        final current = DuruhaApp.themeNotifier.value;
-                        DuruhaApp.themeNotifier.value =
-                            current == ThemeMode.light
-                            ? ThemeMode.dark
-                            : ThemeMode.light;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            _buildStepIndicator(),
-
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // 1. Main Content - Fills available space
-                  Form(
-                    key: _formKey,
-                    child: PageView(
-                      controller: _pageController,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: [
-                        _buildRoleSelection(), // 0
-                        _buildBasicInfo(), // 1
-                        _buildSpecificProfile(), // 2
-                        _buildProduce(), // 3
-                        _buildTerms(), // 4
-                        _buildSuccess(), // 5
-                      ],
-                    ),
-                  ),
-
-                  // 2. Bottom Floating Action Bar
-                  if (_currentPage > 0 && _currentPage < 5)
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        width: double.infinity,
-                        height: 80,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surface.withValues(alpha: 0.95),
-                          border: Border(
-                            top: BorderSide(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.outline.withValues(alpha: 0.1),
-                            ),
-                          ),
-                        ),
-                        child: DuruhaButton(
-                          text: _currentPage == 4
-                              ? "FINISH REGISTRATION"
-                              : "CONTINUE",
-                          isLoading: _isSubmitting,
-                          onPressed: _isSubmitting ? null : () => _nextPage(),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+    return DuruhaScaffold(
+      appBarTitle: _currentPage < 5 ? _getStepTitle() : null,
+      showBackButton: _currentPage > 0 && _currentPage < 5,
+      onBackPressed: _prevPage,
+      appBarActions: [
+        if (_currentPage == 3 && !_isSearchActive)
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => setState(() => _isSearchActive = true),
+          ),
+        IconButton(
+          icon: Icon(
+            Theme.of(context).brightness == Brightness.dark
+                ? Icons.light_mode_rounded
+                : Icons.dark_mode_rounded,
+            color: Theme.of(context).primaryColor,
+          ),
+          onPressed: () {
+            final current = DuruhaApp.themeNotifier.value;
+            DuruhaApp.themeNotifier.value = current == ThemeMode.light
+                ? ThemeMode.dark
+                : ThemeMode.light;
+          },
         ),
+      ],
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              _buildStepIndicator(),
+
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // 1. Main Content - Fills available space
+                    Form(
+                      key: _formKey,
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          _buildRoleSelection(), // 0
+                          _buildBasicInfo(), // 1
+                          _buildSpecificProfile(), // 2
+                          _buildProduce(), // 3
+                          _buildTerms(), // 4
+                          _buildSuccess(), // 5
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Floating Search Bar - Positioned over everything
+          _buildFloatingSearchBar(),
+
+          // 2. Bottom Floating Action Bar
+          if (_currentPage > 0 && _currentPage < 5)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                width: double.infinity,
+                height: 80,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.95),
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ),
+                child: DuruhaButton(
+                  text: _currentPage == 4 ? "FINISH REGISTRATION" : "CONTINUE",
+                  isLoading: _isSubmitting,
+                  onPressed: _isSubmitting ? null : () => _nextPage(),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

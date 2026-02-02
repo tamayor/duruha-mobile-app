@@ -1,10 +1,12 @@
+import 'package:duruha/core/widgets/duruha_app_bar.dart';
 import 'package:duruha/core/widgets/duruha_button.dart';
+import 'package:duruha/core/widgets/duruha_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
 import 'package:duruha/features/farmer/features/farm/data/recommendation_repository.dart';
 import 'package:duruha/features/farmer/features/farm/domain/recommendation_model.dart';
 import 'package:duruha/features/farmer/features/farm/presentation/recommendation_card.dart';
-import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:duruha/core/widgets/duruha_section_container.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
@@ -54,24 +56,37 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Farm')),
+    return DuruhaScaffold(
+      appBarTitle: 'Farm',
       bottomNavigationBar: FarmerNavigation(
         name: 'Elly Farmer',
         currentRoute: '/farmer/farm',
       ),
       body: _isLoading
           ? const FarmerLoadingScreen()
-          : SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildRecommendationsSection(),
-                  _buildActivePledgesSection(),
-
-                  const SizedBox(height: 40),
-                ],
-              ),
+          : Stack(
+              children: [
+                // Content
+                SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Content with padding
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildRecommendationsSection(),
+                            _buildActivePledgesSection(),
+                            const SizedBox(height: 40),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
     );
   }

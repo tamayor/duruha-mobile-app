@@ -1,7 +1,7 @@
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/features/farmer/features/biz/data/biz_repository.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
-import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
@@ -96,25 +96,19 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text("Business Hub"),
-        centerTitle: true,
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _toggleFilter,
-            icon: Icon(
-              Icons.calendar_today_rounded,
-              color: _isFilterVisible ? theme.colorScheme.primary : null,
-            ),
-            tooltip: "Filter Date Range",
+    return DuruhaScaffold(
+      appBarTitle: "Business Hub",
+      appBarActions: [
+        IconButton(
+          onPressed: _toggleFilter,
+          icon: Icon(
+            Icons.calendar_today_rounded,
+            color: _isFilterVisible ? theme.colorScheme.onSecondary : null,
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
+          tooltip: "Filter Date Range",
+        ),
+        const SizedBox(width: 8),
+      ],
       bottomNavigationBar: const FarmerNavigation(
         name: "Elly",
         currentRoute: '/farmer/biz',
@@ -125,116 +119,138 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
               children: [
                 RefreshIndicator(
                   onRefresh: _fetchData,
+                  edgeOffset:
+                      MediaQuery.of(context).padding.top + kToolbarHeight,
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
+                    padding:
+                        EdgeInsets.zero, // Padding handled inside or removing
+                    // Note: original had padding: EdgeInsets.all(20).
+                    // I should keep it but maybe apply it to the content below the spacer?
+                    // Or keep it on SingleChildScrollView but it will affect the spacer area?
+                    // Best to put padding on the column children or a wrapping Padding below spacer.
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Monitor Pledge Button
-                        DuruhaButton(
-                          text: "Open Pledge Monitor",
-                          onPressed: () {
-                            HapticFeedback.mediumImpact();
-                            Navigator.pushNamed(context, '/farmer/monitor');
-                          },
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Revenue Summary Header
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                colorScheme.primary,
-                                colorScheme.secondary,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: colorScheme.primary.withValues(
-                                  alpha: 0.2,
-                                ),
-                                blurRadius: 15,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                "TOTAL EARNINGS IN PERIOD",
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onPrimary.withValues(
-                                    alpha: 0.8,
+                              // Monitor Pledge Button
+                              DuruhaButton(
+                                text: "Open Pledge Monitor",
+                                onPressed: () {
+                                  HapticFeedback.mediumImpact();
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/farmer/monitor',
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Revenue Summary Header
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      colorScheme.primary,
+                                      colorScheme.secondary,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
                                   ),
-                                  letterSpacing: 1.5,
-                                  fontWeight: FontWeight.bold,
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colorScheme.primary.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "TOTAL EARNINGS IN PERIOD",
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: colorScheme.onPrimary
+                                                .withValues(alpha: 0.8),
+                                            letterSpacing: 1.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      DuruhaFormatter.formatCurrency(
+                                        _totalRevenue,
+                                      ),
+                                      style: theme.textTheme.headlineLarge
+                                          ?.copyWith(
+                                            color: colorScheme.onPrimary,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        _buildMiniStat(
+                                          context,
+                                          "Sales",
+                                          "${_filteredSoldPledges.length}",
+                                        ),
+                                        const SizedBox(width: 24),
+                                        _buildMiniStat(
+                                          context,
+                                          "Crops sold",
+                                          "${_groupedByCrop.length}",
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 8),
+
+                              const SizedBox(height: 32),
+
                               Text(
-                                DuruhaFormatter.formatCurrency(_totalRevenue),
-                                style: theme.textTheme.headlineLarge?.copyWith(
-                                  color: colorScheme.onPrimary,
-                                  fontWeight: FontWeight.w900,
+                                "Earnings by Crop",
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurface,
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  _buildMiniStat(
-                                    context,
-                                    "Sales",
-                                    "${_filteredSoldPledges.length}",
+
+                              if (_groupedByCrop.isEmpty)
+                                Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(40.0),
+                                    child: Text(
+                                      "No sales found in this period.",
+                                      style: TextStyle(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
                                   ),
-                                  const SizedBox(width: 24),
-                                  _buildMiniStat(
-                                    context,
-                                    "Crops sold",
-                                    "${_groupedByCrop.length}",
-                                  ),
-                                ],
-                              ),
+                                )
+                              else
+                                ..._groupedByCrop.entries.map(
+                                  (entry) =>
+                                      _buildCropGroup(entry.key, entry.value),
+                                ),
+
+                              const SizedBox(height: 80),
                             ],
                           ),
                         ),
-
-                        const SizedBox(height: 32),
-
-                        Text(
-                          "Earnings by Crop",
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        if (_groupedByCrop.isEmpty)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(40.0),
-                              child: Text(
-                                "No sales found in this period.",
-                                style: TextStyle(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          ..._groupedByCrop.entries.map(
-                            (entry) => _buildCropGroup(entry.key, entry.value),
-                          ),
-
-                        const SizedBox(height: 80),
                       ],
                     ),
                   ),
@@ -250,7 +266,7 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
                   ),
                   // Popup
                   Positioned(
-                    top: 16,
+                    top: 10,
                     left: 16,
                     right: 16,
                     child: Material(

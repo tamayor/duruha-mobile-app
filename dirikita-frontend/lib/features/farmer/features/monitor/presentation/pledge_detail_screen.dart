@@ -1,4 +1,4 @@
-import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -275,7 +275,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
   void _showInputsModal({Map<String, dynamic>? expense}) {
     if (expense != null) {
       _inputNameController.text = expense['name'];
-      _inputCostController.text = expense['cost'].toStringAsFixed(0);
+      _inputCostController.text = expense['cost'].toString();
       _selectedInputCategory = expense['category'];
     } else {
       _inputNameController.clear();
@@ -321,7 +321,9 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                       label: "Amount",
                       icon: Icons.payments_outlined,
                       controller: _inputCostController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       suffix: "₱",
                       isRequired: true,
                       validator: (value) {
@@ -401,7 +403,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                           child: Icon(
                             _getCategoryIcon(input['category']),
                             size: 18,
-                            color: theme.colorScheme.primary,
+                            color: theme.colorScheme.onSecondary,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -418,7 +420,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                               Text(
                                 input['category'],
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.outline,
+                                  color: theme.colorScheme.onSurface,
                                 ),
                               ),
                             ],
@@ -427,7 +429,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                         Text(
                           DuruhaFormatter.formatCurrency(
                             input['cost'].toDouble(),
-                            decimalDigits: 0,
+                            decimalDigits: 2,
                           ),
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -453,13 +455,26 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                             color: Colors.red,
                             size: 20,
                           ),
-                          onPressed: () {
-                            setState(() => _inputs.remove(input));
-                            _repository.deleteExpense(
-                              widget.pledgeId,
-                              input['id'] ?? 'unknown',
+                          onPressed: () async {
+                            final confirmed = await DuruhaConfirmationModal.show(
+                              context: context,
+                              title: 'Delete Expense?',
+                              message:
+                                  'Are you sure you want to delete "${input['name']}"? This action cannot be undone.',
+                              confirmText: 'Delete',
+                              cancelText: 'Cancel',
+                              icon: Icons.delete_forever_rounded,
+                              isDanger: true,
                             );
-                            setModalState(() {});
+
+                            if (confirmed == true) {
+                              setState(() => _inputs.remove(input));
+                              _repository.deleteExpense(
+                                widget.pledgeId,
+                                input['id'] ?? 'unknown',
+                              );
+                              setModalState(() {});
+                            }
                           },
                         ),
                       ],
@@ -477,17 +492,32 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_pledge?.id ?? "Pledge Details")),
+    return DuruhaScaffold(
+      appBarTitle: _pledge?.id ?? "Pledge Details",
       bottomNavigationBar: const FarmerNavigation(
         name: "Elly",
         currentRoute: '/',
       ),
-      body: _isLoading ? const FarmerLoadingScreen() : _buildDetailsTab(),
+      body: _isLoading
+          ? const FarmerLoadingScreen()
+          : Stack(
+              children: [
+                SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: _buildDetailsContent(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
-  Widget _buildDetailsTab() {
+  Widget _buildDetailsContent() {
     final pledge = _pledge!;
     double totalInputs = _inputs.fold(0, (sum, item) => sum + item['cost']);
     final theme = Theme.of(context);
@@ -498,222 +528,251 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
         : _dateHistory.first['newDate'] as DateTime;
     final daysRemaining = harvestDate.difference(DateTime.now()).inDays;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Crop Image Header - REMOVED per request
-          /*
+    return Column(
+      children: [
+        // Crop Image Header - REMOVED per request
+        /*
           if (pledge.imageUrl.isNotEmpty)
              ...
           */
 
-          // Header Summary Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  theme.colorScheme.primary,
-                  theme.colorScheme.secondary,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: theme.colorScheme.primary.withAlpha(40),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+        // Header Summary Card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            child: Column(
-              children: [
-                Text(
-                  daysRemaining >= 0
-                      ? "$daysRemaining Days Until Harvest"
-                      : "Harvest Ready",
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onPrimary.withAlpha(200),
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStat(
-                      context,
-                      "Min. Quantity",
-                      "${pledge.quantity.toStringAsFixed(0)} ${pledge.unit}",
-                      Icons.shopping_basket_outlined,
-                    ),
-                    _buildStat(
-                      context,
-                      "Invested",
-                      DuruhaFormatter.formatCurrency(
-                        totalInputs,
-                        decimalDigits: 0,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.primary.withAlpha(40),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              daysRemaining > 0
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "$daysRemaining ",
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 40,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        Text(
+                          "Days Until Harvest",
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      "Harvest Ready",
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                        letterSpacing: 0.5,
                       ),
-                      Icons.payments_outlined,
+                    ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStat(
+                    context,
+                    "Min. Quantity",
+                    "${pledge.quantity.toStringAsFixed(0)} ${pledge.unit}",
+                    Icons.shopping_basket_outlined,
+                  ),
+                  _buildStat(
+                    context,
+                    "Invested",
+                    DuruhaFormatter.formatCurrency(
+                      totalInputs,
+                      decimalDigits: 0,
+                    ),
+                    Icons.payments_outlined,
+                  ),
+                ],
+              ),
+              if (_produce != null) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Divider(color: Colors.white24, height: 1),
+                ),
+                Column(
+                  children: [
+                    Text(
+                      "Potential Earnings",
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onPrimary.withAlpha(150),
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      DuruhaFormatter.formatCurrency(
+                        (_produce!.currentFairMarketGuideline *
+                                pledge.quantity) -
+                            totalInputs,
+                      ),
+                      style: theme.textTheme.headlineLarge?.copyWith(
+                        color: theme.colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 32,
+                      ),
+                    ),
+                    Text(
+                      "Based on ${DuruhaFormatter.formatCurrency(_produce!.currentFairMarketGuideline, decimalDigits: 0)}/kg market price",
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onPrimary.withAlpha(180),
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ),
-                if (_produce != null) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Divider(color: Colors.white24, height: 1),
-                  ),
-                  Column(
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        DuruhaButton(
+          text: "Record Farming Expenses",
+          isOutline: true,
+          onPressed: _showInputsModal,
+        ),
+        const SizedBox(height: 24),
+        _buildStatusSection(),
+        const SizedBox(height: 24),
+        DuruhaSectionContainer(
+          title: "Planting Details",
+          padding: EdgeInsets.zero,
+          children: [
+            Material(
+              color: Colors.transparent,
+              child: DuruhaInkwell(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  Navigator.pushNamed(
+                    context,
+                    '/farmer/crops/${pledge.cropId}',
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Text(
-                        "Potential Earnings",
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onPrimary.withAlpha(150),
-                          letterSpacing: 1.2,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pledge.cropNameDialect ?? pledge.cropName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildVariantsRow(pledge.variants, theme),
+                            const SizedBox(height: 4),
+                            _buildSimpleRow(
+                              "Market: ",
+                              pledge.targetMarket.toUpperCase(),
+                              Icons.storefront_outlined,
+                              theme,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        DuruhaFormatter.formatCurrency(
-                          (_produce!.currentFairMarketGuideline *
-                                  pledge.quantity) -
-                              totalInputs,
+                      if (pledge.imageUrl.isNotEmpty) ...[
+                        const SizedBox(width: 16),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            pledge.imageUrl,
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 80,
+                                height: 80,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                child: Icon(
+                                  Icons.image_not_supported_outlined,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                        style: theme.textTheme.headlineLarge?.copyWith(
-                          color: theme.colorScheme.onPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 32,
-                        ),
-                      ),
-                      Text(
-                        "Based on ${DuruhaFormatter.formatCurrency(_produce!.currentFairMarketGuideline, decimalDigits: 0)}/kg market price",
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onPrimary.withAlpha(180),
-                          fontStyle: FontStyle.italic,
+                      ],
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.chevron_right,
+                        color: theme.colorScheme.onSurfaceVariant.withAlpha(
+                          100,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          DuruhaButton(
-            text: "Record Farming Expenses",
-            isOutline: true,
-            onPressed: _showInputsModal,
-          ),
-          const SizedBox(height: 24),
-          _buildStatusSection(),
-          const SizedBox(height: 24),
-          DuruhaSectionContainer(
-            title: "Planting Details",
-            padding: EdgeInsets.zero,
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: DuruhaInkwell(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    Navigator.pushNamed(
-                      context,
-                      '/farmer/crops/${pledge.cropId}',
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                pledge.cropNameDialect ?? pledge.cropName,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.onPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              _buildVariantsRow(pledge.variants, theme),
-                              const SizedBox(height: 4),
-                              _buildSimpleRow(
-                                "Market: ",
-                                pledge.targetMarket.toUpperCase(),
-                                Icons.storefront_outlined,
-                                theme,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (pledge.imageUrl.isNotEmpty) ...[
-                          const SizedBox(width: 16),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              pledge.imageUrl,
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(width: 12),
-                        Icon(
-                          Icons.chevron_right,
-                          color: theme.colorScheme.onSurfaceVariant.withAlpha(
-                            100,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          DuruhaSectionContainer(
-            title: "Expected Harvest",
-            action: TextButton.icon(
-              onPressed: _showDatePicker,
-              icon: Icon(
-                Icons.edit_calendar_rounded,
-                size: 18,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        DuruhaSectionContainer(
+          title: "Expected Harvest",
+          action: TextButton.icon(
+            onPressed: _showDatePicker,
+            icon: Icon(
+              Icons.edit_calendar_rounded,
+              size: 18,
+              color: theme.colorScheme.onPrimary,
+            ),
+            label: Text(
+              "Change",
+              style: TextStyle(
                 color: theme.colorScheme.onPrimary,
-              ),
-              label: Text(
-                "Change",
-                style: TextStyle(
-                  color: theme.colorScheme.onPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                fontWeight: FontWeight.w500,
               ),
             ),
-            children: [
-              Text(
-                DateFormat('MMMM d, yyyy').format(harvestDate),
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
           ),
-        ],
-      ),
+          children: [
+            Text(
+              DateFormat('MMMM d, yyyy').format(harvestDate),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -973,21 +1032,39 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                           ),
                           if (!isDate && item['status'] != 'Set')
                             IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 20),
-                              onPressed: () {
-                                setState(() {
-                                  _statusHistory.removeAt(
-                                    item['originalIndex'],
+                              icon: const Icon(
+                                Icons.delete,
+                                color: Colors.red,
+                                size: 16,
+                              ),
+                              onPressed: () async {
+                                final confirmed =
+                                    await DuruhaConfirmationModal.show(
+                                      context: context,
+                                      title:
+                                          'Delete "${item['status']}" status?',
+                                      message: 'This action cannot be undone.',
+                                      confirmText: 'Delete',
+                                      cancelText: 'Cancel',
+                                      icon: Icons.delete_forever_rounded,
+                                      isDanger: true,
+                                    );
+
+                                if (confirmed == true) {
+                                  setState(() {
+                                    _statusHistory.removeAt(
+                                      item['originalIndex'],
+                                    );
+                                    _currentStatus =
+                                        _statusHistory.first['status'];
+                                  });
+                                  HapticFeedback.selectionClick();
+                                  // API Call
+                                  _repository.deleteStatusEntry(
+                                    widget.pledgeId,
+                                    'status_entry_${item['originalIndex']}', // Mock ID
                                   );
-                                  _currentStatus =
-                                      _statusHistory.first['status'];
-                                });
-                                HapticFeedback.selectionClick();
-                                // API Call
-                                _repository.deleteStatusEntry(
-                                  widget.pledgeId,
-                                  'status_entry_${item['originalIndex']}', // Mock ID
-                                );
+                                }
                               },
                               color: colorScheme.error.withAlpha(150),
                               visualDensity: VisualDensity.compact,
@@ -1113,7 +1190,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                         color: theme.colorScheme.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: theme.colorScheme.secondary.withValues(
+                          color: theme.colorScheme.onSecondary.withValues(
                             alpha: 0.2,
                           ),
                         ),
@@ -1123,7 +1200,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onPrimary,
+                          color: theme.colorScheme.onSecondary,
                         ),
                       ),
                     );

@@ -6,7 +6,7 @@ import 'package:duruha/features/farmer/features/profile/data/profile_repository.
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
 import 'package:duruha/features/farmer/features/profile/domain/ratings_model.dart';
 import 'package:duruha/features/farmer/features/profile/data/ratings_repository.dart';
-import 'package:duruha/features/farmer/shared/presentation/duruha_badges.dart';
+import 'package:duruha/features/farmer/shared/presentation/badges.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 
 class FarmerProfileRatingsScreen extends StatelessWidget {
@@ -24,13 +24,15 @@ class FarmerProfileRatingsScreen extends StatelessWidget {
       ]),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
+          return const DuruhaScaffold(
+            appBarTitle: "Program Profile",
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
-          return const Scaffold(
+          return const DuruhaScaffold(
+            appBarTitle: "Error",
             body: Center(child: Text("Error loading performance data")),
           );
         }
@@ -42,153 +44,170 @@ class FarmerProfileRatingsScreen extends StatelessWidget {
             .where((b) => profile.unlockedBadgeIds.contains(b.id))
             .length;
 
-        return Scaffold(
-          backgroundColor: theme.scaffoldBackgroundColor,
-          appBar: AppBar(
-            title: const Text("Program Profile"),
-            centerTitle: true,
-            backgroundColor: theme.colorScheme.surface,
-            elevation: 0,
-          ),
+        return DuruhaScaffold(
+          appBarTitle: "Program Profile",
           bottomNavigationBar: FarmerNavigation(
             name: profile.name.split(' ').first,
             currentRoute: '/farmer/profile',
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Stats Grid
-                Row(
+          body: Stack(
+            children: [
+              SingleChildScrollView(
+                padding: EdgeInsets.zero,
+                child: Column(
                   children: [
-                    _buildMetricCard(
-                      context,
-                      label: "Trust Score",
-                      value: performance.trustScore.toString(),
-                      subtitle: performance.trustSubtitle,
-                      icon: Icons.verified_user_rounded,
-                      color: Colors.blue.shade700,
+                    SizedBox(
+                      height:
+                          MediaQuery.of(context).padding.top + kToolbarHeight,
                     ),
-                    const SizedBox(width: 16),
-                    _buildMetricCard(
-                      context,
-                      label: "Crop Points",
-                      value: DuruhaFormatter.formatNumber(
-                        performance.cropPoints,
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header Stats Grid
+                          Row(
+                            children: [
+                              _buildMetricCard(
+                                context,
+                                label: "Trust Score",
+                                value: performance.trustScore.toString(),
+                                subtitle: performance.trustSubtitle,
+                                icon: Icons.verified_user_rounded,
+                                color: Colors.blue.shade700,
+                              ),
+                              const SizedBox(width: 16),
+                              _buildMetricCard(
+                                context,
+                                label: "Crop Points",
+                                value: DuruhaFormatter.formatNumber(
+                                  performance.cropPoints,
+                                ),
+                                subtitle: performance.pointsSubtitle,
+                                icon: Icons.stars_rounded,
+                                color: Colors.orange.shade700,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+
+                          const SizedBox(height: 32),
+
+                          // Achievement Banner
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  colorScheme.primary,
+                                  colorScheme.primary.withValues(alpha: 0.8),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.emoji_events_outlined,
+                                  color: theme.colorScheme.onPrimary,
+                                  size: 48,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  performance.currentRankName,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onPrimary,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  performance.rankNextGoal,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onPrimary
+                                        .withValues(alpha: 0.9),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                LinearProgressIndicator(
+                                  value: performance.rankProgress,
+                                  backgroundColor: theme.colorScheme.primary
+                                      .withValues(alpha: 0.3),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    theme.colorScheme.onPrimary,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Duruha Badges",
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  "$earnedBadgesCount / ${DuruhaBadges.all.length}",
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: DuruhaBadges.all.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final badge = DuruhaBadges.all[index];
+                                final isUnlocked = profile.unlockedBadgeIds
+                                    .contains(badge.id);
+                                return _buildBadgeItem(
+                                  context,
+                                  badge,
+                                  isUnlocked: isUnlocked,
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                        ],
                       ),
-                      subtitle: performance.pointsSubtitle,
-                      icon: Icons.stars_rounded,
-                      color: Colors.orange.shade700,
                     ),
                   ],
                 ),
-                const SizedBox(height: 32),
-
-                const SizedBox(height: 32),
-
-                // Achievement Banner
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        colorScheme.primary,
-                        colorScheme.primary.withValues(alpha: 0.8),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colorScheme.primary.withValues(alpha: 0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.emoji_events_outlined,
-                        color: Colors.white,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        performance.currentRankName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        performance.rankNextGoal,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      LinearProgressIndicator(
-                        value: performance.rankProgress,
-                        backgroundColor: Colors.white.withValues(alpha: 0.3),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Colors.white,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // Badges Section
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Duruha Badges",
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      "$earnedBadgesCount / ${DuruhaBadges.all.length}",
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: DuruhaBadges.all.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final badge = DuruhaBadges.all[index];
-                    final isUnlocked = profile.unlockedBadgeIds.contains(
-                      badge.id,
-                    );
-                    return _buildBadgeItem(
-                      context,
-                      badge,
-                      isUnlocked: isUnlocked,
-                    );
-                  },
-                ),
-                const SizedBox(height: 40),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },

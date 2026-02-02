@@ -136,12 +136,6 @@ class FarmerNavigation extends StatelessWidget {
         selectedIcon: Icons.attach_money,
       ),
       _NavItem(
-        label: '4U',
-        route: '/farmer/programs',
-        icon: Icons.list_alt_outlined,
-        selectedIcon: Icons.list_alt,
-      ),
-      _NavItem(
         label: 'Profile',
         route: '/profile',
         icon: Icons.person_outline,

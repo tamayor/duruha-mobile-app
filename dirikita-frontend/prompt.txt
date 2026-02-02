@@ -1,0 +1,16 @@
+
+------- UPDATE README.md -------
+Act as a Senior Technical Writer and Software Architect. I want you to perform a deep scan of the provided codebase.
+Your Task:
+Analyze: Read all files to understand the architecture, data flow, and dependencies.
+Executive Summary: Write a high-level overview explaining the purpose of the project and the tech stack used.
+Module Breakdown: For each major directory/module, explain its responsibility.
+API/Function Reference: Extract and document all public functions, classes, and methods. Include:
+Parameters (types and descriptions)
+Return values
+Potential exceptions or error codes
+Usage Examples: Provide 2-3 code snippets showing how to initialize and use the core logic.
+Output Format: Markdown. Use clear headings and tables for parameter lists.
+------- END UPDATE README.md -------
+
+flutter pub get

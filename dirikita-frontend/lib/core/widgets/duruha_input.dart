@@ -1,5 +1,6 @@
 import 'package:duruha/core/theme/duruha_styles.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class DuruhaInput extends StatelessWidget {
   final String label;
@@ -23,6 +24,10 @@ class DuruhaInput extends StatelessWidget {
     this.onChanged,
   });
 
+  bool get _isNumericInput =>
+      keyboardType == TextInputType.number ||
+      keyboardType == const TextInputType.numberWithOptions(decimal: true);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -36,6 +41,7 @@ class DuruhaInput extends StatelessWidget {
         onChanged: onChanged,
         cursorColor: theme.colorScheme.onSecondary,
         style: TextStyle(color: theme.colorScheme.onSecondary),
+        inputFormatters: _isNumericInput ? [_DecimalInputFormatter()] : null,
         decoration: DuruhaStyles.fieldDecoration(
           context,
           label: label,
@@ -45,5 +51,34 @@ class DuruhaInput extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Formatter that allows decimal numbers with only one decimal point
+class _DecimalInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Allow empty
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    // Check if the new text is valid
+    final text = newValue.text;
+
+    // Only allow digits and one decimal point
+    if (!RegExp(r'^[0-9]*\.?[0-9]*$').hasMatch(text)) {
+      return oldValue;
+    }
+
+    // Ensure only one decimal point
+    if (text.split('.').length > 2) {
+      return oldValue;
+    }
+
+    return newValue;
   }
 }
