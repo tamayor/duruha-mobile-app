@@ -42,9 +42,21 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _isLoading = false;
       });
+
+      // Determine route based on email content
+      String targetRoute;
+      if (_emailController.text.toLowerCase().contains('consumer')) {
+        targetRoute = '/consumer/market';
+      } else if (_emailController.text.toLowerCase().contains('farmer')) {
+        targetRoute = '/farmer/farm';
+      } else {
+        // Default to farmer route if no match
+        targetRoute = '/';
+      }
+
       Navigator.pushReplacementNamed(
         context,
-        '/farmer/farm',
+        targetRoute,
         arguments: response.user,
       );
     } catch (e) {

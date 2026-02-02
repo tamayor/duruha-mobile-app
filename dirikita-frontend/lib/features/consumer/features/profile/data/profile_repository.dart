@@ -1,66 +1,90 @@
-import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
-import 'package:duruha/shared/produce/data/produce_repository.dart';
+import 'dart:io';
+
+import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
-class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
+class FarmerProfileRepositoryImpl implements FarmerProfileRepository {
   @override
-  Future<ConsumerProfile> getConsumerProfile(String consumerId) async {
+  Future<FarmerProfile> getFarmerProfile(String farmerId) async {
     // Simulate API delay
     await Future.delayed(const Duration(milliseconds: 500));
+    // Return mock data for now
+    // In a real app, we would use farmerId to fetch specific data
 
-    // Return mock data
-    return ConsumerProfile(
-      id: 'consumer-001',
-      name: 'Elly Consumer',
-      phone: '09177654321',
+    return FarmerProfile(
+      id: 'farmer-001',
+      name: 'Elly Farmer',
       joinedAt: DateTime.now().toString(),
-      barangay: 'Poblacion',
-      city: 'Valencia City',
-      province: 'Valencia City',
-      postalCode: '0022',
-      landmark: 'Behind City Hall',
+      phone: '09171234567',
+      barangay: 'Barangay 1',
+      city: 'Malaybalay City',
+      province: 'Davao del Sur',
+      postalCode: '8000',
+      landmark: 'Near Plaza',
       dialect: 'Cebuano',
-
-      // Consumer Details
-      consumerSegment: 'Restaurant',
-      segmentSize: 50, // e.g. capacity
-      cookingFrequency: 'Daily',
-      qualityPreferences: ['Class A (Premium)', 'Class B (Standard)'],
-      // Demand Crops
-      demandCrops: (await ProduceRepository().getAllProduce())
-          .take(3)
-          .map((p) => p.toProduceItem())
-          .toList(),
+      // Farmer Details
+      email: 'elly@example.com',
+      farmAlias: 'Green Valley Farm',
+      landArea: 2.5,
+      accessibilityType: 'Truck',
+      waterSources: ['Irrigation Canal', 'Rain Catchment'],
+      paymentMethods: ['Cash', 'GCash'],
+      operatingDays: ['Mon', 'Wed', 'Fri'],
+      deliveryWindow: 'AM',
+      pledgedCrops: List.generate(
+        10,
+        (i) => ProduceItem(
+          id: 'prod_${i + 1}',
+          nameEnglish: 'Crop ${i + 1}',
+          nameScientific: 'Scientific Name',
+          category: ProduceCategory.fruitVeg,
+          namesByDialect: {},
+          availableVarieties: [],
+          imageHeroUrl: '',
+          imageThumbnailUrl: '',
+          iconUrl: '',
+          gradeGuideUrl: '',
+          unitOfMeasure: 'kg',
+          priceMinHistorical: 0,
+          priceMaxHistorical: 0,
+          currentFairMarketGuideline: 0,
+          perishabilityIndex: 1,
+          shelfLifeDays: 7,
+          requiresColdChain: false,
+          avgWeightPerUnitKg: 1,
+          growingCycleDays: 30,
+          seasonalityStart: 'Jan',
+          seasonalityEnd: 'Dec',
+          isNativeToRegion: true,
+        ),
+      ),
+      trustScore: 982,
+      cropPoints: 14500,
+      unlockedBadgeIds: [
+        'years_silver',
+        'transactions_bronze',
+        'earnings_gold',
+        'variety_gold',
+      ],
+      // imageUrl: 'https://i.pravatar.cc/300?img=12', // Uncomment to test with image
     );
   }
-}
 
-extension on Produce {
-  ProduceItem toProduceItem() {
-    return ProduceItem(
-      id: id,
-      nameEnglish: nameEnglish,
-      nameScientific: nameScientific,
-      category: category,
-      namesByDialect: namesByDialect,
-      availableVarieties: availableVarieties,
-      imageHeroUrl: imageHeroUrl,
-      imageThumbnailUrl: imageThumbnailUrl,
-      iconUrl: iconUrl,
-      gradeGuideUrl: gradeGuideUrl,
-      unitOfMeasure: unitOfMeasure,
-      priceMinHistorical: priceMinHistorical,
-      priceMaxHistorical: priceMaxHistorical,
-      currentFairMarketGuideline: currentFairMarketGuideline,
-      perishabilityIndex: perishabilityIndex,
-      shelfLifeDays: shelfLifeDays,
-      requiresColdChain: requiresColdChain,
-      avgWeightPerUnitKg: avgWeightPerUnitKg,
-      growingCycleDays: growingCycleDays,
-      seasonalityStart: seasonalityStart,
-      seasonalityEnd: seasonalityEnd,
-      isNativeToRegion: isNativeToRegion,
-    );
+  @override
+  Future<String> uploadProfileImage(File file) async {
+    // Simulate network upload
+    await Future.delayed(const Duration(seconds: 2));
+    // Return a mock URL
+    return 'https://i.pravatar.cc/300?img=${DateTime.now().millisecond % 70}';
+  }
+
+  @override
+  Future<void> updateProfile(FarmerProfile profile) async {
+    // Simulate network delay
+    await Future.delayed(const Duration(seconds: 1));
+    // In a real app, we would send the updated profile to the API
+    // For now, we just simulate success
+    return;
   }
 }

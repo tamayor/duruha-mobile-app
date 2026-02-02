@@ -14,30 +14,36 @@ class AuthRepository {
 
     // Mock Response
     // Determine Mock User based on request credentials (simple simulation)
-    // If phone starts with '0917' -> Farmer, else Consumer (just for demo)
+    // Check email for role indicators
 
-    final bool isFarmerMock =
-        request.email.contains("farmer") || request.email.startsWith("0917");
+    final bool isConsumerMock = request.email.toLowerCase().contains(
+      "consumer",
+    );
+
+    // Default to farmer if consumer is not specified
+    final UserRole userRole = isConsumerMock
+        ? UserRole.consumer
+        : UserRole.farmer;
 
     final UserProfile mockUser = UserProfile(
       id: "user_${DateTime.now().millisecondsSinceEpoch}",
       joinedAt: DateTime.now().toIso8601String(),
-      name: isFarmerMock ? "Juan Farmer" : "Maria Consumer",
+      name: userRole == UserRole.farmer ? "Juan Farmer" : "Maria Consumer",
       phone: request.email,
       barangay: "San Isidro",
       city: "Davao City",
       province: "Davao del Sur",
       postalCode: "8000",
       landmark: "Near Chapel",
-      role: isFarmerMock ? UserRole.farmer : UserRole.consumer,
+      role: userRole,
       dialect: "Cebuano",
       // Farmer
-      farmAlias: isFarmerMock ? "Happy Farm" : null,
-      landArea: isFarmerMock ? 2.5 : null,
-      waterSources: isFarmerMock ? ["River", "Rain"] : null,
+      farmAlias: userRole == UserRole.farmer ? "Happy Farm" : null,
+      landArea: userRole == UserRole.farmer ? 2.5 : null,
+      waterSources: userRole == UserRole.farmer ? ["River", "Rain"] : null,
       // Consumer
-      consumerSegment: !isFarmerMock ? "Household" : null,
-      cookingFrequency: !isFarmerMock ? "Daily" : null,
+      consumerSegment: userRole == UserRole.consumer ? "Household" : null,
+      cookingFrequency: userRole == UserRole.consumer ? "Daily" : null,
     );
 
     debugPrint("✅ [AUTH API] Login Success. Token: mock_jwt_token_123");

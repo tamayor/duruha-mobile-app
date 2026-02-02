@@ -2,17 +2,17 @@ import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/theme/app_theme.dart';
 import 'package:duruha/features/auth/presentation/login_screen.dart';
 import 'package:duruha/features/auth/presentation/signup_screen.dart';
+import 'package:duruha/features/consumer/features/profile/presentation/profile_screen.dart';
+import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
 
 import 'package:duruha/features/farmer/shared/presentation/create_pledge_screen.dart';
 import 'package:duruha/features/landing/presentation/landing_screen.dart';
 import 'package:duruha/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/profile_screen.dart';
-import 'package:duruha/features/consumer/features/profile/presentation/profile.dart';
 import 'package:duruha/features/farmer/features/farm/presentation/dashboard_screen.dart';
 import 'package:duruha/features/farmer/features/farm/presentation/crop_study_screen.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
-import 'package:duruha/features/consumer/shared/presentation/consumer_navigation.dart';
 import 'package:duruha/features/farmer/features/crops/presentation/crops_screen.dart';
 import 'package:duruha/features/farmer/features/crops/presentation/crop_detail_screen.dart';
 import 'package:duruha/features/farmer/features/monitor/presentation/pledge_monitor_screen.dart';
@@ -144,7 +144,7 @@ class DuruhaApp extends StatelessWidget {
                     screen = _protected(
                       _buildPlaceholderScreen(
                         {'role': 'Consumer', 'name': args.name},
-                        '/home',
+                        '/market',
                         'Market',
                       ),
                     );
@@ -192,25 +192,9 @@ class DuruhaApp extends StatelessWidget {
                   }
                 }
                 break;
-              case '/orders':
-                screen = _protected(
-                  _buildPlaceholderScreen(
-                    args is Map<String, dynamic> ? args : {},
-                    routeName,
-                    'Orders',
-                  ),
-                );
-                break;
-              case '/inventory':
-                screen = _protected(
-                  _buildPlaceholderScreen(
-                    args is Map<String, dynamic> ? args : {},
-                    routeName,
-                    'Inventory',
-                  ),
-                );
-                break;
-
+              // case '/consumer/market':
+              //   screen = _protected(ConsumerProfileScreen());
+              //   break;
               case '/farmer/farm':
                 screen = _protected(const FarmerDashboardScreen());
                 break;

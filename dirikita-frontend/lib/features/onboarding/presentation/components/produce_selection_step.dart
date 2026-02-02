@@ -117,8 +117,6 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
       children: [
         Column(
           children: [
-            // Note: Search and Filter Bar logic moved to parent OnboardingScreen
-
             // 2. Data Grid
             Expanded(
               child: _isLoading
