@@ -91,16 +91,9 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                   title: Text(
                     summary.nameDialect.toUpperCase(),
                     style: TextStyle(
-                      color: Colors.white,
+                      color: theme.colorScheme.onSurface,
                       fontWeight: FontWeight.bold,
                       fontSize: 24,
-
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          blurRadius: 10,
-                        ),
-                      ],
                     ),
                   ),
                   background: Stack(
@@ -194,56 +187,56 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                         return DuruhaSectionContainer(
                           title: "Sales History",
                           subtitle:
-                              "Past records of harvested and sold pledges.",
-                          action: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.green.withValues(alpha: 0.3),
+                              "Past records of harvested\nand sold pledges.",
+                          children: [
+                            Container(
+                              width: double
+                                  .infinity, // <--- Add this to fill the screen width
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 24,
+                                horizontal: 16,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                // mainAxisAlignment centers vertically, crossAxisAlignment centers horizontally
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    "TOTAL EARNINGS",
+                                    style: TextStyle(
+                                      fontSize:
+                                          10, // Increased slightly for readability
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.onSurface,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    height: 4,
+                                  ), // Small gap between label and amount
+                                  Text(
+                                    DuruhaFormatter.formatCurrency(
+                                      totalEarnings,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize:
+                                          24, // Made a bit bolder for your dashboard
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  "TOTAL EARNINGS",
-                                  style: TextStyle(
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade700,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                Text(
-                                  DuruhaFormatter.formatCurrency(totalEarnings),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          children: [
+                            const Divider(), // Clean separator before the history list
                             ...soldHistory.map(
                               (p) => _buildPledgeTile(context, p),
                             ),
-                            if (soldHistory.isEmpty)
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(24.0),
-                                  child: Text(
-                                    "No sales records yet.",
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                ),
-                              ),
+                            // ... rest of your code
                           ],
                         );
                       }(),
@@ -272,14 +265,14 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
               context,
               width,
               "Market Price",
-              "${DuruhaFormatter.formatCurrency(p.priceMinHistorical, decimalDigits: 0)} - ${DuruhaFormatter.formatCurrency(p.priceMaxHistorical, decimalDigits: 0)}",
+              "${DuruhaFormatter.formatCurrency(p.priceMinHistorical, decimalDigits: 0)}\n${DuruhaFormatter.formatCurrency(p.priceMaxHistorical, decimalDigits: 0)}",
               Icons.attach_money,
             ),
             _buildInfoCard(
               context,
               width,
               "Seasonality",
-              "${p.seasonalityStart} - ${p.seasonalityEnd}",
+              "${p.seasonalityStart}\n${p.seasonalityEnd}",
               Icons.calendar_month,
             ),
             _buildInfoCard(
@@ -320,23 +313,27 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
           color: theme.colorScheme.outline.withValues(alpha: 0.1),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
           Icon(icon, size: 20, color: theme.colorScheme.onSecondary),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -347,77 +344,92 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DuruhaInkwell(
+        onTap: () {
+          // Navigate to pledge detail screen
+          Navigator.pushNamed(context, '/farmer/monitor/${p.id.toLowerCase()}');
+        },
+        backgroundColor: theme.colorScheme.surface,
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.1),
         ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "${DuruhaFormatter.formatNumber(p.amount)} ${p.unit}",
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface,
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "${DuruhaFormatter.formatNumber(p.amount)} ${p.unit}",
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
                       ),
-                    ),
-                    if (p.price != null)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      if (p.price != null)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              DuruhaFormatter.formatCurrency(
+                                p.amount * p.price!,
+                              ),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onPrimary,
+                              ),
+                            ),
+                            Text(
+                              "@ ₱${DuruhaFormatter.formatNumber(p.price!)}/unit",
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        p.variety,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Row(
                         children: [
                           Text(
-                            DuruhaFormatter.formatCurrency(p.amount * p.price!),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
-                          ),
-                          Text(
-                            "@ ₱${DuruhaFormatter.formatNumber(p.price!)}/unit",
-                            style: theme.textTheme.labelSmall?.copyWith(
+                            DateFormat('MMM d, yyyy').format(p.date),
+                            style: theme.textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w500,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
                         ],
                       ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      p.variety,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    Text(
-                      DateFormat('MMM d, yyyy').format(p.date),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 12,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }

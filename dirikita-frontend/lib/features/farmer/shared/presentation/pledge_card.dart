@@ -1,5 +1,6 @@
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/helpers/duruha_status_helper.dart';
+import 'package:duruha/core/widgets/duruha_inkwell.dart';
 import 'package:duruha/core/widgets/duruha_progress_bar.dart';
 import 'package:duruha/core/widgets/duruha_section_container.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
@@ -34,7 +35,7 @@ class PledgeCard extends StatelessWidget {
       progress = 1.0; // Instant
     }
 
-    return InkWell(
+    return DuruhaInkwell(
       onTap: () {
         Navigator.pushNamed(
           context,
@@ -42,8 +43,6 @@ class PledgeCard extends StatelessWidget {
           arguments: pledge,
         );
       },
-      borderRadius: BorderRadius.circular(12),
-      splashColor: theme.colorScheme.primary,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: GestureDetector(
@@ -381,7 +380,9 @@ class PledgeCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onPrimary,
+              color: theme
+                  .colorScheme
+                  .onPrimary, // Consistent with user's specific edit in detail screen
             ),
           ),
         );

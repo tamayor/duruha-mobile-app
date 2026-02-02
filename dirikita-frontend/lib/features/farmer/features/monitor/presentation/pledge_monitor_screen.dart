@@ -79,7 +79,7 @@ class _MonitorPledgeScreenState extends State<MonitorPledgeScreen> {
         ),
         bottomNavigationBar: const FarmerNavigation(
           name: "Elly", // Dynamic name later
-          currentRoute: '/farmer/biz',
+          currentRoute: '/',
         ),
         body: _isLoading
             ? const FarmerLoadingScreen()

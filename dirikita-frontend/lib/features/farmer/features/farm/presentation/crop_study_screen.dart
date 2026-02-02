@@ -255,8 +255,7 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
                 width: 1,
               ),
             ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
+            child: DuruhaInkwell(
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.pushNamed(

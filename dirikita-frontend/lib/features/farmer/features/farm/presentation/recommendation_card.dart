@@ -1,3 +1,4 @@
+import 'package:duruha/core/widgets/duruha_inkwell.dart';
 import 'package:duruha/features/farmer/features/farm/domain/recommendation_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -32,8 +33,7 @@ class RecommendationCard extends StatelessWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+        child: DuruhaInkwell(
           onTap: () {
             HapticFeedback.lightImpact();
             onTap();

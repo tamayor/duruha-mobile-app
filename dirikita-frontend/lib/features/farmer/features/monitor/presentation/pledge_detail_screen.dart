@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/helpers/duruha_status_helper.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/core/widgets/duruha_modal_bottom_sheet.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
@@ -28,6 +29,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
   final _repository = PledgeRepository();
   bool _isLoading = true;
 
+  HarvestPledge? _pledge;
   Produce? _produce;
 
   DateTime? _selectedNewDate;
@@ -71,7 +73,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchProduceData();
+    _loadPledgeData();
     // Initialize history with creation
     _statusHistory.add({
       'status': 'Set',
@@ -79,23 +81,45 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
     });
   }
 
-  Future<void> _fetchProduceData() async {
-    if (widget.pledge == null) return;
+  Future<void> _loadPledgeData() async {
     try {
+      // 1. Get the pledge object (either from widget or fetch from repository)
+      HarvestPledge pledge;
+      if (widget.pledge != null) {
+        pledge = widget.pledge!;
+      } else {
+        // Fetch pledge from repository using pledgeId
+        final allPledges = await _repository.fetchMyPledges();
+        pledge = allPledges.firstWhere(
+          (p) => p.id?.toLowerCase() == widget.pledgeId.toLowerCase(),
+          orElse: () => throw Exception('Pledge not found'),
+        );
+      }
+
+      // 2. Fetch the produce metadata
       final allProduce = await ProduceRepository().getAllProduce();
       final produce = allProduce.firstWhere(
-        (p) => p.id == widget.pledge!.cropId,
+        (p) => p.id == pledge.cropId,
+        orElse: () => throw Exception('Produce not found'),
       );
+
       if (mounted) {
         setState(() {
+          _pledge = pledge;
           _produce = produce;
+          _currentStatus = pledge.currentStatus;
           _isLoading = false;
         });
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading pledge: $e')));
+      }
     }
   }
 
@@ -103,7 +127,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
   void _showDatePicker() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: widget.pledge!.harvestDate,
+      initialDate: _pledge!.harvestDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 90)),
     );
@@ -114,210 +138,137 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
   }
 
   void _showRescheduleDialog() {
-    showModalBottomSheet(
+    DuruhaModalBottomSheet.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final theme = Theme.of(context);
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.85,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(32),
+      title: "Adjust\nHarvest Schedule",
+      icon: Icons.calendar_month,
+      child: StatefulBuilder(
+        builder: (context, setDialogState) {
+          final theme = Theme.of(context);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DuruhaSectionContainer(
+                title: "New Schedule",
+                backgroundColor: theme.colorScheme.primaryContainer.withAlpha(
+                  20,
                 ),
-              ),
-              child: Column(
                 children: [
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 12),
-                    height: 4,
-                    width: 40,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.outline.withAlpha(50),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                  _buildRow(
+                    "Original Date",
+                    DateFormat('MMMM d, yyyy').format(_pledge!.harvestDate),
+                    icon: Icons.event,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
+                  _buildRow(
+                    "Proposed Date",
+                    DateFormat('MMMM d, yyyy').format(_selectedNewDate!),
+                    icon: Icons.event_available,
+                    isBold: true,
+                    color: theme.colorScheme.onPrimary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              DuruhaDropdown<String>(
+                value: _selectedReason,
+                label: "Reason for Rescheduling",
+                prefixIcon: Icons.help_outline,
+                items: _rescheduleReasons,
+                onChanged: (v) => setDialogState(() => _selectedReason = v!),
+              ),
+              const SizedBox(height: 16),
+              DuruhaTextField(
+                label: "Notes",
+                icon: Icons.edit_note,
+                controller: _reasonController,
+                maxLines: 3,
+                isRequired: false,
+              ),
+              const SizedBox(height: 24),
+              if (_dateHistory.isNotEmpty) ...[
+                Text(
+                  "Schedule History",
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.outline,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ..._dateHistory.map(
+                  (item) => Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerLow,
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant.withAlpha(50),
+                      ),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.calendar_month,
-                          color: theme.colorScheme.primary,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "${DateFormat('MMM d').format(item['oldDate'])} → ${DateFormat('MMM d').format(item['newDate'])}",
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            Text(
+                              DateFormat('MM/dd').format(item['timestamp']),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(height: 4),
                         Text(
-                          "Adjust Harvest Schedule",
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                          "${item['reason']}${item['notes'].isNotEmpty ? ' - ${item['notes']}' : ''}",
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
                         ),
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          DuruhaSectionContainer(
-                            title: "New Schedule",
-                            backgroundColor: theme.colorScheme.primaryContainer
-                                .withAlpha(20),
-                            children: [
-                              _buildRow(
-                                "Original Date",
-                                DateFormat(
-                                  'MMMM d, yyyy',
-                                ).format(widget.pledge!.harvestDate),
-                                icon: Icons.event,
-                              ),
-                              _buildRow(
-                                "Proposed Date",
-                                DateFormat(
-                                  'MMMM d, yyyy',
-                                ).format(_selectedNewDate!),
-                                icon: Icons.event_available,
-                                isBold: true,
-                                color: theme.colorScheme.onPrimary,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          DuruhaDropdown<String>(
-                            value: _selectedReason,
-                            label: "Reason for Rescheduling",
-                            prefixIcon: Icons.help_outline,
-                            items: _rescheduleReasons,
-                            onChanged: (v) =>
-                                setDialogState(() => _selectedReason = v!),
-                          ),
-                          const SizedBox(height: 16),
-                          DuruhaTextField(
-                            label: "Notes",
-                            icon: Icons.edit_note,
-                            controller: _reasonController,
-                            maxLines: 3,
-                            isRequired: false,
-                          ),
-                          const SizedBox(height: 24),
-                          if (_dateHistory.isNotEmpty) ...[
-                            Text(
-                              "Schedule History",
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.outline,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            ..._dateHistory.map(
-                              (item) => Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.surfaceContainerLow,
-                                  border: Border.all(
-                                    color: theme.colorScheme.outlineVariant
-                                        .withAlpha(50),
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          "${DateFormat('MMM d').format(item['oldDate'])} → ${DateFormat('MMM d').format(item['newDate'])}",
-                                          style: theme.textTheme.bodyMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                                color:
-                                                    theme.colorScheme.onSurface,
-                                              ),
-                                        ),
-                                        Text(
-                                          DateFormat(
-                                            'MM/dd',
-                                          ).format(item['timestamp']),
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color:
-                                                    theme.colorScheme.outline,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      "${item['reason']}${item['notes'].isNotEmpty ? ' - ${item['notes']}' : ''}",
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: DuruhaButton(
-                      text: "Confirm New Date",
-                      onPressed: () {
-                        final newDate = _selectedNewDate!;
-                        final reason = _selectedReason;
-                        final notes = _reasonController.text;
+                ),
+              ],
+              const SizedBox(height: 20),
+              DuruhaButton(
+                text: "Confirm New Date",
+                onPressed: () {
+                  final newDate = _selectedNewDate!;
+                  final reason = _selectedReason;
+                  final notes = _reasonController.text;
 
-                        setState(() {
-                          _dateHistory.insert(0, {
-                            'oldDate': widget.pledge!.harvestDate,
-                            'newDate': newDate,
-                            'reason': reason,
-                            'notes': notes,
-                            'timestamp': DateTime.now(),
-                          });
-                        });
-                        // API Call for Date Reschedule (Treating as status/update)
-                        _repository.updatePledgeStatus(
-                          widget.pledgeId,
-                          "Rescheduled: ${DateFormat('MMM d').format(newDate)}",
-                          notes: "$reason - $notes",
-                        );
-                        Navigator.pop(context);
-                      },
-                    ),
-                  ),
-                ],
+                  setState(() {
+                    _dateHistory.insert(0, {
+                      'oldDate': _pledge!.harvestDate,
+                      'newDate': newDate,
+                      'reason': reason,
+                      'notes': notes,
+                      'timestamp': DateTime.now(),
+                    });
+                  });
+                  _repository.updatePledgeStatus(
+                    widget.pledgeId,
+                    "Rescheduled: ${DateFormat('MMM d').format(newDate)}",
+                    notes: "$reason - $notes",
+                  );
+                  Navigator.pop(context);
+                },
               ),
-            );
-          },
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -329,310 +280,215 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
     } else {
       _inputNameController.clear();
       _inputCostController.clear();
-      _selectedInputCategory = _inputCategories.first; // Reset to default
+      _selectedInputCategory = _inputCategories.first;
     }
 
-    showModalBottomSheet(
+    DuruhaModalBottomSheet.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final theme = Theme.of(context);
-            final formKey = GlobalKey<FormState>();
-            double totalInputs = _inputs.fold(
-              0,
-              (sum, item) => sum + item['cost'],
-            );
+      title: "Farming Expenses",
+      icon: Icons.payments,
+      subtitle:
+          "Total: ${DuruhaFormatter.formatCurrency(_inputs.fold<double>(0, (sum, item) => sum + item['cost']))}",
+      child: StatefulBuilder(
+        builder: (context, setModalState) {
+          final theme = Theme.of(context);
+          final formKey = GlobalKey<FormState>();
 
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.85,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(32),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Form(
+                key: formKey,
+                child: DuruhaSectionContainer(
+                  title: expense != null ? "Edit Expense" : "Add New Entry",
+                  children: [
+                    DuruhaTextField(
+                      label: "Item Name",
+                      icon: Icons.inventory_2_outlined,
+                      controller: _inputNameController,
+                      isRequired: true,
+                    ),
+                    DuruhaDropdown<String>(
+                      value: _selectedInputCategory,
+                      label: "Category",
+                      prefixIcon: Icons.category_outlined,
+                      items: _inputCategories,
+                      onChanged: (v) =>
+                          setModalState(() => _selectedInputCategory = v!),
+                    ),
+                    const SizedBox(height: 16),
+                    DuruhaTextField(
+                      label: "Amount",
+                      icon: Icons.payments_outlined,
+                      controller: _inputCostController,
+                      keyboardType: TextInputType.number,
+                      suffix: "₱",
+                      isRequired: true,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return null;
+                        if (double.tryParse(value) == null) {
+                          return 'Please enter a valid number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    DuruhaButton(
+                      text: expense != null ? "Update Expense" : "Add Expense",
+                      onPressed: () {
+                        if (formKey.currentState!.validate()) {
+                          final newExpense = {
+                            'id':
+                                expense?['id'] ??
+                                DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
+                            'name': _inputNameController.text,
+                            'category': _selectedInputCategory,
+                            'cost': double.parse(_inputCostController.text),
+                          };
+                          setState(() {
+                            if (expense != null) {
+                              final index = _inputs.indexOf(expense);
+                              if (index != -1) _inputs[index] = newExpense;
+                            } else {
+                              _inputs.insert(0, newExpense);
+                            }
+                            _inputNameController.clear();
+                            _inputCostController.clear();
+                          });
+                          if (expense != null) {
+                            _repository.updateExpense(
+                              widget.pledgeId,
+                              newExpense,
+                            );
+                          } else {
+                            _repository.addExpense(widget.pledgeId, newExpense);
+                          }
+                          setModalState(() {});
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
-              child: Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 12),
-                    height: 4,
-                    width: 40,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.outline.withAlpha(50),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+              const SizedBox(height: 32),
+              if (_inputs.isNotEmpty) ...[
+                Text(
+                  "Expense History",
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSecondary,
+                    letterSpacing: 1.2,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
+                ),
+                const SizedBox(height: 12),
+                ..._inputs.map(
+                  (input) => Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerLow,
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant.withAlpha(50),
+                      ),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.payments, color: theme.colorScheme.primary),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Farming Expenses",
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              "Total: ${DuruhaFormatter.formatCurrency(totalInputs)}",
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          child: Icon(
+                            _getCategoryIcon(input['category']),
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                input['name'],
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                input['category'],
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          DuruhaFormatter.formatCurrency(
+                            input['cost'].toDouble(),
+                            decimalDigits: 0,
+                          ),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
+                          icon: const Icon(
+                            Icons.edit,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _showInputsModal(expense: input);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            setState(() => _inputs.remove(input));
+                            _repository.deleteExpense(
+                              widget.pledgeId,
+                              input['id'] ?? 'unknown',
+                            );
+                            setModalState(() {});
+                          },
                         ),
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Form(
-                            key: formKey,
-                            child: DuruhaSectionContainer(
-                              title: expense != null
-                                  ? "Edit Expense"
-                                  : "Add New Entry",
-                              children: [
-                                DuruhaTextField(
-                                  label: "Item Name",
-                                  icon: Icons.inventory_2_outlined,
-                                  controller: _inputNameController,
-                                  isRequired: true,
-                                ),
-                                DuruhaDropdown<String>(
-                                  value: _selectedInputCategory,
-                                  label: "Category",
-                                  prefixIcon: Icons.category_outlined,
-                                  items: _inputCategories,
-                                  onChanged: (v) => setModalState(
-                                    () => _selectedInputCategory = v!,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                DuruhaTextField(
-                                  label: "Amount",
-                                  icon: Icons.payments_outlined,
-                                  controller: _inputCostController,
-                                  keyboardType: TextInputType.number,
-                                  suffix: "₱",
-                                  isRequired: true,
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return null;
-                                    }
-                                    if (double.tryParse(value) == null) {
-                                      return 'Please enter a valid number';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                DuruhaButton(
-                                  text: expense != null
-                                      ? "Update Expense"
-                                      : "Add Expense",
-                                  onPressed: () {
-                                    if (formKey.currentState!.validate()) {
-                                      final newExpense = {
-                                        'id':
-                                            expense?['id'] ??
-                                            DateTime.now()
-                                                .millisecondsSinceEpoch
-                                                .toString(),
-                                        'name': _inputNameController.text,
-                                        'category': _selectedInputCategory,
-                                        'cost': double.parse(
-                                          _inputCostController.text,
-                                        ),
-                                      };
-                                      setState(() {
-                                        if (expense != null) {
-                                          final index = _inputs.indexOf(
-                                            expense,
-                                          );
-                                          if (index != -1) {
-                                            _inputs[index] = newExpense;
-                                          }
-                                        } else {
-                                          _inputs.insert(0, newExpense);
-                                        }
-                                        _inputNameController.clear();
-                                        _inputCostController.clear();
-                                      });
-
-                                      if (expense != null) {
-                                        _repository.updateExpense(
-                                          widget.pledgeId,
-                                          newExpense,
-                                        );
-                                      } else {
-                                        _repository.addExpense(
-                                          widget.pledgeId,
-                                          newExpense,
-                                        );
-                                      }
-                                      setModalState(() {});
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          if (_inputs.isNotEmpty) ...[
-                            Text(
-                              "Expense History",
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSecondary,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            ..._inputs.map(
-                              (input) => Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.surfaceContainerLow,
-                                  border: Border.all(
-                                    color: theme.colorScheme.outlineVariant
-                                        .withAlpha(50),
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundColor:
-                                          theme.colorScheme.primaryContainer,
-                                      child: Icon(
-                                        _getCategoryIcon(input['category']),
-                                        size: 18,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            input['name'],
-                                            style: theme.textTheme.bodyMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                          ),
-                                          Text(
-                                            input['category'],
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  color:
-                                                      theme.colorScheme.outline,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Text(
-                                      DuruhaFormatter.formatCurrency(
-                                        input['cost'].toDouble(),
-                                        decimalDigits: 0,
-                                      ),
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: theme.colorScheme.onSurface,
-                                          ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.edit,
-                                        color: Colors.blue,
-                                        size: 20,
-                                      ),
-                                      onPressed: () {
-                                        Navigator.pop(context); // Close list
-                                        _showInputsModal(expense: input);
-                                      },
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        color: Colors.red,
-                                        size: 20,
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _inputs.remove(input);
-                                        });
-                                        // API Call
-                                        _repository.deleteExpense(
-                                          widget.pledgeId,
-                                          input['id'] ?? 'unknown',
-                                        );
-                                        // Update modal UI
-                                        setModalState(() {});
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+                ),
+              ],
+              const SizedBox(height: 20),
+            ],
+          );
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.pledge?.id ?? "Pledge Details")),
+      appBar: AppBar(title: Text(_pledge?.id ?? "Pledge Details")),
       bottomNavigationBar: const FarmerNavigation(
         name: "Elly",
-        currentRoute: '/farmer/biz',
+        currentRoute: '/',
       ),
       body: _isLoading ? const FarmerLoadingScreen() : _buildDetailsTab(),
     );
   }
 
   Widget _buildDetailsTab() {
-    final pledge = widget.pledge!;
+    final pledge = _pledge!;
     double totalInputs = _inputs.fold(0, (sum, item) => sum + item['cost']);
     final theme = Theme.of(context);
 
@@ -762,7 +618,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
             children: [
               Material(
                 color: Colors.transparent,
-                child: InkWell(
+                child: DuruhaInkwell(
                   onTap: () {
                     HapticFeedback.selectionClick();
                     Navigator.pushNamed(
@@ -770,7 +626,6 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
                       '/farmer/crops/${pledge.cropId}',
                     );
                   },
-                  borderRadius: BorderRadius.circular(12),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(

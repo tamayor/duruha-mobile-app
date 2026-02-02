@@ -252,9 +252,8 @@ class FarmerProfileRatingsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final isEarned = isUnlocked || badge.isUnlocked;
 
-    return InkWell(
+    return DuruhaInkwell(
       onTap: () => _showBadgeDetails(context, badge, isUnlocked: isEarned),
-      borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(

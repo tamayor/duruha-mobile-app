@@ -40,7 +40,7 @@ class DuruhaStyles {
 
       filled: true,
       // Background is 30% Surface Container
-      fillColor: colorScheme.primaryContainer.withValues(alpha: 0.3),
+      fillColor: colorScheme.primaryContainer.withValues(alpha: 0.1),
 
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
 

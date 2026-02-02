@@ -326,63 +326,60 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            // Using surfaceContainerHighest gives it a subtle contrast from the card it sits in
-            color: colorScheme.surface.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+    return DuruhaInkwell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          // Using surfaceContainerHighest gives it a subtle contrast from the card it sits in
+          color: colorScheme.surface.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Left Side: Label and Date
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label.toUpperCase(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 9,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('MMM d, yyyy').format(date),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight:
+                          FontWeight.w900, // Thick font for "Excitement"
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              // Left Side: Label and Date
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label.toUpperCase(),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        letterSpacing: 1.1,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('MMM d, yyyy').format(date),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight:
-                            FontWeight.w900, // Thick font for "Excitement"
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
+            // Right Side: Visual Cue
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: colorScheme.onSurface.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
               ),
-              // Right Side: Visual Cue
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.calendar_month_rounded,
-                  size: 20,
-                  color: colorScheme.onSecondary,
-                ),
+              child: Icon(
+                Icons.calendar_month_rounded,
+                size: 15,
+                color: colorScheme.onSecondary,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

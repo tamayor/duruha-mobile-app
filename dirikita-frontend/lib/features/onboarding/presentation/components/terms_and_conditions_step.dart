@@ -1,4 +1,5 @@
 import 'package:duruha/core/terms-and-conditions/terms_content.dart';
+import 'package:duruha/core/widgets/duruha_inkwell.dart';
 import 'package:flutter/material.dart';
 // Actually, to be safe and avoid adding deps without permission, I'll use Text with simple formatting or styling.
 // But wait, the user instructions "Add New Project Creation... npx" implies I should be careful with deps.
@@ -181,11 +182,10 @@ class _TermsAndConditionsStepState extends State<TermsAndConditionsStep> {
                     ),
                   ),
                 ),
-              InkWell(
+              DuruhaInkwell(
                 onTap: _hasScrolledToBottom
                     ? () => widget.onAgreedChanged(!widget.isAgreed)
                     : null,
-                borderRadius: BorderRadius.circular(12),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,

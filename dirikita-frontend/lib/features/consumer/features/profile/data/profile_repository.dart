@@ -18,7 +18,7 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
       barangay: 'Poblacion',
       city: 'Valencia City',
       province: 'Valencia City',
-      postalCode: 'Valencia City',
+      postalCode: '0022',
       landmark: 'Behind City Hall',
       dialect: 'Cebuano',
 

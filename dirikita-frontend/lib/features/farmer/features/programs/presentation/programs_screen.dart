@@ -127,7 +127,7 @@ class _FarmerProgramsScreenState extends State<FarmerProgramsScreen> {
       ),
       bottomNavigationBar: const FarmerNavigation(
         name: "Elly",
-        currentRoute: '/farmer/profile',
+        currentRoute: '/farmer/programs',
       ),
       body: Column(
         children: [
@@ -268,7 +268,7 @@ class _FarmerProgramsScreenState extends State<FarmerProgramsScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return InkWell(
+    return DuruhaInkwell(
       onTap: () {
         HapticFeedback.mediumImpact();
         Navigator.pushNamed(context, '/farmer/profile/ratings');
@@ -455,9 +455,8 @@ class _FarmerProgramsScreenState extends State<FarmerProgramsScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest.withValues(
-                              alpha: 0.5,
-                            ),
+                            color: colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: colorScheme.outline.withValues(

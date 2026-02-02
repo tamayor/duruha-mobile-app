@@ -158,14 +158,13 @@ class LandingScreen extends StatelessWidget {
 
                         // --- WEBSITE LINK ---
                         Center(
-                          child: InkWell(
+                          child: DuruhaInkwell(
                             onTap: () async {
                               final Uri url = Uri.parse('https://duruha.com');
                               if (!await launchUrl(url)) {
                                 throw Exception('Could not launch $url');
                               }
                             },
-                            borderRadius: BorderRadius.circular(8),
                             child: Padding(
                               padding: const EdgeInsets.all(8.0),
                               child: Row(

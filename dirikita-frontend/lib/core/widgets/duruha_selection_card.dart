@@ -1,3 +1,4 @@
+import 'package:duruha/core/widgets/duruha_inkwell.dart';
 import 'package:flutter/material.dart';
 
 class DuruhaSelectionCard extends StatelessWidget {
@@ -48,7 +49,7 @@ class DuruhaSelectionCard extends StatelessWidget {
             width: isSelected ? 0 : 1,
           ),
         ),
-        child: InkWell(
+        child: DuruhaInkwell(
           onTap: onTap,
           child: isList
               ? SizedBox(

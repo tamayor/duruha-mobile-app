@@ -209,19 +209,17 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
                             ),
                           ),
                         ),
-                        child: Row(
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: DuruhaTextField(
-                                label: "Search your crops",
-                                icon: Icons.search,
-                                controller: _searchController,
-                                focusNode: _searchFocusNode,
-                                onChanged: _filterCrops,
-                                isRequired: false,
-                              ),
+                            DuruhaTextField(
+                              label: "Search your crops",
+                              icon: Icons.search,
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              onChanged: _filterCrops,
+                              isRequired: false,
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(height: 12),
                             Container(
                               margin: const EdgeInsets.only(bottom: 16),
                               child: DuruhaPopupMenu<SortOption>(
@@ -285,7 +283,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
             color: theme.colorScheme.outline.withValues(alpha: 0.1),
           ),
         ),
-        child: InkWell(
+        child: DuruhaInkwell(
           onTap: () {
             //print('Tapped crop: ${crop.id}');
             Navigator.pushNamed(context, '/farmer/crops/${crop.id}');

@@ -1,3 +1,4 @@
+import 'package:duruha/core/widgets/duruha_inkwell.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_navigation.dart';
@@ -258,9 +259,8 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
 
   Widget _buildStatItem(BuildContext context, _DetailItem item) {
     final theme = Theme.of(context);
-    return InkWell(
+    return DuruhaInkwell(
       onTap: item.onTap,
-      borderRadius: BorderRadius.circular(12),
       child: Row(
         children: [
           Container(
@@ -309,7 +309,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
         ? theme.colorScheme.error
         : theme.colorScheme.onSurface;
 
-    return InkWell(
+    return DuruhaInkwell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

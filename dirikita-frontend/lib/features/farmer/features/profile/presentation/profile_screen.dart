@@ -395,9 +395,8 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
 
   Widget _buildStatItem(BuildContext context, _DetailItem item) {
     final theme = Theme.of(context);
-    return InkWell(
+    return DuruhaInkwell(
       onTap: item.onTap,
-      borderRadius: BorderRadius.circular(12),
       child: Row(
         children: [
           Container(
@@ -458,7 +457,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
         ? theme.colorScheme.error
         : theme.colorScheme.onSurface;
 
-    return InkWell(
+    return DuruhaInkwell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

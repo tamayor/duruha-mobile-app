@@ -81,13 +81,13 @@ class DuruhaTheme {
         // Primary: Brand Identity
         primary: parchment50,
         onPrimary: goblin600, // Text on primary
-        primaryContainer: parchment200,
+        primaryContainer: parchment300,
         onPrimaryContainer: goblin900,
 
         // Secondary: Accents
-        secondary: parchment400,
+        secondary: goblin50,
         onSecondary: goblin950,
-        secondaryContainer: parchment200,
+        secondaryContainer: goblin300,
         onSecondaryContainer: goblin900,
 
         // Surface: Paper background
@@ -102,8 +102,36 @@ class DuruhaTheme {
         outline: parchment400,
         outlineVariant: parchment300,
 
-        error: Colors.white,
-        onError: Color(0xFFBA1A1A),
+        error: Color(0xFFBA1A1A),
+        onError: Colors.white,
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: parchment50,
+        headerBackgroundColor: parchment200, // Top part of the calendar
+        headerForegroundColor: goblin950, // Color of the date text in header
+        dayForegroundColor: WidgetStateProperty.all(goblin950),
+        todayBackgroundColor: WidgetStateProperty.all(parchment100),
+        todayForegroundColor: WidgetStateProperty.all(parchment800),
+        confirmButtonStyle: TextButton.styleFrom(
+          foregroundColor: parchment950,
+          backgroundColor: parchment300,
+        ),
+        cancelButtonStyle: TextButton.styleFrom(
+          foregroundColor: parchment950,
+          backgroundColor: parchment50,
+        ),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return parchment300;
+          }
+          return null;
+        }),
+        dayOverlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return parchment100;
+          }
+          return null;
+        }),
       ),
     );
   }
@@ -125,10 +153,10 @@ class DuruhaTheme {
         onPrimaryContainer: goblin100,
 
         // Secondary: Accents
-        secondary: goblin600,
-        onSecondary: goblin50,
-        secondaryContainer: goblin800,
-        onSecondaryContainer: parchment100,
+        secondary: parchment700,
+        onSecondary: parchment50,
+        secondaryContainer: parchment800,
+        onSecondaryContainer: parchment200,
 
         // Surface: Paper background
         surface: goblin950,
@@ -144,6 +172,34 @@ class DuruhaTheme {
 
         error: Color(0xFF690005),
         onError: Color(0xFFFFB4AB),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: goblin950,
+        headerBackgroundColor: goblin600, // Top part of the calendar
+        headerForegroundColor: goblin100, // Color of the date text in header
+        dayForegroundColor: WidgetStateProperty.all(goblin100),
+        todayBackgroundColor: WidgetStateProperty.all(goblin600),
+        todayForegroundColor: WidgetStateProperty.all(goblin100),
+        confirmButtonStyle: TextButton.styleFrom(
+          foregroundColor: goblin100,
+          backgroundColor: goblin600,
+        ),
+        cancelButtonStyle: TextButton.styleFrom(
+          foregroundColor: goblin100,
+          backgroundColor: goblin950,
+        ),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return goblin600;
+          }
+          return null;
+        }),
+        dayOverlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return goblin100;
+          }
+          return null;
+        }),
       ),
     );
   }
