@@ -4,6 +4,7 @@ class DuruhaStyles {
   static InputDecoration fieldDecoration(
     BuildContext context, {
     required String label,
+    bool enabled = true,
     IconData? icon,
     String? suffix,
     String? hintText,
@@ -13,10 +14,13 @@ class DuruhaStyles {
     final colorScheme = theme.colorScheme;
 
     return InputDecoration(
+      enabled: enabled,
       labelText: label,
       // Idle Label Color
       labelStyle: TextStyle(
-        color: colorScheme.onSurface,
+        color: enabled
+            ? colorScheme.onSurface
+            : colorScheme.onSurface.withValues(alpha: 0.5),
         fontWeight: FontWeight.w500,
       ),
       // Focused Label Color
@@ -25,9 +29,16 @@ class DuruhaStyles {
         fontWeight: FontWeight.bold,
       ),
 
-      prefixIcon: icon != null ? Icon(icon) : null,
+      prefixIcon: icon != null ? Icon(icon, size: 18) : null,
       // Icon is 50% Primary Color
-      prefixIconColor: colorScheme.onSurfaceVariant,
+      prefixIconColor: enabled
+          ? colorScheme.onSurfaceVariant
+          : colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+      prefixStyle: TextStyle(
+        color: colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.bold,
+        fontSize: 8,
+      ),
 
       suffixText: suffix,
       suffixStyle: TextStyle(
@@ -40,15 +51,25 @@ class DuruhaStyles {
 
       filled: true,
       // Background is 30% Surface Container
-      fillColor: colorScheme.primaryContainer.withValues(alpha: 0.1),
+      fillColor: enabled
+          ? colorScheme.primaryContainer.withValues(alpha: 0.1)
+          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
 
-      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
 
       // 1. ENABLED BORDER (Idle) -> 30% Outline Color
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
           color: colorScheme.outline.withValues(alpha: 0.3),
+          width: 1.0,
+        ),
+      ),
+
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: colorScheme.outline.withValues(alpha: 0.1),
           width: 1.0,
         ),
       ),

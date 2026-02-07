@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
 class SessionService {
@@ -103,5 +104,36 @@ class SessionService {
   static Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey(_userKey);
+  }
+
+  static const String _isFavoriteKey = 'is_favorites_only';
+
+  // Save favorite preference
+  static Future<void> saveFavoritePreference(bool isFavorite) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_isFavoriteKey, isFavorite);
+  }
+
+  // Get favorite preference
+  static Future<bool> getFavoritePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_isFavoriteKey) ?? false;
+  }
+
+  static const String _themeKey = 'app_theme_mode';
+
+  // Save theme preference
+  static Future<void> saveThemePreference(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_themeKey, mode.toString());
+  }
+
+  // Get theme preference
+  static Future<ThemeMode> getThemePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeStr = prefs.getString(_themeKey);
+    if (themeStr == 'ThemeMode.dark') return ThemeMode.dark;
+    if (themeStr == 'ThemeMode.light') return ThemeMode.light;
+    return ThemeMode.system;
   }
 }

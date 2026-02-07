@@ -99,8 +99,8 @@ class DuruhaTheme {
         surfaceContainerHighest: parchment300,
         onSurfaceVariant: parchment700, // Secondary text/icons
 
-        outline: parchment400,
-        outlineVariant: parchment300,
+        outline: parchment500,
+        outlineVariant: goblin500,
 
         error: Color(0xFFBA1A1A),
         onError: Colors.white,
@@ -148,9 +148,9 @@ class DuruhaTheme {
         brightness: Brightness.dark,
         // Primary: Brand Identity (Lighter for dark mode)
         primary: goblin950,
-        onPrimary: parchment100, // Dark text on light primary
+        onPrimary: goblin50, // Dark text on light primary
         primaryContainer: goblin700,
-        onPrimaryContainer: goblin100,
+        onPrimaryContainer: goblin200,
 
         // Secondary: Accents
         secondary: parchment700,
@@ -167,8 +167,8 @@ class DuruhaTheme {
         surfaceContainerHighest: goblin700,
         onSurfaceVariant: goblin200, // Secondary text/icons
 
-        outline: goblin600,
-        outlineVariant: goblin700,
+        outline: goblin500,
+        outlineVariant: parchment500,
 
         error: Color(0xFF690005),
         onError: Color(0xFFFFB4AB),

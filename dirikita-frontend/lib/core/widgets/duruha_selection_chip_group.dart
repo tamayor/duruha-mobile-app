@@ -1,6 +1,8 @@
 import 'package:duruha/core/widgets/duruha_input.dart';
 import 'package:flutter/material.dart';
 
+enum SelectionLayout { wrap, column }
+
 class DuruhaSelectionChipGroup extends StatefulWidget {
   final String title;
   final String? subtitle;
@@ -10,6 +12,11 @@ class DuruhaSelectionChipGroup extends StatefulWidget {
   final bool isRequired;
   final bool isNumbered;
   final double? titleSize;
+  final Widget? action;
+  final Map<String, IconData>? optionIcons;
+  final Map<String, String>? optionTitles;
+  final Map<String, String>? optionSubtitles;
+  final SelectionLayout layout;
 
   const DuruhaSelectionChipGroup({
     super.key,
@@ -21,6 +28,11 @@ class DuruhaSelectionChipGroup extends StatefulWidget {
     this.isRequired = false,
     this.isNumbered = false,
     this.titleSize,
+    this.action,
+    this.optionIcons,
+    this.optionTitles,
+    this.optionSubtitles,
+    this.layout = SelectionLayout.wrap,
   });
 
   @override
@@ -55,6 +67,9 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
                 selectedValues: widget.selectedValues,
                 onToggle: widget.onToggle,
                 isNumbered: widget.isNumbered,
+                optionIcons: widget.optionIcons,
+                optionTitles: widget.optionTitles,
+                optionSubtitles: widget.optionSubtitles,
                 scrollController: scrollController,
               ),
             );
@@ -88,115 +103,200 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    widget.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                      fontSize: widget.titleSize,
-                    ),
-                  ),
-                  if (widget.isRequired)
-                    Text(
-                      " *",
-                      style: TextStyle(
-                        color: colorScheme.onError,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              if (widget.subtitle != null)
-                Text(
-                  widget.subtitle!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          clipBehavior: Clip.none,
-          children: [
-            ...visibleOptions.map((option) {
-              final int index = widget.selectedValues.indexOf(option);
-              final bool isSelected = index != -1;
-
-              return FilterChip(
-                label: Text(option),
-                labelStyle: TextStyle(
-                  color: isSelected
-                      ? colorScheme.onPrimaryContainer
-                      : colorScheme.onSurface,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-                avatar: (widget.isNumbered && isSelected)
-                    ? CircleAvatar(
-                        radius: 10,
-                        backgroundColor: colorScheme.primary,
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            color: colorScheme.onPrimary,
-                            fontSize: 10,
+        if (widget.title.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          widget.title,
+                          style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                            fontSize: widget.titleSize,
                           ),
                         ),
-                      )
-                    : null,
-                selected: isSelected,
-                onSelected: (_) => widget.onToggle(option),
-                showCheckmark: !widget.isNumbered,
-                checkmarkColor: colorScheme.onSurface,
-                selectedColor: colorScheme.primaryContainer,
-                backgroundColor: colorScheme.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: isSelected
-                        ? colorScheme.primary
-                        : colorScheme.outline,
-                    width: isSelected ? 1.5 : 1,
+                        if (widget.isRequired)
+                          Text(
+                            " *",
+                            style: TextStyle(
+                              color: colorScheme.onError,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (widget.action != null) widget.action!,
+                  ],
+                ),
+                if (widget.subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    widget.subtitle!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-              );
-            }),
-            if (showShowMore)
-              ActionChip(
-                avatar: Icon(
-                  Icons.search,
-                  color: colorScheme.onSurfaceVariant,
-                  size: 16,
-                ),
-                label: Text(
-                  "View More",
-                  style: TextStyle(color: colorScheme.onSurfaceVariant),
-                ),
-                onPressed: () => _openSearchSheet(context),
-                backgroundColor: colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.5,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: colorScheme.outline),
-                ),
-              ),
-          ],
-        ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 5),
+        ],
+        if (widget.layout == SelectionLayout.wrap)
+          Wrap(
+            spacing: 10,
+            runSpacing: -3,
+            clipBehavior: Clip.none,
+            children: [
+              ..._buildChips(visibleOptions, colorScheme),
+              if (showShowMore) _buildViewMoreChip(colorScheme),
+            ],
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ..._buildChips(visibleOptions, colorScheme),
+              if (showShowMore) _buildViewMoreChip(colorScheme),
+            ],
+          ),
       ],
     );
+  }
+
+  bool get _isColumnLayout => widget.layout == SelectionLayout.column;
+
+  List<Widget> _buildChips(
+    List<String> visibleOptions,
+    ColorScheme colorScheme,
+  ) {
+    return visibleOptions.map((option) {
+      final int index = widget.selectedValues.indexOf(option);
+      final bool isSelected = index != -1;
+
+      final content = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.optionTitles?[option] ?? option,
+            style: TextStyle(fontSize: _isColumnLayout ? 14 : 13, height: 1.1),
+          ),
+          if (widget.optionSubtitles?[option] != null)
+            Text(
+              widget.optionSubtitles![option]!,
+              style: TextStyle(
+                fontSize: _isColumnLayout ? 11 : 10,
+                fontWeight: FontWeight.normal,
+                color: isSelected
+                    ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
+                    : colorScheme.onSurfaceVariant,
+                height: 1.1,
+              ),
+            ),
+        ],
+      );
+
+      final chip = FilterChip(
+        label: Row(
+          mainAxisSize: _isColumnLayout ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (_isColumnLayout) Expanded(child: content) else content,
+            if (isSelected && !widget.isNumbered) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.check_sharp,
+                size: 16,
+                color: isSelected
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.outlineVariant,
+              ),
+            ],
+          ],
+        ),
+        labelStyle: TextStyle(
+          color: isSelected
+              ? colorScheme.onPrimaryContainer
+              : colorScheme.onSurface,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+        avatar: (widget.isNumbered && isSelected)
+            ? CircleAvatar(
+                radius: 10,
+                backgroundColor: colorScheme.primary,
+                child: Text(
+                  '${index + 1}',
+                  style: TextStyle(
+                    color: colorScheme.onPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            : (widget.optionIcons?[option] != null
+                  ? Icon(
+                      widget.optionIcons![option],
+                      size: 16,
+                      color: isSelected
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.onSurfaceVariant,
+                    )
+                  : null),
+        selected: isSelected,
+        onSelected: (_) => widget.onToggle(option),
+        showCheckmark: false,
+        checkmarkColor: colorScheme.onPrimaryContainer,
+        selectedColor: colorScheme.primaryContainer,
+        backgroundColor: colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isSelected ? colorScheme.primary : colorScheme.outline,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+      );
+
+      if (_isColumnLayout) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: .5),
+          child: SizedBox(width: double.infinity, child: chip),
+        );
+      }
+      return chip;
+    }).toList();
+  }
+
+  Widget _buildViewMoreChip(ColorScheme colorScheme) {
+    final chip = ActionChip(
+      avatar: Icon(Icons.search, color: colorScheme.onSurfaceVariant, size: 16),
+      label: Text(
+        "View More",
+        style: TextStyle(color: colorScheme.onSurfaceVariant),
+      ),
+      onPressed: () => _openSearchSheet(context),
+      backgroundColor: colorScheme.surfaceContainerHighest.withValues(
+        alpha: 0.5,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colorScheme.outline),
+      ),
+    );
+
+    if (_isColumnLayout) {
+      return SizedBox(width: double.infinity, child: chip);
+    }
+    return chip;
   }
 }
 
@@ -206,6 +306,9 @@ class _SearchSelectionSheet extends StatefulWidget {
   final List<String> selectedValues;
   final Function(String) onToggle;
   final bool isNumbered;
+  final Map<String, IconData>? optionIcons;
+  final Map<String, String>? optionTitles;
+  final Map<String, String>? optionSubtitles;
   final ScrollController scrollController;
 
   const _SearchSelectionSheet({
@@ -214,6 +317,9 @@ class _SearchSelectionSheet extends StatefulWidget {
     required this.selectedValues,
     required this.onToggle,
     required this.isNumbered,
+    this.optionIcons,
+    this.optionTitles,
+    this.optionSubtitles,
     required this.scrollController,
   });
 
@@ -335,7 +441,7 @@ class _SearchSelectionSheetState extends State<_SearchSelectionSheet> {
                     vertical: 4,
                   ),
                   title: Text(
-                    option,
+                    widget.optionTitles?[option] ?? option,
                     style: TextStyle(
                       fontWeight: isSelected
                           ? FontWeight.bold
@@ -343,6 +449,15 @@ class _SearchSelectionSheetState extends State<_SearchSelectionSheet> {
                       color: colorScheme.onSurface,
                     ),
                   ),
+                  subtitle: widget.optionSubtitles?[option] != null
+                      ? Text(
+                          widget.optionSubtitles![option]!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      : null,
                   leading: widget.isNumbered && isSelected
                       ? CircleAvatar(
                           radius: 12,
@@ -355,6 +470,13 @@ class _SearchSelectionSheetState extends State<_SearchSelectionSheet> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                        )
+                      : widget.optionIcons?[option] != null
+                      ? Icon(
+                          widget.optionIcons![option],
+                          color: isSelected
+                              ? colorScheme.onPrimaryContainer
+                              : colorScheme.onSurfaceVariant,
                         )
                       : null,
                   trailing: Icon(

@@ -43,16 +43,10 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
 
-      // Determine route based on email content
-      String targetRoute;
-      if (_emailController.text.toLowerCase().contains('consumer')) {
-        targetRoute = '/consumer/market';
-      } else if (_emailController.text.toLowerCase().contains('farmer')) {
-        targetRoute = '/farmer/farm';
-      } else {
-        // Default to farmer route if no match
-        targetRoute = '/';
-      }
+      // Determine route based on user role
+      final targetRoute = response.user.isFarmer
+          ? '/farmer/farm'
+          : '/consumer/market';
 
       Navigator.pushReplacementNamed(
         context,

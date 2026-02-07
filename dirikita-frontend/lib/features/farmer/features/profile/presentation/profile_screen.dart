@@ -6,10 +6,10 @@ import 'package:duruha/features/farmer/features/profile/domain/profile_model.dar
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
+import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
-import 'package:duruha/features/farmer/shared/presentation/badges.dart';
+import 'package:duruha/features/farmer/shared/presentation/widgets/badges.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/edit_profile_screen.dart';
 
 class FarmerProfileScreen extends StatefulWidget {

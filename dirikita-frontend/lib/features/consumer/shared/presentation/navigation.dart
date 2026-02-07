@@ -14,7 +14,7 @@ class ConsumerNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final items = _getFarmerItems();
+    final items = _getConsumerItems();
 
     // Find the index of the current route
     // Check for exact match first, then check if current route starts with nav route
@@ -116,7 +116,7 @@ class ConsumerNavigation extends StatelessWidget {
     );
   }
 
-  List<_NavItem> _getFarmerItems() {
+  List<_NavItem> _getConsumerItems() {
     return [
       _NavItem(
         label: 'Market',
@@ -127,12 +127,12 @@ class ConsumerNavigation extends StatelessWidget {
       _NavItem(
         label: 'Orders',
         route: '/consumer/orders',
-        icon: Icons.agriculture_outlined,
-        selectedIcon: Icons.agriculture,
+        icon: Icons.shopping_bag_outlined,
+        selectedIcon: Icons.shopping_bag,
       ),
       _NavItem(
         label: 'Profile',
-        route: '/consumer/profile',
+        route: '/profile',
         icon: Icons.person_outline,
         selectedIcon: Icons.person,
       ),

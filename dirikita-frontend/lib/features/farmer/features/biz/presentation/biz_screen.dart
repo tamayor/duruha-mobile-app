@@ -1,43 +1,82 @@
-import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/features/farmer/features/biz/data/biz_repository.dart';
+import 'package:duruha/features/farmer/features/sales/data/selected_crops_repository.dart';
+import 'package:duruha/features/farmer/features/sales/domain/selected_crop_summary.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
-import 'package:intl/intl.dart';
+import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
+
+import 'widgets/biz_date_range_picker.dart';
+import 'widgets/biz_earnings_section.dart';
+import 'widgets/biz_revenue_card.dart';
+import 'widgets/selected_crop_card.dart';
+
+enum SortOption { rankAsc, rankDesc, nameAsc, nameDesc }
 
 class FarmerBizScreen extends StatefulWidget {
-  const FarmerBizScreen({super.key});
+  final int initialTabIndex;
+
+  const FarmerBizScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<FarmerBizScreen> createState() => _FarmerBizScreenState();
 }
 
 class _FarmerBizScreenState extends State<FarmerBizScreen> {
-  final _repository = BizRepository();
+  // Repositories
+  final _bizRepository = BizRepository();
+  final _cropsRepository = SelectedCropsRepository();
+
+  // State
   bool _isLoading = true;
+  bool _showCrops = false;
+
+  // -- BIZ HUB STATE --
   List<HarvestPledge> _allPledges = [];
   bool _isFilterVisible = false;
-
-  // Default year-over-year: Start from 1 year ago, End at today
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 365));
   DateTime _endDate = DateTime.now();
+
+  // -- CROPS STATE --
+  List<SelectedCropSummary> _allCrops = [];
+  List<SelectedCropSummary> _filteredCrops = [];
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  bool _isSearchVisible = false;
+  SortOption _sortOption = SortOption.rankAsc;
 
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    _showCrops = widget.initialTabIndex == 1;
+    _fetchAllData();
   }
 
-  Future<void> _fetchData() async {
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchAllData() async {
     setState(() => _isLoading = true);
     try {
-      final pledges = await _repository.fetchSalesRecords();
+      final pledgesFuture = _bizRepository.fetchSalesRecords();
+      final cropsFuture = _cropsRepository.fetchSelectedCrops();
+
+      final results = await Future.wait([pledgesFuture, cropsFuture]);
+      final pledges = results[0] as List<HarvestPledge>;
+      final crops = results[1] as List<SelectedCropSummary>;
+
       if (mounted) {
         setState(() {
           _allPledges = pledges;
+          _allCrops = crops;
+          _filteredCrops = crops;
+          _sortCrops(); // Initial sort
           _isLoading = false;
         });
       }
@@ -47,6 +86,19 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
       }
     }
   }
+
+  // --- VIEW TOGGLE Logic ---
+
+  void _toggleView() {
+    setState(() {
+      _showCrops = !_showCrops;
+      // Reset search/filter when switching views
+      if (_isSearchVisible) _removeSearch();
+      if (_isFilterVisible) _hideFilter();
+    });
+  }
+
+  // --- BIZ HUB Logic ---
 
   void _toggleFilter() {
     setState(() {
@@ -91,316 +143,6 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return DuruhaScaffold(
-      appBarTitle: "Business Hub",
-      appBarActions: [
-        IconButton(
-          onPressed: _toggleFilter,
-          icon: Icon(
-            Icons.calendar_today_rounded,
-            color: _isFilterVisible ? theme.colorScheme.onSecondary : null,
-          ),
-          tooltip: "Filter Date Range",
-        ),
-        const SizedBox(width: 8),
-      ],
-      bottomNavigationBar: const FarmerNavigation(
-        name: "Elly",
-        currentRoute: '/farmer/biz',
-      ),
-      body: _isLoading
-          ? const FarmerLoadingScreen()
-          : Stack(
-              children: [
-                RefreshIndicator(
-                  onRefresh: _fetchData,
-                  edgeOffset:
-                      MediaQuery.of(context).padding.top + kToolbarHeight,
-                  child: SingleChildScrollView(
-                    padding:
-                        EdgeInsets.zero, // Padding handled inside or removing
-                    // Note: original had padding: EdgeInsets.all(20).
-                    // I should keep it but maybe apply it to the content below the spacer?
-                    // Or keep it on SingleChildScrollView but it will affect the spacer area?
-                    // Best to put padding on the column children or a wrapping Padding below spacer.
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Monitor Pledge Button
-                              DuruhaButton(
-                                text: "Open Pledge Monitor",
-                                onPressed: () {
-                                  HapticFeedback.mediumImpact();
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/farmer/monitor',
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 24),
-
-                              // Revenue Summary Header
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      colorScheme.primary,
-                                      colorScheme.secondary,
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(24),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: colorScheme.primary.withValues(
-                                        alpha: 0.2,
-                                      ),
-                                      blurRadius: 15,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "TOTAL EARNINGS IN PERIOD",
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(
-                                            color: colorScheme.onPrimary
-                                                .withValues(alpha: 0.8),
-                                            letterSpacing: 1.5,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      DuruhaFormatter.formatCurrency(
-                                        _totalRevenue,
-                                      ),
-                                      style: theme.textTheme.headlineLarge
-                                          ?.copyWith(
-                                            color: colorScheme.onPrimary,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        _buildMiniStat(
-                                          context,
-                                          "Sales",
-                                          "${_filteredSoldPledges.length}",
-                                        ),
-                                        const SizedBox(width: 24),
-                                        _buildMiniStat(
-                                          context,
-                                          "Crops sold",
-                                          "${_groupedByCrop.length}",
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(height: 32),
-
-                              Text(
-                                "Earnings by Crop",
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-
-                              if (_groupedByCrop.isEmpty)
-                                Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(40.0),
-                                    child: Text(
-                                      "No sales found in this period.",
-                                      style: TextStyle(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              else
-                                ..._groupedByCrop.entries.map(
-                                  (entry) =>
-                                      _buildCropGroup(entry.key, entry.value),
-                                ),
-
-                              const SizedBox(height: 80),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_isFilterVisible) ...[
-                  // Barrier
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: _hideFilter,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(color: Colors.transparent),
-                    ),
-                  ),
-                  // Popup
-                  Positioned(
-                    top: 10,
-                    left: 16,
-                    right: 16,
-                    child: Material(
-                      elevation: 4,
-                      borderRadius: BorderRadius.circular(16),
-                      color: theme.colorScheme.surface,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: theme.colorScheme.outline.withValues(
-                              alpha: 0.1,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              "Filter Date Range",
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildDateRangeFilter(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-    );
-  }
-
-  Widget _buildDateRangeFilter() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildDateButton(
-              label: "Start Date",
-              date: _startDate,
-              onTap: () => _selectDate(true),
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
-          ),
-          Expanded(
-            child: _buildDateButton(
-              label: "End Date",
-              date: _endDate,
-              onTap: () => _selectDate(false),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDateButton({
-    required String label,
-    required DateTime date,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return DuruhaInkwell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          // Using surfaceContainerHighest gives it a subtle contrast from the card it sits in
-          color: colorScheme.surface.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Row(
-          children: [
-            // Left Side: Label and Date
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label.toUpperCase(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      letterSpacing: 1.1,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 9,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('MMM d, yyyy').format(date),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight:
-                          FontWeight.w900, // Thick font for "Excitement"
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Right Side: Visual Cue
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.calendar_month_rounded,
-                size: 15,
-                color: colorScheme.onSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _selectDate(bool isStart) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -419,109 +161,292 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
     }
   }
 
-  Widget _buildCropGroup(String cropName, List<HarvestPledge> pledges) {
+  // --- CROPS LIST Logic ---
+
+  void _sortCrops() {
+    _filteredCrops.sort((a, b) {
+      switch (_sortOption) {
+        case SortOption.rankAsc:
+          return a.rank.compareTo(b.rank);
+        case SortOption.rankDesc:
+          return b.rank.compareTo(a.rank);
+        case SortOption.nameAsc:
+          return a.nameDialect.compareTo(b.nameDialect);
+        case SortOption.nameDesc:
+          return b.nameDialect.compareTo(a.nameDialect);
+      }
+    });
+  }
+
+  void _filterCrops(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredCrops = List.from(_allCrops);
+      } else {
+        final lowerQuery = query.toLowerCase();
+        _filteredCrops = _allCrops.where((crop) {
+          return crop.nameDialect.toLowerCase().contains(lowerQuery) ||
+              crop.nameDialect.toLowerCase().contains(lowerQuery);
+        }).toList();
+      }
+      _sortCrops(); // Re-sort after filtering
+    });
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _isSearchVisible = !_isSearchVisible;
+      if (_isSearchVisible) {
+        _searchFocusNode.requestFocus();
+      } else {
+        _searchFocusNode.unfocus();
+      }
+    });
+  }
+
+  void _removeSearch() {
+    if (_isSearchVisible) {
+      setState(() {
+        _isSearchVisible = false;
+        _searchController.clear();
+        _filterCrops('');
+        _searchFocusNode.unfocus();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final cropTotalRevenue = pledges.fold(
-      0.0,
-      (sum, p) => sum + (p.quantity * (p.sellingPrice ?? 0)),
-    );
+    return DuruhaScaffold(
+      // Dynamic App Bar Title
+      appBarTitleWidget: _showCrops && _isSearchVisible
+          ? TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              style: theme.textTheme.titleMedium,
+              decoration: InputDecoration(
+                hintText: 'Search crops...',
+                border: InputBorder.none,
+                hintStyle: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              onChanged: _filterCrops,
+            )
+          : Text(
+              _showCrops ? "My Crops" : "Business Hub",
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.5,
+              ),
+            ),
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      child: DuruhaSectionContainer(
-        title: cropName,
-        action: Text(
-          DuruhaFormatter.formatCurrency(cropTotalRevenue),
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: Colors.green.shade700,
-            fontWeight: FontWeight.bold,
+      // Dynamic App Bar Actions
+      appBarActions: [
+        if (!_showCrops) ...[
+          // BIZ HUB ACTIONS
+          IconButton(
+            onPressed: _toggleFilter,
+            icon: Icon(
+              Icons.calendar_today_rounded,
+              color: _isFilterVisible ? theme.colorScheme.onSecondary : null,
+            ),
+            tooltip: "Filter Date Range",
+          ),
+        ] else ...[
+          // MY CROPS ACTIONS
+          if (_isSearchVisible)
+            IconButton(
+              onPressed: _removeSearch,
+              icon: const Icon(Icons.close),
+              tooltip: "Close Search",
+            )
+          else
+            IconButton(
+              onPressed: _toggleSearch,
+              icon: const Icon(Icons.search),
+              tooltip: "Search",
+            ),
+
+          DuruhaPopupMenu<SortOption>(
+            tooltip: 'Sort by',
+            items: SortOption.values,
+            selectedValue: _sortOption,
+            onSelected: (SortOption result) {
+              setState(() {
+                _sortOption = result;
+                _filterCrops(_searchController.text);
+              });
+            },
+            icon: const Icon(Icons.sort),
+            labelBuilder: (SortOption option) {
+              switch (option) {
+                case SortOption.rankAsc:
+                  return '0-9';
+                case SortOption.rankDesc:
+                  return '9-0';
+                case SortOption.nameAsc:
+                  return 'A-Z';
+                case SortOption.nameDesc:
+                  return 'Z-A';
+              }
+            },
+          ),
+        ],
+
+        const SizedBox(width: 8),
+
+        // --- TOGGLE VIEW ICON ---
+        // Far right icon to switch views
+        IconButton.filled(
+          onPressed: _toggleView,
+          tooltip: _showCrops ? "Switch to Biz Hub" : "Switch to My Crops",
+          icon: Icon(
+            _showCrops ? Icons.bar_chart_rounded : Icons.grass_rounded,
+          ),
+          style: IconButton.styleFrom(
+            backgroundColor: theme.colorScheme.onPrimary.withValues(alpha: .5),
+            foregroundColor: theme.colorScheme.primary,
+            side: BorderSide(color: theme.colorScheme.primary),
+            shape: const CircleBorder(),
           ),
         ),
-        children: [...pledges.map((p) => _buildTransactionTile(p))],
+      ],
+
+      bottomNavigationBar: FarmerNavigation(
+        name: "Elly",
+        currentRoute: '/farmer/biz',
       ),
+      body: _isLoading
+          ? const FarmerLoadingScreen()
+          : _showCrops
+          ? _buildMyCropsTab(context)
+          : _buildBizHubTab(context),
     );
   }
 
-  Widget _buildTransactionTile(HarvestPledge p) {
+  // --- TAB 1: BIZ HUB CONTENT ---
+  Widget _buildBizHubTab(BuildContext context) {
     final theme = Theme.of(context);
-    final revenue = p.quantity * (p.sellingPrice ?? 0);
+    final colorScheme = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.receipt_long_outlined,
-              size: 16,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: _fetchAllData,
+          edgeOffset: MediaQuery.of(context).padding.top + kToolbarHeight,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.zero,
+            physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "${DuruhaFormatter.formatNumber(p.quantity)} ${p.unit} • ${p.variants.join(', ')}",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  DateFormat('MMM d, yyyy').format(p.harvestDate),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Monitor Pledge Button
+                      DuruhaButton(
+                        text: "Open Pledge Monitor",
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          Navigator.pushNamed(context, '/farmer/monitor');
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Revenue Summary Header
+                      BizRevenueCard(
+                        totalRevenue: _totalRevenue,
+                        salesCount: _filteredSoldPledges.length,
+                        cropsSoldCount: _groupedByCrop.length,
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      Text(
+                        "Earnings by Crop",
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      BizEarningsSection(groupedByCrop: _groupedByCrop),
+
+                      const SizedBox(height: 80),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                DuruhaFormatter.formatCurrency(revenue),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                "₱${DuruhaFormatter.formatNumber(p.sellingPrice ?? 0)}/unit",
-                style: theme.textTheme.labelSmall?.copyWith(color: Colors.grey),
-              ),
-            ],
+        ),
+        if (_isFilterVisible) ...[
+          // Barrier
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _hideFilter,
+              behavior: HitTestBehavior.opaque,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          // Popup
+          Positioned(
+            top: 10,
+            left: 16,
+            right: 16,
+            child: BizDateRangePicker(
+              startDate: _startDate,
+              endDate: _endDate,
+              onStartDateTap: () => _selectDate(true),
+              onEndDateTap: () => _selectDate(false),
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildMiniStat(BuildContext context, String label, String value) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onPrimary.withValues(alpha: 0.6),
-          ),
-        ),
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: theme.colorScheme.onPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ],
     );
   }
+
+  // --- TAB 2: MY CROPS CONTENT ---
+  Widget _buildMyCropsTab(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // Simple direct list for now
+    if (_filteredCrops.isEmpty) {
+      return Center(
+        child: Text(
+          'No crops match your search.',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: _filteredCrops.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        final crop = _filteredCrops[index];
+        return SelectedCropCard(
+          crop: crop,
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/farmer/biz/crops/',
+              arguments: crop.id,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- WIDGET HELPERS ---
 }

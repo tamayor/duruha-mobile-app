@@ -3,10 +3,13 @@ import 'package:duruha/core/widgets/duruha_app_bar.dart'; // Adjust import path
 
 class DuruhaScaffold extends StatelessWidget {
   final String? appBarTitle;
+  final Widget? appBarTitleWidget;
   final List<Widget>? appBarActions;
+  final PreferredSizeWidget? appBarBottom;
   final Widget body;
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
+  final Widget? bottomSheet;
   final bool isLoading;
   final Widget? loadingScreen;
   final bool safeAreaBottom;
@@ -16,10 +19,13 @@ class DuruhaScaffold extends StatelessWidget {
   const DuruhaScaffold({
     super.key,
     this.appBarTitle,
+    this.appBarTitleWidget,
     this.appBarActions,
+    this.appBarBottom,
     required this.body,
     this.bottomNavigationBar,
     this.floatingActionButton,
+    this.bottomSheet,
     this.isLoading = false,
     this.loadingScreen,
     this.safeAreaBottom = true,
@@ -33,7 +39,10 @@ class DuruhaScaffold extends StatelessWidget {
     final topPadding = MediaQuery.of(context).padding.top;
 
     // Calculate total offset so content starts below the bar but background flows behind
-    final double appBarOffset = topPadding + kToolbarHeight;
+    // Add bottom height if present
+    final double appBarHeight =
+        kToolbarHeight + (appBarBottom?.preferredSize.height ?? 0);
+    final double appBarOffset = topPadding + appBarHeight;
 
     return Scaffold(
       // We extend the body so the blur has texture to process
@@ -41,6 +50,7 @@ class DuruhaScaffold extends StatelessWidget {
       backgroundColor: theme.scaffoldBackgroundColor,
       bottomNavigationBar: bottomNavigationBar,
       floatingActionButton: floatingActionButton,
+      bottomSheet: bottomSheet,
       body: Stack(
         children: [
           // 1. CONTENT LAYER
@@ -64,7 +74,9 @@ class DuruhaScaffold extends StatelessWidget {
             right: 0,
             child: DuruhaAppBar(
               title: appBarTitle,
+              titleWidget: appBarTitleWidget,
               actions: appBarActions,
+              bottom: appBarBottom,
               showBackButton: showBackButton,
               onBackPressed: onBackPressed,
             ),

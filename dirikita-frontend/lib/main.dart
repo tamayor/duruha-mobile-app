@@ -2,25 +2,31 @@ import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/theme/app_theme.dart';
 import 'package:duruha/features/auth/presentation/login_screen.dart';
 import 'package:duruha/features/auth/presentation/signup_screen.dart';
-import 'package:duruha/features/consumer/features/profile/presentation/profile_screen.dart';
-import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
+import 'package:duruha/features/consumer/features/market/domain/market_order_model.dart';
 
-import 'package:duruha/features/farmer/shared/presentation/create_pledge_screen.dart';
+import 'package:duruha/features/consumer/features/market/presentation/market_screen.dart';
+import 'package:duruha/features/consumer/features/market/presentation/market_state.dart';
+import 'package:duruha/features/consumer/features/market/presentation/order_screen.dart';
+import 'package:duruha/features/consumer/features/market/presentation/payment_screen.dart';
+import 'package:duruha/features/consumer/features/orders/presentation/orders_screen.dart';
+import 'package:duruha/features/consumer/features/profile/presentation/profile_screen.dart';
 import 'package:duruha/features/landing/presentation/landing_screen.dart';
 import 'package:duruha/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/profile_screen.dart';
-import 'package:duruha/features/farmer/features/farm/presentation/dashboard_screen.dart';
-import 'package:duruha/features/farmer/features/farm/presentation/crop_study_screen.dart';
-import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
-import 'package:duruha/features/farmer/features/crops/presentation/crops_screen.dart';
-import 'package:duruha/features/farmer/features/crops/presentation/crop_detail_screen.dart';
-import 'package:duruha/features/farmer/features/monitor/presentation/pledge_monitor_screen.dart';
-import 'package:duruha/features/farmer/features/monitor/presentation/pledge_detail_screen.dart';
+import 'package:duruha/features/farmer/features/main/presentation/main_screen.dart';
+import 'package:duruha/features/farmer/features/main/presentation/crop_study_screen.dart';
+
+import 'package:duruha/features/farmer/features/sales/presentation/sales_screen.dart';
+import 'package:duruha/features/farmer/features/biz/presentation/crop_detail_screen.dart';
+import 'package:duruha/features/farmer/features/manage/presentation/manage_screen.dart';
+import 'package:duruha/features/farmer/features/manage/presentation/pledge_detail_screen.dart';
 import 'package:duruha/features/farmer/features/biz/presentation/biz_screen.dart';
 import 'package:duruha/features/farmer/features/programs/presentation/programs_screen.dart';
+import 'package:duruha/features/farmer/features/tx/presentation/transaction_create_screen.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/ratings_screen.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
+import 'package:duruha/shared/produce/presentation/produce_presentation_screen.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
 // Placeholder for missing screens
@@ -135,28 +141,34 @@ class DuruhaApp extends StatelessWidget {
             final args = settings.arguments;
             final routeName = settings.name ?? '';
             Widget? screen;
+
+            // 1. Try Consumer Routes
+            screen = _getConsumerScreens(settings);
+            if (screen != null) return _buildRoute(settings, screen);
+
+            // 2. Try Farmer Routes
+            screen = _getFarmerScreens(settings);
+            if (screen != null) return _buildRoute(settings, screen);
+
+            // 3. Handle Shared/Top-level Routes
             switch (routeName) {
               case '/home':
                 if (args is UserProfile) {
                   if (args.role == UserRole.farmer) {
-                    screen = _protected(const FarmerDashboardScreen());
+                    screen = _protected(const FarmerMainScreen());
                   } else {
                     screen = _protected(
-                      _buildPlaceholderScreen(
-                        {'role': 'Consumer', 'name': args.name},
-                        '/market',
-                        'Market',
+                      MarketScreen(
+                        userData: {'role': 'Consumer', 'name': args.name},
                       ),
                     );
                   }
                 } else if (args is Map<String, dynamic>) {
                   final role = args['role'] ?? 'User';
                   if (role == 'Farmer') {
-                    screen = _protected(const FarmerDashboardScreen());
+                    screen = _protected(const FarmerMainScreen());
                   } else {
-                    screen = _protected(
-                      _buildPlaceholderScreen(args, '/home', 'Market'),
-                    );
+                    screen = _protected(MarketScreen(userData: args));
                   }
                 }
                 break;
@@ -192,56 +204,15 @@ class DuruhaApp extends StatelessWidget {
                   }
                 }
                 break;
-              // case '/consumer/market':
-              //   screen = _protected(ConsumerProfileScreen());
-              //   break;
-              case '/farmer/farm':
-                screen = _protected(const FarmerDashboardScreen());
-                break;
-              case '/farmer/pledge/create':
-                screen = _protected(const FarmerCreatePledgeScreen());
-                break;
-              case '/farmer/pledge/study':
-                if (args is String) {
-                  screen = _protected(CropStudyScreen(cropId: args));
-                }
-                break;
-              case '/farmer/crops':
-                screen = _protected(const FarmerCropsScreen());
-                break;
-              case '/farmer/biz':
-                screen = _protected(const FarmerBizScreen());
-                break;
-              case '/farmer/monitor':
-                screen = _protected(const MonitorPledgeScreen());
-                break;
-              case '/farmer/programs':
-                screen = _protected(const FarmerProgramsScreen());
-                break;
-              case '/farmer/profile/ratings':
-                screen = _protected(const FarmerProfileRatingsScreen());
-                break;
               default:
-                if (routeName.startsWith('/farmer/monitor/')) {
-                  final id = routeName.replaceFirst('/farmer/monitor/', '');
-                  final pledge = args is HarvestPledge ? args : null;
-                  screen = _protected(
-                    PledgeDetailScreen(pledgeId: id, pledge: pledge),
-                  );
-                } else if (routeName.startsWith('/farmer/crops/')) {
-                  final id = routeName.replaceFirst('/farmer/crops/', '');
-                  screen = _protected(CropDetailScreen(cropId: id));
-                } else {
-                  //  print('Navigating to default: $routeName');
+                if (routeName.startsWith('/produce/')) {
+                  final id = routeName.replaceFirst('/produce/', '');
+                  screen = ProducePresentationScreen(produceId: id);
                 }
             }
+
             if (screen != null) {
-              return PageRouteBuilder(
-                settings: settings,
-                pageBuilder: (_, _, _) => screen!,
-                transitionDuration: Duration.zero,
-                reverseTransitionDuration: Duration.zero,
-              );
+              return _buildRoute(settings, screen);
             }
             return null;
           },
@@ -254,23 +225,115 @@ class DuruhaApp extends StatelessWidget {
   // Helper to wrap protected routes
   Widget _protected(Widget child) => ProtectedScreen(child: child);
 
-  Widget _buildPlaceholderScreen(
-    Map<String, dynamic> args,
-    String route,
-    String title,
-  ) {
-    var role = args['role'] as String? ?? 'User';
-    final name = args['name'] as String? ?? 'Friend';
-
-    // If role is user, we might want to default to consumer navigation if it's the default
-    if (role == 'User') role = 'Consumer';
-
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text("$title Screen\nRole: $role")),
-      bottomNavigationBar: role == 'Farmer'
-          ? FarmerNavigation(name: name, currentRoute: route)
-          : ConsumerNavigation(name: name, currentRoute: route),
+  // Helper to build the page route
+  PageRouteBuilder _buildRoute(RouteSettings settings, Widget screen) {
+    return PageRouteBuilder(
+      settings: settings,
+      pageBuilder: (_, _, _) => screen,
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
     );
+  }
+
+  Widget? _getConsumerScreens(RouteSettings settings) {
+    final args = settings.arguments;
+    final routeName = settings.name ?? '';
+
+    switch (routeName) {
+      case '/consumer/market':
+        if (args is UserProfile) {
+          return _protected(
+            MarketScreen(userData: {'role': 'Consumer', 'name': args.name}),
+          );
+        } else if (args is Map<String, dynamic>) {
+          return _protected(MarketScreen(userData: args));
+        }
+        break;
+      case '/consumer/orders':
+        if (args is UserProfile) {
+          return _protected(
+            ConsumerOrdersScreen(
+              userData: {'role': 'Consumer', 'name': args.name},
+            ),
+          );
+        } else if (args is Map<String, dynamic>) {
+          return _protected(ConsumerOrdersScreen(userData: args));
+        }
+        break;
+      case '/consumer/market/order':
+        if (args is Map<String, dynamic>) {
+          final marketState = args['marketState'] as MarketState?;
+          final userData = args['userData'] as Map<String, dynamic>? ?? {};
+          if (marketState != null) {
+            return _protected(
+              OrderScreen(marketState: marketState, userData: userData),
+            );
+          }
+        }
+        break;
+      case '/consumer/market/order/pay':
+        if (args is Map<String, dynamic>) {
+          final order = args['order'] as MarketOrder?;
+          final userData = args['userData'] as Map<String, dynamic>? ?? {};
+          final marketState = args['marketState'] as MarketState?;
+          if (order != null && marketState != null) {
+            return _protected(
+              PaymentScreen(
+                order: order,
+                userData: userData,
+                marketState: marketState,
+              ),
+            );
+          }
+        }
+        break;
+    }
+    return null;
+  }
+
+  Widget? _getFarmerScreens(RouteSettings settings) {
+    final args = settings.arguments;
+    final routeName = settings.name ?? '';
+
+    switch (routeName) {
+      case '/farmer/main':
+        return _protected(const FarmerMainScreen());
+      case '/farmer/pledge/study':
+        if (args is String) {
+          return _protected(CropStudyScreen(cropId: args));
+        }
+        break;
+      case '/farmer/sales':
+        return _protected(const FarmerSalesScreen());
+      case '/farmer/biz':
+        return _protected(const FarmerBizScreen());
+      case '/farmer/manage':
+        return _protected(const MonitorPledgeScreen());
+      case '/farmer/tx/create':
+        if (args is Map<String, dynamic>) {
+          final ids = args['ids'] as List<String>;
+          final mode = args['mode'] as String;
+          return _protected(
+            TransactionCreateScreen(selectedCropIds: ids, mode: mode),
+          );
+        }
+        break;
+      case '/farmer/programs':
+        return _protected(const FarmerProgramsScreen());
+      case '/farmer/profile/ratings':
+        return _protected(const FarmerProfileRatingsScreen());
+      case '/farmer/biz/crops/':
+        if (args is String) {
+          return _protected(CropDetailScreen(cropId: args));
+        }
+        break;
+      default:
+        if (routeName.startsWith('/farmer/monitor/')) {
+          final id = routeName.replaceFirst('/farmer/monitor/', '');
+          final pledge = args is HarvestPledge ? args : null;
+          return _protected(PledgeDetailScreen(pledgeId: id, pledge: pledge));
+        }
+    }
+    return null;
   }
 }

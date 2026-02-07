@@ -8,6 +8,7 @@ class DuruhaPopupMenu<T> extends StatelessWidget {
   final Map<T, IconData>? itemIcons;
   final Widget? icon;
   final String? tooltip;
+  final bool showLabel;
 
   const DuruhaPopupMenu({
     super.key,
@@ -18,6 +19,7 @@ class DuruhaPopupMenu<T> extends StatelessWidget {
     this.itemIcons,
     this.icon,
     this.tooltip,
+    this.showLabel = true,
   });
 
   @override
@@ -103,24 +105,25 @@ class DuruhaPopupMenu<T> extends StatelessWidget {
                   size: 20,
                   color: colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(width: 8),
+                // const SizedBox(width: 8),
               ],
               // 2. Show Label
-              Flexible(
-                child: Text(
-                  // Show "Select" only if selectedValue is not found (and not null-valid)
-                  items.contains(selectedValue)
-                      ? labelBuilder(selectedValue as T)
-                      : (tooltip ?? 'Select'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurface,
+              if (showLabel)
+                Flexible(
+                  child: Text(
+                    // Show "Select" only if selectedValue is not found (and not null-valid)
+                    items.contains(selectedValue)
+                        ? labelBuilder(selectedValue as T)
+                        : (tooltip ?? 'Select'),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              const SizedBox(width: 4),
-              Icon(Icons.arrow_drop_down, color: colorScheme.onSurfaceVariant),
+              // const SizedBox(width: 4),
+              // Icon(Icons.arrow_drop_down, color: colorScheme.onSurfaceVariant),
             ],
           ),
         ),

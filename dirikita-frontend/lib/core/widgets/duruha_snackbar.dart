@@ -55,7 +55,7 @@ class DuruhaSnackBar {
       backgroundColor = customColor;
       // Simple contrast check for custom color could go here,
       // but for now we trust the dev or default to white for safety on custom darks
-      foregroundColor = Colors.white;
+      foregroundColor = theme.colorScheme.onPrimary;
     }
 
     if (customIcon != null) {

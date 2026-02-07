@@ -63,7 +63,6 @@ class DuruhaDropdown<T> extends StatelessWidget {
             // Icon color in the decoration
             prefixIconColor: contentColor,
           ),
-
       // Arrow color set to onPrimary
       icon: Icon(Icons.arrow_drop_down_rounded, color: contentColor, size: 20),
 

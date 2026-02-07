@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
+import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 
 class DuruhaProgram {
   final String title;

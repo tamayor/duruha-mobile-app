@@ -1,11 +1,11 @@
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/core/data/dialects.dart';
-import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
-import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
+import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
+import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
 import 'package:flutter/material.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  final FarmerProfile profile;
+  final ConsumerProfile profile;
 
   const EditProfileScreen({super.key, required this.profile});
 
@@ -20,8 +20,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _emailController;
   late TextEditingController _phoneController;
-  late TextEditingController _farmAliasController;
-  late TextEditingController _landAreaController;
+  late TextEditingController _segmentSizeController;
   late TextEditingController _barangayController;
   late TextEditingController _cityController;
   late TextEditingController _provinceController;
@@ -30,34 +29,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // New State Variables
   late String _selectedDialect;
-  late String _accessibility;
-  late List<String> _waterSources;
-  late List<String> _paymentMethods;
-  late List<String> _operatingDays;
-  late String _deliveryWindow;
+  late String _consumerSegment;
+  late String _cookingFrequency;
+  late List<String> _qualityPreferences;
 
   bool _isLoading = false;
 
-  final List<String> _waterSourceOptions = [
-    "River / Stream",
-    "Deep Well (Borehole)",
-    "Rainwater Harvesting",
-    "Irrigation Canal",
-    "Public/Municipal Tap",
-    "Water Tanker",
+  final List<String> _consumerSegmentOptions = [
+    'Household',
+    'Restaurant',
+    'Catering',
+    'Small Business',
   ];
 
-  final List<String> _paymentMethodOptions = ['GCash', 'Bank Transfer', 'Cash'];
-  final List<String> _operatingDaysOptions = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
+  final List<String> _cookingFrequencyOptions = [
+    'Daily',
+    'Few times a week',
+    'Weekly',
+    'Occasional',
   ];
-  final List<String> _deliveryWindowOptions = ['AM', 'PM', 'Flexible'];
+
+  final List<String> _qualityPreferenceOptions = [
+    'Freshness',
+    'Organic',
+    'Local Source',
+    'Lowest Price',
+    'Premium Grade',
+  ];
 
   @override
   void initState() {
@@ -70,11 +68,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController = TextEditingController(text: widget.profile.name);
     _emailController = TextEditingController(text: widget.profile.email ?? '');
     _phoneController = TextEditingController(text: widget.profile.phone);
-    _farmAliasController = TextEditingController(
-      text: widget.profile.farmAlias,
-    );
-    _landAreaController = TextEditingController(
-      text: widget.profile.landArea.toString(),
+    _segmentSizeController = TextEditingController(
+      text: (widget.profile.segmentSize ?? 1).toString(),
     );
     _barangayController = TextEditingController(text: widget.profile.barangay);
     _cityController = TextEditingController(text: widget.profile.city);
@@ -87,11 +82,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   void _initializeState() {
     _selectedDialect = widget.profile.dialect;
-    _accessibility = widget.profile.accessibilityType ?? 'Truck';
-    _waterSources = List.from(widget.profile.waterSources ?? []);
-    _paymentMethods = List.from(widget.profile.paymentMethods ?? []);
-    _operatingDays = List.from(widget.profile.operatingDays ?? []);
-    _deliveryWindow = widget.profile.deliveryWindow ?? 'AM';
+    _consumerSegment = widget.profile.consumerSegment ?? 'Household';
+    _cookingFrequency = widget.profile.cookingFrequency ?? 'Daily';
+    _qualityPreferences = List.from(widget.profile.qualityPreferences ?? []);
   }
 
   @override
@@ -99,8 +92,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _farmAliasController.dispose();
-    _landAreaController.dispose();
+    _segmentSizeController.dispose();
     _barangayController.dispose();
     _cityController.dispose();
     _provinceController.dispose();
@@ -125,47 +117,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // NOTE: We need to handle 'email' carefully since copyWith might not exist on FarmerProfile depending on how mixins/extends work,
-      // but we updated the model to include it in the constructor and UserProfile has it.
-      // Ideally FarmerProfile.copyWith should be updated to accept email.
-      // But assuming UserProfile doesn't have a copyWith, and FarmerProfile overrides it.
-      // I'll assume FarmerProfile.copyWith handles 'email' if I added it to the named args there.
-      // Wait, I only added it to UserProfile constructor and FarmerProfile constructor.
-      // I forgot to update FarmerProfile.copyWith in step 421. I only updated waterSources etc.
-      // I should verify if I can update UserProfile fields via FarmerProfile.copyWith if I didn't add them.
-      // I probably didn't add 'email' parameter to copyWith.
-      // I will proceed, and if logic fails I will fix copyWith.
-      // Actually, I can't pass 'email' if it's not a param.
-      // I will try to pass it, if it errors, I'll fix the model.
-
       final updatedProfile = widget.profile.copyWith(
         name: _nameController.text,
         email: _emailController.text,
         phone: _phoneController.text,
-        farmAlias: _farmAliasController.text,
-        landArea:
-            double.tryParse(_landAreaController.text) ??
-            widget.profile.landArea,
         barangay: _barangayController.text,
         city: _cityController.text,
         province: _provinceController.text,
         landmark: _landmarkController.text,
         postalCode: _postalCodeController.text,
         dialect: _selectedDialect,
-        accessibilityType: _accessibility,
-        waterSources: _waterSources,
-        paymentMethods: _paymentMethods,
-        operatingDays: _operatingDays,
-        deliveryWindow: _deliveryWindow,
+        consumerSegment: _consumerSegment,
+        segmentSize: int.tryParse(_segmentSizeController.text),
+        cookingFrequency: _cookingFrequency,
+        qualityPreferences: _qualityPreferences,
       );
 
-      // HACK: Since copyWith might not support email yet, let's create a new instance if needed
-      // or just assume for now we don't update email via copyWith until I fix it.
-      // But wait, I really should fix it.
-      // Let's not pass email for now to avoid compilation error if I missed it.
-      // I'll perform a follow-up fix for email in copyWith.
-
-      await FarmerProfileRepositoryImpl().updateProfile(updatedProfile);
+      await ConsumerProfileRepositoryImpl().updateProfile(updatedProfile);
 
       if (mounted) {
         DuruhaSnackBar.showSuccess(context, "Profile updated successfully!");
@@ -231,82 +199,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 24),
 
-              // --- FARM DETAILS ---
+              // --- CONSUMER DETAILS ---
               DuruhaSectionContainer(
-                title: "Farm Details",
+                title: "Consumer Details",
                 children: [
-                  DuruhaTextField(
-                    controller: _farmAliasController,
-                    label: "Farm Alias (Optional)",
-                    icon: Icons.landscape,
-                  ),
-                  DuruhaTextField(
-                    controller: _landAreaController,
-                    label: "Land Area (Ha)",
-                    icon: Icons.square_foot,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: (val) {
-                      if (val == null || val.isEmpty) return "Required";
-                      if (double.tryParse(val) == null) return "Invalid number";
-                      return null;
-                    },
-                  ),
                   DuruhaDropdown(
-                    label: 'Road Accessibility',
-                    value: _accessibility,
-                    items: const ['Truck', 'Tricycle', 'Walk_In'],
+                    label: 'Consumer TYPE',
+                    value: _consumerSegment,
+                    items: _consumerSegmentOptions,
                     itemIcons: const {
-                      'Truck': Icons.local_shipping_outlined,
-                      'Tricycle': Icons.electric_rickshaw_outlined,
-                      'Walk_In': Icons.directions_walk_outlined,
+                      'Household': Icons.home_outlined,
+                      'Restaurant': Icons.restaurant,
+                      'Catering': Icons.room_service_outlined,
+                      'Small Business': Icons.storefront,
                     },
                     onChanged: (v) {
                       if (v != null) {
-                        setState(() => _accessibility = v);
+                        setState(() => _consumerSegment = v);
                       }
                     },
                   ),
-                  const SizedBox(height: 16),
-                  DuruhaSelectionChipGroup(
-                    title: "Water Sources",
-                    subtitle: "Select all that apply",
-                    options: _waterSourceOptions,
-                    selectedValues: _waterSources,
-                    onToggle: (val) => _toggleSelection(_waterSources, val),
+                  DuruhaTextField(
+                    controller: _segmentSizeController,
+                    label: "Household / Group Size",
+                    icon: Icons.people_outline,
+                    keyboardType: TextInputType.number,
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // --- OPERATIONS ---
-              DuruhaSectionContainer(
-                title: "Operations",
-                children: [
-                  DuruhaSelectionChipGroup(
-                    title: "Payment Methods",
-                    options: _paymentMethodOptions,
-                    selectedValues: _paymentMethods,
-                    onToggle: (val) => _toggleSelection(_paymentMethods, val),
-                  ),
-                  const SizedBox(height: 16),
-                  DuruhaSelectionChipGroup(
-                    title: "Operating Days",
-                    options: _operatingDaysOptions,
-                    selectedValues: _operatingDays,
-                    onToggle: (val) => _toggleSelection(_operatingDays, val),
-                  ),
-                  const SizedBox(height: 16),
                   DuruhaDropdown(
-                    label: 'Preferred Delivery Window',
-                    value: _deliveryWindow.isEmpty ? null : _deliveryWindow,
-                    items: _deliveryWindowOptions,
+                    label: 'Cooking Frequency',
+                    value: _cookingFrequency,
+                    items: _cookingFrequencyOptions,
                     onChanged: (v) {
                       if (v != null) {
-                        setState(() => _deliveryWindow = v);
+                        setState(() => _cookingFrequency = v);
                       }
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  DuruhaSelectionChipGroup(
+                    title: "Quality Preferences",
+                    subtitle: "What matters most to you?",
+                    options: _qualityPreferenceOptions,
+                    selectedValues: _qualityPreferences,
+                    onToggle: (val) =>
+                        _toggleSelection(_qualityPreferences, val),
                   ),
                 ],
               ),

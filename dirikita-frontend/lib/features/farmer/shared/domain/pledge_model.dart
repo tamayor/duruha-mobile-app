@@ -1,3 +1,33 @@
+class HarvestEntry {
+  final DateTime date;
+  final String variety;
+  final double quantity;
+  final double? earnings;
+
+  HarvestEntry({
+    required this.date,
+    required this.variety,
+    required this.quantity,
+    this.earnings,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'date': date.toIso8601String(),
+    'variety': variety,
+    'quantity': quantity,
+    'earnings': earnings,
+  };
+
+  factory HarvestEntry.fromJson(Map<String, dynamic> json) => HarvestEntry(
+    date: DateTime.parse(json['date']),
+    variety: json['variety'],
+    quantity: (json['quantity'] as num).toDouble(),
+    earnings: json['earnings'] != null
+        ? (json['earnings'] as num).toDouble()
+        : null,
+  );
+}
+
 class HarvestPledge {
   final String? id;
   final String? cropId;
@@ -14,6 +44,11 @@ class HarvestPledge {
   final double totalExpenses;
   final double? sellingPrice;
   final String imageUrl;
+  final DateTime? availableDate;
+  final DateTime? disposalDate;
+  final Map<String, double>? varietyQuantities;
+  final List<HarvestEntry>? perDatePledges;
+  final List<DateTime>? completedDates;
 
   HarvestPledge({
     this.id,
@@ -31,7 +66,28 @@ class HarvestPledge {
     this.totalExpenses = 0.0,
     this.sellingPrice,
     this.imageUrl = 'assets/images/placeholder.png',
+    this.availableDate,
+    this.disposalDate,
+    this.varietyQuantities,
+    this.perDatePledges,
+    this.completedDates,
   });
+
+  /// Compatibility getter to return the old structure: Map<DateTime, Map<String, double>>
+  Map<DateTime, Map<String, double>> get perDatePledgesMap {
+    if (perDatePledges == null) return {};
+    final map = <DateTime, Map<String, double>>{};
+    for (var entry in perDatePledges!) {
+      final normalizedDate = DateTime(
+        entry.date.year,
+        entry.date.month,
+        entry.date.day,
+      );
+      map.putIfAbsent(normalizedDate, () => {});
+      map[normalizedDate]![entry.variety] = entry.quantity;
+    }
+    return map;
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -40,6 +96,11 @@ class HarvestPledge {
     'crop_name_dialect': cropNameDialect,
     'selected_variants': variants,
     'harvest_date': harvestDate.toIso8601String(),
+    'available_date': availableDate?.toIso8601String(),
+    'disposal_date': disposalDate?.toIso8601String(),
+    'variety_quantities': varietyQuantities,
+    'per_date_pledges': perDatePledges?.map((e) => e.toJson()).toList(),
+    'completed_dates': completedDates?.map((d) => d.toIso8601String()).toList(),
     'quantity': quantity,
     'unit': unit,
     'farmer_id': farmerId,
@@ -50,5 +111,17 @@ class HarvestPledge {
     'image_url': imageUrl,
     'created_at':
         createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+  };
+}
+
+class TransactionRequest {
+  final String mode; // 'pledge' or 'offer'
+  final List<HarvestPledge> pledges;
+
+  TransactionRequest({required this.mode, required this.pledges});
+
+  Map<String, dynamic> toJson() => {
+    'mode': mode,
+    'pledges': pledges.map((p) => p.toJson()).toList(),
   };
 }

@@ -48,4 +48,25 @@ class DuruhaFormatter {
       return value.toString();
     }
   }
+
+  /// Formats a date to a readable string (e.g., February 3, 2026)
+  static String formatDate(DateTime date) {
+    try {
+      return DateFormat('MMMM d, y').format(date);
+    } catch (e) {
+      return date.toIso8601String().split('T')[0];
+    }
+  }
+
+  /// Formats a number with compact notation (e.g. 1.2k, 1M)
+  static String formatCompactNumber(num value) {
+    try {
+      if (value.isNaN || value.isInfinite) {
+        return value.toString();
+      }
+      return NumberFormat.compact(locale: 'en_PH').format(value);
+    } catch (e) {
+      return value.toString();
+    }
+  }
 }

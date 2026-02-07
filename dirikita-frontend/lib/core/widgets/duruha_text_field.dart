@@ -18,6 +18,7 @@ class DuruhaTextField extends StatelessWidget {
   final bool isRequired; // If true, automatically checks for empty text
   final String? Function(String?)?
   validator; // Custom validation logic (e.g., email check)
+  final bool enabled;
   final Function(String)? onChanged; // Callback for text changes
   final FocusNode? focusNode;
 
@@ -31,6 +32,7 @@ class DuruhaTextField extends StatelessWidget {
     this.maxLines = 1,
     this.suffix, // Add to constructor
     this.isRequired = true, // Defaults to required!
+    this.enabled = true,
     this.validator,
     this.onChanged,
     this.focusNode,
@@ -52,6 +54,7 @@ class DuruhaTextField extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: TextFormField(
+        enabled: enabled,
         controller: controller,
         focusNode: focusNode,
         keyboardType: keyboardType,
@@ -68,6 +71,7 @@ class DuruhaTextField extends StatelessWidget {
         decoration: DuruhaStyles.fieldDecoration(
           context,
           label: label,
+          enabled: enabled,
           icon: icon,
           suffix: suffix, // Pass to decoration
         ),

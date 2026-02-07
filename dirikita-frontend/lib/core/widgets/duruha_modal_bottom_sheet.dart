@@ -100,7 +100,7 @@ class DuruhaModalBottomSheet extends StatelessWidget {
 
           // Header with title, subtitle, and close button
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
               children: [
                 Icon(icon, color: theme.colorScheme.primary),
@@ -119,7 +119,7 @@ class DuruhaModalBottomSheet extends StatelessWidget {
                         Text(
                           subtitle!,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
+                            color: theme.colorScheme.onSecondary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

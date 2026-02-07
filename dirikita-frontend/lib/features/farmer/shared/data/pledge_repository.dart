@@ -1,7 +1,10 @@
 import '../domain/pledge_model.dart';
+// import 'package:duruha/shared/produce/data/produce_repository.dart';
+// import 'dart:math' as math;
+// import 'package:flutter/material.dart';
 
 class PledgeRepository {
-  // Simulate an API call
+  // Simulate an API call (Legacy/Individual)
   Future<bool> createPledge(HarvestPledge pledge) async {
     try {
       // ignore: avoid_print
@@ -32,7 +35,7 @@ class PledgeRepository {
         cropId: 'prod_010',
         cropName: 'Onion',
         cropNameDialect: 'Sulyaw',
-        variants: ['Red Pinoy'],
+        variants: ['Red Pinoy', 'White Granex'],
         harvestDate: now.add(const Duration(days: 45)),
         quantity: 500,
         unit: 'kg',
@@ -43,6 +46,47 @@ class PledgeRepository {
         totalExpenses: 12500.0,
         imageUrl:
             'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=900&auto=format&fit=crop',
+        perDatePledges: [
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 45)),
+            variety: 'Red Pinoy',
+            quantity: 200,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 45)),
+            variety: 'White Granex',
+            quantity: 100,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 48)),
+            variety: 'Red Pinoy',
+            quantity: 150,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 48)),
+            variety: 'White Granex',
+            quantity: 50,
+          ),
+        ],
+        completedDates: [
+          DateTime(now.year, now.month, now.day).add(const Duration(days: 45)),
+        ],
       ),
 
       // 2. READY TO HARVEST - Chili
@@ -62,6 +106,26 @@ class PledgeRepository {
         totalExpenses: 3200.0,
         imageUrl:
             'https://images.unsplash.com/photo-1546860255-95536c19724e?w=900&auto=format&fit=crop',
+        perDatePledges: [
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 3)),
+            variety: 'Native',
+            quantity: 20,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 7)),
+            variety: 'Native',
+            quantity: 30,
+          ),
+        ],
       ),
 
       // 3. SOLD - Tomato (Historical)
@@ -120,6 +184,26 @@ class PledgeRepository {
         totalExpenses: 8000.0,
         imageUrl:
             'https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?w=900&auto=format&fit=crop',
+        perDatePledges: [
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 30)),
+            variety: 'Ilocos White',
+            quantity: 150,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 35)),
+            variety: 'Ilocos White',
+            quantity: 150,
+          ),
+        ],
       ),
 
       // 6. HARVESTED - Eggplant
@@ -139,6 +223,33 @@ class PledgeRepository {
         totalExpenses: 3500.0,
         imageUrl:
             'https://images.unsplash.com/photo-1615485290382-441e4d0c9cb5?w=900&auto=format&fit=crop',
+        perDatePledges: [
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).subtract(const Duration(days: 1)),
+            variety: 'Long Purple',
+            quantity: 75,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 2)),
+            variety: 'Long Purple',
+            quantity: 75,
+          ),
+        ],
+        completedDates: [
+          DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1)),
+        ],
       ),
 
       // 7. SOLD - Bitter Gourd
@@ -167,7 +278,7 @@ class PledgeRepository {
         cropId: 'prod_008',
         cropName: 'Cabbage',
         cropNameDialect: 'Repolyo',
-        variants: ['Scorpio'],
+        variants: ['Scorpio', 'Rare Ball'],
         harvestDate: now.add(const Duration(days: 15)),
         quantity: 1000,
         unit: 'heads',
@@ -178,6 +289,44 @@ class PledgeRepository {
         totalExpenses: 15000.0,
         imageUrl:
             'https://images.unsplash.com/photo-1591196702597-062a17338521?w=900&auto=format&fit=crop',
+        perDatePledges: [
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 15)),
+            variety: 'Scorpio',
+            quantity: 300,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 15)),
+            variety: 'Rare Ball',
+            quantity: 200,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 22)),
+            variety: 'Scorpio',
+            quantity: 300,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 22)),
+            variety: 'Rare Ball',
+            quantity: 200,
+          ),
+        ],
       ),
 
       // 9. SOLD - Bell Pepper
@@ -217,40 +366,28 @@ class PledgeRepository {
         totalExpenses: 2500.0,
         imageUrl:
             'https://images.unsplash.com/photo-1627566144810-7e44923e3e07?w=900&auto=format&fit=crop',
+        perDatePledges: [
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).subtract(const Duration(days: 2)),
+            variety: 'Smooth Green',
+            quantity: 60,
+          ),
+          HarvestEntry(
+            date: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(const Duration(days: 1)),
+            variety: 'Smooth Green',
+            quantity: 60,
+          ),
+        ],
       ),
     ];
-  }
-
-  // Simulate fetching demand forecast based on date
-  Future<Map<String, dynamic>> getDemandForecast(
-    String cropId,
-    DateTime date,
-  ) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    // Mock logic based on month
-    final month = date.month;
-    //final year = date.year;  - must be included in the future
-    final isHighSeason = month >= 9 || month <= 2;
-
-    // Detailed Mock Data
-    final double localDemand = 1000.0;
-    final double localFulfilled = (month % 2 != 0)
-        ? 1000.0
-        : 600.0; // Odd months full
-
-    final double nationalDemand = 10000.0;
-    final double nationalFulfilled = 4500.0;
-
-    return {
-      'local_demand_kg': localDemand,
-      'local_fulfilled_kg': localFulfilled,
-      'national_demand_kg': nationalDemand,
-      'national_fulfilled_kg': nationalFulfilled,
-      'local_price': isHighSeason ? 120.0 : 80.0,
-      'national_price': isHighSeason ? 115.0 : 70.0,
-    };
   }
 
   // Update pledge status
@@ -298,6 +435,20 @@ class PledgeRepository {
   Future<bool> deleteStatusEntry(String pledgeId, String statusId) async {
     await Future.delayed(const Duration(seconds: 1));
     //print("rewind [API] Deleted Status Entry $statusId from $pledgeId");
+    return true;
+  }
+
+  // Toggle harvest date completion
+  Future<bool> toggleHarvestDateStatus(
+    String pledgeId,
+    DateTime date,
+    bool isCompleted,
+  ) async {
+    await Future.delayed(const Duration(seconds: 1));
+    // ignore: avoid_print
+    print(
+      "✅ [API] Toggled Harvest Date Status for $pledgeId: ${date.toIso8601String()} -> $isCompleted",
+    );
     return true;
   }
 }

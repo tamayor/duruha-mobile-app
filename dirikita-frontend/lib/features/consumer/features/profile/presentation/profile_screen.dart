@@ -1,16 +1,13 @@
 import 'dart:io';
 
-import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
+import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:duruha/features/farmer/shared/presentation/navigation.dart';
-import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
-import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
-import 'package:duruha/features/farmer/shared/presentation/badges.dart';
-import 'package:duruha/features/farmer/features/profile/presentation/edit_profile_screen.dart';
+import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
+import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
+import 'package:duruha/features/consumer/features/profile/presentation/edit_profile_screen.dart';
 
 class ConsumerProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -22,7 +19,7 @@ class ConsumerProfileScreen extends StatefulWidget {
 }
 
 class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
-  late Future<FarmerProfile> _profileFuture;
+  late Future<ConsumerProfile> _profileFuture;
 
   @override
   void initState() {
@@ -30,30 +27,26 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
     _profileFuture = _loadProfile();
   }
 
-  Future<FarmerProfile> _loadProfile() async {
-    // Use the ID from userData if available, otherwise default
-    // final id = widget.userData['id'] ?? 'farmer-001';
-    return FarmerProfileRepositoryImpl().getFarmerProfile('farmer-001');
+  Future<ConsumerProfile> _loadProfile() async {
+    return ConsumerProfileRepositoryImpl().getConsumerProfile('consumer-001');
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Initial basic info from passed arguments (fallback while loading)
-    final initialName = widget.userData['name'] ?? 'Farmer';
+    final initialName = widget.userData['name'] ?? 'Consumer';
 
     return DuruhaScaffold(
       appBarTitle: 'My Profile',
-      bottomNavigationBar: FarmerNavigation(
+      bottomNavigationBar: ConsumerNavigation(
         name: initialName,
         currentRoute: '/profile',
       ),
-      body: FutureBuilder<FarmerProfile>(
+      body: FutureBuilder<ConsumerProfile>(
         future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const FarmerLoadingScreen();
+            return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
           } else if (!snapshot.hasData) {
@@ -62,10 +55,11 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
 
           final profile = snapshot.data!;
           final displayName = profile.name;
-          const displayRole = 'Farmer';
+          const displayRole = 'Consumer';
           final displayLocation =
               "${profile.barangay}, ${profile.city}, \n${profile.province}, ${profile.postalCode}";
           final displayLandmark = profile.landmark;
+
           return Stack(
             children: [
               SingleChildScrollView(
@@ -191,22 +185,14 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // --- PERFORMANCE & ACHIEVEMENTS ---
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                      ), // Full width usually for SectionContainer
-                      child: _buildBadgesPreview(context, profile),
-                    ),
-
-                    // --- STATS / DETAILS CARD ---
+                    // --- OVERVIEW CARD ---
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: _buildDetailsCard(context, profile),
                     ),
 
                     const SizedBox(height: 32),
-                    DuruhaThemeToggleButton(),
+                    const DuruhaThemeToggleButton(),
                     // --- MENU OPTIONS ---
                     _buildMenuOption(
                       context,
@@ -214,7 +200,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                       title: "Edit Profile",
                       onTap: () async {
                         final updatedProfile =
-                            await Navigator.push<FarmerProfile>(
+                            await Navigator.push<ConsumerProfile>(
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
@@ -231,29 +217,25 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                     ),
                     _buildMenuOption(
                       context,
+                      icon: Icons.shopping_bag_outlined,
+                      title: "My Orders",
+                      onTap: () {
+                        Navigator.pushNamed(context, '/consumer/orders');
+                      },
+                    ),
+                    _buildMenuOption(
+                      context,
+                      icon: Icons.favorite_border,
+                      title: "My Favorites",
+                      onTap: () {
+                        Navigator.pushNamed(context, '/consumer/market');
+                      },
+                    ),
+                    _buildMenuOption(
+                      context,
                       icon: Icons.help_outline,
                       title: "Help & Support",
                       onTap: () {},
-                    ),
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.insights_rounded,
-                      title: "Performance & Ratings",
-                      onTap: () {
-                        Navigator.pushNamed(context, '/farmer/profile/ratings');
-                      },
-                    ),
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.list_alt_outlined,
-                      title: "Duruha Programs",
-                      onTap: () {
-                        Navigator.pushNamedAndRemoveUntil(
-                          context,
-                          '/farmer/programs',
-                          (r) => false,
-                        );
-                      },
                     ),
                     const Divider(height: 48),
                     _buildMenuOption(
@@ -280,95 +262,9 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
     );
   }
 
-  Widget _buildStatColumn(
-    BuildContext context, {
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBadgesPreview(BuildContext context, FarmerProfile profile) {
-    final earnedBadges = DuruhaBadges.all
-        .where((b) => profile.unlockedBadgeIds.contains(b.id))
-        .toList();
-
-    return DuruhaSectionContainer(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildStatColumn(
-              context,
-              label: "Trust Score",
-              value: profile.trustScore.toString(),
-              icon: Icons.verified_user_rounded,
-              color: Colors.blue.shade700,
-            ),
-            _buildVerticalDivider(context),
-            _buildStatColumn(
-              context,
-              label: "Crop Points",
-              value: DuruhaFormatter.formatNumber(profile.cropPoints),
-              icon: Icons.stars_rounded,
-              color: Colors.orange.shade700,
-            ),
-          ],
-        ),
-        SizedBox(
-          height: 120, // Approximate height for BadgeCard
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(
-              earnedBadges.length,
-              (index) => SizedBox(
-                width: 40,
-                child: BadgeCard(
-                  badge: earnedBadges[index],
-                  isUnlocked: true,
-                  iconOnly: true,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVerticalDivider(BuildContext context) {
-    return Container(
-      height: 40,
-      width: 1,
-      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-    );
-  }
-
-  Widget _buildDetailsCard(BuildContext context, FarmerProfile profile) {
+  Widget _buildDetailsCard(BuildContext context, ConsumerProfile profile) {
     final theme = Theme.of(context);
 
-    // Use data from the profile model
     final items = [
       _DetailItem(
         'Joined',
@@ -377,27 +273,24 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
       ),
       _DetailItem('Dialect', profile.dialect, Icons.language),
       _DetailItem(
-        'Farm Size',
-        '${profile.landArea != null ? DuruhaFormatter.formatNumber(profile.landArea!) : "0"} Ha',
-        Icons.landscape,
+        'Segment',
+        profile.consumerSegment ?? 'Household',
+        Icons.group_outlined,
       ),
       _DetailItem(
-        'Water',
-        profile.waterSources?.isNotEmpty == true
-            ? '${profile.waterSources!.length} Sources'
-            : 'Rainfed',
-        Icons.water_drop,
+        'Frequency',
+        profile.cookingFrequency ?? 'Daily',
+        Icons.restaurant_menu,
       ),
       _DetailItem(
-        'Crops',
-        '${profile.pledgedCrops?.length ?? 0} Types',
-        Icons.eco,
-        onTap: () => Navigator.pushNamed(context, '/farmer/crops'),
+        'Preferences',
+        '${profile.qualityPreferences?.length ?? 0} Saved',
+        Icons.verified_outlined,
       ),
       _DetailItem(
-        'Experience',
-        '5 Years', // Still hardcoded as not in model yet
-        Icons.history,
+        'Interests',
+        '${profile.demandCrops?.length ?? 0} Crops',
+        Icons.eco_outlined,
       ),
     ];
 
@@ -427,6 +320,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
               color: theme.colorScheme.onSurface,
             ),
           ),
+          const SizedBox(height: 16),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -445,53 +339,41 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
 
   Widget _buildStatItem(BuildContext context, _DetailItem item) {
     final theme = Theme.of(context);
-    return DuruhaInkwell(
-      onTap: item.onTap,
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.onPrimary.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              item.icon,
-              size: 20,
-              color: theme.colorScheme.onPrimary,
-            ),
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  item.value,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+          child: Icon(item.icon, size: 20, color: theme.colorScheme.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                item.value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                item.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (item.onTap != null)
-            Icon(
-              Icons.chevron_right,
-              size: 16,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-            ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -536,7 +418,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
     );
   }
 
-  Future<void> _pickAndUploadImage(FarmerProfile profile) async {
+  Future<void> _pickAndUploadImage(ConsumerProfile profile) async {
     final picker = ImagePicker();
     try {
       final XFile? image = await showModalBottomSheet<XFile?>(
@@ -570,26 +452,17 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
       );
 
       if (image != null) {
-        // Show loading indicator or optimistic update here if needed
         DuruhaSnackBar.showInfo(context, "Uploading image...");
 
-        final newImageUrl = await FarmerProfileRepositoryImpl()
+        final newImageUrl = await ConsumerProfileRepositoryImpl()
             .uploadProfileImage(File(image.path));
 
         setState(() {
-          // In a real app, update the profile object properly or reload
-          // For now, simpler workaround as profile is local in FutureBuilder
-          // But since we are inside FutureBuilder, modifying 'profile' won't persist on rebuild
-          // unless we refresh the future.
           _profileFuture = Future.value(
             profile.copyWith(imageUrl: newImageUrl),
           );
         });
         if (mounted) {
-          Navigator.of(
-            context,
-          ).pop(); // Close loading snackbar? No, snackbar persists.
-          // Hide previous snackbar before showing success
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           DuruhaSnackBar.showSuccess(
             context,
@@ -599,9 +472,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).hideCurrentSnackBar(); // Close loading snackbar if present
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         DuruhaSnackBar.showError(context, "Failed to upload image: $e");
       }
     }
@@ -612,7 +483,6 @@ class _DetailItem {
   final String label;
   final String value;
   final IconData icon;
-  final VoidCallback? onTap;
 
-  _DetailItem(this.label, this.value, this.icon, {this.onTap});
+  _DetailItem(this.label, this.value, this.icon);
 }

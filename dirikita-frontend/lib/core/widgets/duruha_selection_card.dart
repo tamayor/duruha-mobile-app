@@ -3,21 +3,25 @@ import 'package:flutter/material.dart';
 
 class DuruhaSelectionCard extends StatelessWidget {
   final String title, subtitle;
+  final Widget? subtitleWidget;
   final String? imageUrl;
   final IconData? icon;
   final bool isSelected;
   final bool isList; // Manual override from parent
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const DuruhaSelectionCard({
     super.key,
     required this.title,
     required this.subtitle,
+    this.subtitleWidget,
     this.imageUrl,
     this.icon,
     required this.isSelected,
     required this.isList, // Required to handle parent layout logic
     required this.onTap,
+    this.trailing,
   });
 
   @override
@@ -52,14 +56,10 @@ class DuruhaSelectionCard extends StatelessWidget {
         child: DuruhaInkwell(
           onTap: onTap,
           child: isList
-              ? SizedBox(
-                  // Dynamic height if it's an icon to prevent constraints issues,
-                  // but keeping 90 for consistency with images if needed.
-                  // For now, let's keep 90 but allowing flexibility might be safer.
-                  // Actually, generic search cards rely on this 90.
-                  height: 90,
+              ? ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 90),
                   child: content,
-                ) // Fixed height for List stability
+                ) // Flexible height for List with minHeight
               : content,
         ),
       ),
@@ -71,12 +71,16 @@ class DuruhaSelectionCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: Row(
+        crossAxisAlignment: subtitleWidget != null
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           if (imageUrl != null || icon != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 1, // Keeps image/icon square
+              child: SizedBox(
+                width: 64,
+                height: 64,
                 child: _buildImage(colorScheme),
               ),
             ),
@@ -96,18 +100,25 @@ class DuruhaSelectionCard extends StatelessWidget {
                   maxLines: 1,
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSecondary.withValues(alpha: 0.8),
+                if (subtitleWidget != null)
+                  subtitleWidget!
+                else
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSecondary.withValues(alpha: 0.8),
+                    ),
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                ),
               ],
             ),
           ),
-          if (isSelected) _buildCheck(colorScheme),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ] else if (isSelected)
+            _buildCheck(colorScheme),
         ],
       ),
     );

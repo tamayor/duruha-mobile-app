@@ -16,14 +16,8 @@ class AuthRepository {
     // Determine Mock User based on request credentials (simple simulation)
     // Check email for role indicators
 
-    final bool isConsumerMock = request.email.toLowerCase().contains(
-      "consumer",
-    );
-
-    // Default to farmer if consumer is not specified
-    final UserRole userRole = isConsumerMock
-        ? UserRole.consumer
-        : UserRole.farmer;
+    final bool isConsumer = request.email.toLowerCase().contains("consumer");
+    final UserRole userRole = isConsumer ? UserRole.consumer : UserRole.farmer;
 
     final UserProfile mockUser = UserProfile(
       id: "user_${DateTime.now().millisecondsSinceEpoch}",
@@ -69,7 +63,9 @@ class AuthRepository {
       province: "",
       landmark: "",
       postalCode: "",
-      role: UserRole.consumer, // Default, likely updated in Onboarding
+      role: request.email.toLowerCase().contains("consumer")
+          ? UserRole.consumer
+          : UserRole.farmer,
       dialect: "Cebuano",
 
       // Farmer

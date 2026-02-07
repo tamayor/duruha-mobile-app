@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:duruha/shared/user/domain/user_models.dart';
 
-class FarmerProfile extends UserProfile {
-  FarmerProfile({
+class ConsumerProfile extends UserProfile {
+  ConsumerProfile({
     required super.id,
     required super.joinedAt,
     required super.name,
@@ -16,38 +16,25 @@ class FarmerProfile extends UserProfile {
     required super.postalCode,
     super.imageUrl,
     required super.dialect,
-    required String farmAlias,
-    required double landArea,
-    required String accessibilityType,
-    required List<String> waterSources,
-    required List<String> paymentMethods,
-    required List<String> operatingDays,
-    required String deliveryWindow,
-    List<ProduceItem> pledgedCrops = const [],
-    this.trustScore = 0,
-    this.cropPoints = 0,
-    this.unlockedBadgeIds = const [],
+    String? consumerSegment,
+    int? segmentSize,
+    String? cookingFrequency,
+    List<String> qualityPreferences = const [],
+    List<ProduceItem> demandCrops = const [],
   }) : super(
-         role: UserRole.farmer,
-         farmAlias: farmAlias,
-         landArea: landArea,
-         accessibilityType: accessibilityType,
-         waterSources: waterSources,
-         paymentMethods: paymentMethods,
-         operatingDays: operatingDays,
-         deliveryWindow: deliveryWindow,
-         pledgedCrops: pledgedCrops,
+         role: UserRole.consumer,
+         consumerSegment: consumerSegment,
+         segmentSize: segmentSize,
+         cookingFrequency: cookingFrequency,
+         qualityPreferences: qualityPreferences,
+         demandCrops: demandCrops,
        );
 
-  final int trustScore;
-  final int cropPoints;
-  final List<String> unlockedBadgeIds;
-
-  factory FarmerProfile.fromUserProfile(UserProfile user) {
-    if (user.role != UserRole.farmer) {
-      throw Exception('User is not a farmer'); // Or handle appropriately
+  factory ConsumerProfile.fromUserProfile(UserProfile user) {
+    if (user.role != UserRole.consumer) {
+      throw Exception('User is not a consumer');
     }
-    return FarmerProfile(
+    return ConsumerProfile(
       id: user.id,
       joinedAt: user.joinedAt,
       name: user.name,
@@ -59,20 +46,16 @@ class FarmerProfile extends UserProfile {
       postalCode: user.postalCode,
       landmark: user.landmark,
       imageUrl: user.imageUrl,
-
       dialect: user.dialect,
-      farmAlias: user.farmAlias ?? '',
-      landArea: user.landArea ?? 0.0,
-      accessibilityType: user.accessibilityType ?? '',
-      waterSources: user.waterSources ?? [],
-      paymentMethods: user.paymentMethods ?? [],
-      operatingDays: user.operatingDays ?? [],
-      deliveryWindow: user.deliveryWindow ?? '',
-      pledgedCrops: user.pledgedCrops ?? [],
+      consumerSegment: user.consumerSegment,
+      segmentSize: user.segmentSize,
+      cookingFrequency: user.cookingFrequency,
+      qualityPreferences: user.qualityPreferences ?? [],
+      demandCrops: user.demandCrops ?? [],
     );
   }
 
-  FarmerProfile copyWith({
+  ConsumerProfile copyWith({
     String? id,
     String? joinedAt,
     String? name,
@@ -85,19 +68,13 @@ class FarmerProfile extends UserProfile {
     String? postalCode,
     String? imageUrl,
     String? dialect,
-    String? farmAlias,
-    double? landArea,
-    String? accessibilityType,
-    List<String>? waterSources,
-    List<String>? paymentMethods,
-    List<String>? operatingDays,
-    String? deliveryWindow,
-    List<ProduceItem>? pledgedCrops,
-    int? trustScore,
-    int? cropPoints,
-    List<String>? unlockedBadgeIds,
+    String? consumerSegment,
+    int? segmentSize,
+    String? cookingFrequency,
+    List<String>? qualityPreferences,
+    List<ProduceItem>? demandCrops,
   }) {
-    return FarmerProfile(
+    return ConsumerProfile(
       id: id ?? this.id,
       joinedAt: joinedAt ?? this.joinedAt,
       name: name ?? this.name,
@@ -110,23 +87,17 @@ class FarmerProfile extends UserProfile {
       postalCode: postalCode ?? this.postalCode,
       imageUrl: imageUrl ?? this.imageUrl,
       dialect: dialect ?? this.dialect,
-      farmAlias: farmAlias ?? this.farmAlias ?? '',
-      landArea: landArea ?? this.landArea ?? 0.0,
-      accessibilityType: accessibilityType ?? this.accessibilityType ?? '',
-      waterSources: waterSources ?? this.waterSources ?? [],
-      paymentMethods: paymentMethods ?? this.paymentMethods ?? [],
-      operatingDays: operatingDays ?? this.operatingDays ?? [],
-      deliveryWindow: deliveryWindow ?? this.deliveryWindow ?? '',
-      pledgedCrops: pledgedCrops ?? this.pledgedCrops ?? [],
-      trustScore: trustScore ?? this.trustScore,
-      cropPoints: cropPoints ?? this.cropPoints,
-      unlockedBadgeIds: unlockedBadgeIds ?? this.unlockedBadgeIds,
+      consumerSegment: consumerSegment ?? this.consumerSegment,
+      segmentSize: segmentSize ?? this.segmentSize,
+      cookingFrequency: cookingFrequency ?? this.cookingFrequency,
+      qualityPreferences: qualityPreferences ?? this.qualityPreferences ?? [],
+      demandCrops: demandCrops ?? this.demandCrops ?? [],
     );
   }
 }
 
-abstract class FarmerProfileRepository {
-  Future<FarmerProfile> getFarmerProfile(String farmerId);
+abstract class ConsumerProfileRepository {
+  Future<ConsumerProfile> getConsumerProfile(String consumerId);
   Future<String> uploadProfileImage(File file); // Returns the URL
-  Future<void> updateProfile(FarmerProfile profile);
+  Future<void> updateProfile(ConsumerProfile profile);
 }
