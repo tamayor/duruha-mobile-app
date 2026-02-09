@@ -52,7 +52,7 @@ class DuruhaFormatter {
   /// Formats a date to a readable string (e.g., February 3, 2026)
   static String formatDate(DateTime date) {
     try {
-      return DateFormat('MMMM d, y').format(date);
+      return DateFormat('MMM d, y').format(date);
     } catch (e) {
       return date.toIso8601String().split('T')[0];
     }

@@ -313,6 +313,7 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
             shape: const CircleBorder(),
           ),
         ),
+        const SizedBox(width: 16),
       ],
 
       bottomNavigationBar: FarmerNavigation(
@@ -348,16 +349,6 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Monitor Pledge Button
-                      DuruhaButton(
-                        text: "Open Pledge Monitor",
-                        onPressed: () {
-                          HapticFeedback.mediumImpact();
-                          Navigator.pushNamed(context, '/farmer/monitor');
-                        },
-                      ),
-                      const SizedBox(height: 24),
-
                       // Revenue Summary Header
                       BizRevenueCard(
                         totalRevenue: _totalRevenue,

@@ -98,14 +98,18 @@ class PledgeHeaderSummary extends StatelessWidget {
                     )
                   : Column(
                       children: [
-                        const Icon(
-                          Icons.auto_awesome_rounded,
+                        Icon(
+                          pledge.currentStatus == "Sold"
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.auto_awesome_rounded,
                           color: Colors.white,
                           size: 32,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "HARVEST READY",
+                          pledge.currentStatus == "Sold"
+                              ? "SOLD"
+                              : "HARVEST READY",
                           textAlign: TextAlign.center,
                           style: theme.textTheme.headlineSmall?.copyWith(
                             color: Colors.white,

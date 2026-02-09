@@ -48,7 +48,6 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
 
   final List<Map<String, dynamic>> _dateHistory = [];
   final List<Map<String, dynamic>> _inputs = [];
-  final List<DateTime> _completedDates = [];
 
   String _selectedInputCategory = 'Fertilizer';
   final List<String> _inputCategories = [
@@ -107,9 +106,8 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
           _pledge = pledge;
           _produce = produce;
           _currentStatus = pledge.currentStatus;
-          _completedDates.clear();
-          if (pledge.completedDates != null) {
-            _completedDates.addAll(pledge.completedDates!);
+          if (pledge.perDatePledges != null) {
+            // Already handled by the model
           }
           _isLoading = false;
         });
@@ -521,7 +519,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
 
   Widget _buildDetailsContent() {
     final pledge = _pledge!;
-    double totalInputs = _inputs.fold(0, (sum, item) => sum + item['cost']);
+    double totalInputs = pledge.totalExpenses;
 
     // Calculate days remaining (using the earliest date if multiple exist)
     DateTime harvestDate;
@@ -586,15 +584,12 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
             );
           },
         ),
-        const SizedBox(height: 24),
-        PledgePlantingDetails(pledge: pledge),
         const SizedBox(height: 16),
         PledgeHarvestSchedule(
           pledge: pledge,
           harvestDate: harvestDate,
-          completedDates: _completedDates,
           currentStatus: _currentStatus,
-          onToggleHarvest: (date, newStatus) async {
+          onToggleHarvest: (entry, newStatus) async {
             if (_currentStatus != 'Harvest') {
               DuruhaSnackBar.showWarning(
                 context,
@@ -606,26 +601,37 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
             HapticFeedback.mediumImpact();
 
             setState(() {
-              if (newStatus) {
-                _completedDates.add(date);
-              } else {
-                _completedDates.removeWhere(
-                  (d) =>
-                      d.year == date.year &&
-                      d.month == date.month &&
-                      d.day == date.day,
+              // Find the specific entry in our local pledge object and update it
+              final index = _pledge!.perDatePledges!.indexWhere(
+                (e) =>
+                    e.variety == entry.variety &&
+                    e.quantity == entry.quantity &&
+                    e.date == entry.date,
+              );
+
+              if (index != -1) {
+                final updatedEntry = HarvestEntry(
+                  date: entry.date,
+                  variety: entry.variety,
+                  quantity: entry.quantity,
+                  earnings: entry.earnings,
+                  isCompleted: newStatus,
                 );
+                _pledge!.perDatePledges![index] = updatedEntry;
               }
             });
 
             await _repository.toggleHarvestDateStatus(
               widget.pledgeId,
-              date,
+              entry.date,
               newStatus,
             );
           },
           onShowDatePicker: _showDatePicker,
         ),
+
+        const SizedBox(height: 24),
+        PledgePlantingDetails(pledge: pledge),
       ],
     );
   }

@@ -63,6 +63,20 @@ class _OrderItemCardState extends State<OrderItemCard> {
   }
 
   @override
+  void didUpdateWidget(OrderItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sync controller with external changes, but only if they are substantive
+    // and not just formatting differences from typing (e.g. 5 vs 5.0)
+    final double? currentVal = double.tryParse(_quantityController.text);
+    if (widget.builder.quantityKg != oldWidget.builder.quantityKg &&
+        widget.builder.quantityKg != currentVal) {
+      _quantityController.text = widget.builder.quantityKg > 0
+          ? widget.builder.quantityKg.toString()
+          : '';
+    }
+  }
+
+  @override
   void dispose() {
     _quantityController.dispose();
     super.dispose();
@@ -285,15 +299,19 @@ class _OrderItemCardState extends State<OrderItemCard> {
                         String subtitle =
                             "${DuruhaFormatter.formatCurrency(varietyPrice)}/${produce.unitOfMeasure}";
 
+                        return MapEntry(v.name, subtitle);
+                      }),
+                    ),
+                    optionTrailingText: Map.fromEntries(
+                      produce.availableVarieties.map((v) {
+                        String trailing = "";
                         if (widget.isOrderMode &&
                             _mockInventory.containsKey(v.name)) {
                           final inv = _mockInventory[v.name]!;
                           final total = inv.values.reduce((a, b) => a + b);
-                          subtitle +=
-                              " • ${total.toInt()}kg (A:${inv['A']!.toInt()}, B:${inv['B']!.toInt()}, C:${inv['C']!.toInt()})";
+                          trailing = "${total.toInt()}kg";
                         }
-
-                        return MapEntry(v.name, subtitle);
+                        return MapEntry(v.name, trailing);
                       }),
                     ),
                     onToggle: (String value) {
@@ -416,15 +434,22 @@ class _OrderItemCardState extends State<OrderItemCard> {
                       ),
                       optionSubtitles: Map.fromEntries(
                         ProduceClass.values.map((cls) {
-                          String subtitle =
-                              "${getPriceString(cls)}/${produce.unitOfMeasure}";
+                          return MapEntry(
+                            cls.code,
+                            "${getPriceString(cls)}/${produce.unitOfMeasure}",
+                          );
+                        }),
+                      ),
+                      optionTrailingText: Map.fromEntries(
+                        ProduceClass.values.map((cls) {
+                          String trailing = "";
                           if (widget.isOrderMode) {
                             final available = _getAvailableQuantityForClass(
                               cls.code,
                             );
-                            subtitle += " • ${available.toInt()}kg available";
+                            trailing = "${available.toInt()}kg";
                           }
-                          return MapEntry(cls.code, subtitle);
+                          return MapEntry(cls.code, trailing);
                         }),
                       ),
                       onToggle: (String code) {
@@ -466,13 +491,30 @@ class _OrderItemCardState extends State<OrderItemCard> {
                           ),
                           isRequired: false,
                           onChanged: (value) {
-                            double quantity = double.tryParse(value) ?? 0.0;
+                            // Trim and handle empty/invalid input gracefully
+                            final cleanValue = value.trim();
+                            if (cleanValue.isEmpty) {
+                              widget.onUpdate(
+                                widget.builder.copyWith(quantityKg: 0.0),
+                              );
+                              return;
+                            }
+
+                            // Don't update state for intermediate inputs (like a lonely '.')
+                            // This prevents "zeroing" when the user is midway through typing.
+                            final quantity = double.tryParse(cleanValue);
+                            if (quantity == null) {
+                              return;
+                            }
+
+                            double finalQuantity = quantity;
 
                             // Enforce max quantity
-                            if (widget.isOrderMode && quantity > maxQty) {
-                              quantity = maxQty;
+                            if (widget.isOrderMode && finalQuantity > maxQty) {
+                              finalQuantity = maxQty;
                               // Update controller text to max
-                              _quantityController.text = quantity.toString();
+                              _quantityController.text = finalQuantity
+                                  .toString();
                               // Keep cursor at end
                               _quantityController.selection =
                                   TextSelection.fromPosition(
@@ -483,10 +525,15 @@ class _OrderItemCardState extends State<OrderItemCard> {
                             }
 
                             widget.onUpdate(
-                              widget.builder.copyWith(quantityKg: quantity),
+                              widget.builder.copyWith(
+                                quantityKg: finalQuantity,
+                              ),
                             );
                           },
                           validator: (value) {
+                            if (widget.builder.selectedClasses.isEmpty) {
+                              return 'Please select a class';
+                            }
                             if (value == null || value.isEmpty) {
                               return 'Please enter a quantity';
                             }
@@ -506,7 +553,7 @@ class _OrderItemCardState extends State<OrderItemCard> {
                             child: Text(
                               'Max available: ${maxQty.toInt()} kg',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                                color: theme.colorScheme.onSecondary,
                               ),
                             ),
                           ),
@@ -651,6 +698,27 @@ class _OrderItemCardState extends State<OrderItemCard> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildSummaryItem(ThemeData theme, String label, double amount) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          '${amount.toInt()} kg',
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+      ],
     );
   }
 }

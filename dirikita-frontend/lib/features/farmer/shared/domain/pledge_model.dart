@@ -3,12 +3,14 @@ class HarvestEntry {
   final String variety;
   final double quantity;
   final double? earnings;
+  final bool isCompleted;
 
   HarvestEntry({
     required this.date,
     required this.variety,
     required this.quantity,
     this.earnings,
+    this.isCompleted = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -16,6 +18,7 @@ class HarvestEntry {
     'variety': variety,
     'quantity': quantity,
     'earnings': earnings,
+    'is_completed': isCompleted,
   };
 
   factory HarvestEntry.fromJson(Map<String, dynamic> json) => HarvestEntry(
@@ -25,6 +28,7 @@ class HarvestEntry {
     earnings: json['earnings'] != null
         ? (json['earnings'] as num).toDouble()
         : null,
+    isCompleted: json['is_completed'] ?? false,
   );
 }
 

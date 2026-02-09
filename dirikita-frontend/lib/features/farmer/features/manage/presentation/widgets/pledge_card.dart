@@ -326,7 +326,7 @@ class PledgeCard extends StatelessWidget {
       case 'Sold':
         return Colors.purple;
       default:
-        return colorScheme.primary;
+        return colorScheme.onPrimary;
     }
   }
 

@@ -16,6 +16,7 @@ class DuruhaSelectionChipGroup extends StatefulWidget {
   final Map<String, IconData>? optionIcons;
   final Map<String, String>? optionTitles;
   final Map<String, String>? optionSubtitles;
+  final Map<String, String>? optionTrailingText;
   final SelectionLayout layout;
 
   const DuruhaSelectionChipGroup({
@@ -32,6 +33,7 @@ class DuruhaSelectionChipGroup extends StatefulWidget {
     this.optionIcons,
     this.optionTitles,
     this.optionSubtitles,
+    this.optionTrailingText,
     this.layout = SelectionLayout.wrap,
   });
 
@@ -70,6 +72,7 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
                 optionIcons: widget.optionIcons,
                 optionTitles: widget.optionTitles,
                 optionSubtitles: widget.optionSubtitles,
+                optionTrailingText: widget.optionTrailingText,
                 scrollController: scrollController,
               ),
             );
@@ -152,7 +155,7 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
         if (widget.layout == SelectionLayout.wrap)
           Wrap(
             spacing: 10,
-            runSpacing: -3,
+            runSpacing: 10,
             clipBehavior: Clip.none,
             children: [
               ..._buildChips(visibleOptions, colorScheme),
@@ -189,17 +192,40 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
             widget.optionTitles?[option] ?? option,
             style: TextStyle(fontSize: _isColumnLayout ? 14 : 13, height: 1.1),
           ),
-          if (widget.optionSubtitles?[option] != null)
-            Text(
-              widget.optionSubtitles![option]!,
-              style: TextStyle(
-                fontSize: _isColumnLayout ? 11 : 10,
-                fontWeight: FontWeight.normal,
-                color: isSelected
-                    ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                    : colorScheme.onSurfaceVariant,
-                height: 1.1,
-              ),
+          const SizedBox(height: 5),
+          if (widget.optionSubtitles?[option] != null ||
+              widget.optionTrailingText?[option] != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (widget.optionSubtitles?[option] != null)
+                  Text(
+                    widget.optionSubtitles![option]!,
+                    style: TextStyle(
+                      fontSize: _isColumnLayout ? 12 : 11,
+                      fontWeight: FontWeight.normal,
+                      color: isSelected
+                          ? colorScheme.onSecondary
+                          : colorScheme.onSurfaceVariant,
+                      height: 1.1,
+                    ),
+                  ),
+
+                const SizedBox(width: 16),
+                if (widget.optionTrailingText?[option] != null)
+                  Text(
+                    widget.optionTrailingText![option]!,
+                    style: TextStyle(
+                      fontSize: _isColumnLayout ? 12 : 11,
+                      color: isSelected
+                          ? colorScheme.onPrimaryContainer.withValues(
+                              alpha: 0.5,
+                            )
+                          : colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
             ),
         ],
       );
@@ -268,7 +294,7 @@ class _DuruhaSelectionChipGroupState extends State<DuruhaSelectionChipGroup> {
 
       if (_isColumnLayout) {
         return Padding(
-          padding: const EdgeInsets.only(bottom: .5),
+          padding: const EdgeInsets.only(bottom: 5),
           child: SizedBox(width: double.infinity, child: chip),
         );
       }
@@ -309,6 +335,7 @@ class _SearchSelectionSheet extends StatefulWidget {
   final Map<String, IconData>? optionIcons;
   final Map<String, String>? optionTitles;
   final Map<String, String>? optionSubtitles;
+  final Map<String, String>? optionTrailingText;
   final ScrollController scrollController;
 
   const _SearchSelectionSheet({
@@ -320,6 +347,7 @@ class _SearchSelectionSheet extends StatefulWidget {
     this.optionIcons,
     this.optionTitles,
     this.optionSubtitles,
+    this.optionTrailingText,
     required this.scrollController,
   });
 
@@ -410,7 +438,7 @@ class _SearchSelectionSheetState extends State<_SearchSelectionSheet> {
               final int selectionIndex = widget.selectedValues.indexOf(option);
               final bool isSelected = selectionIndex != -1;
 
-              return AnimatedContainer(
+              final listItem = AnimatedContainer(
                 key: ValueKey(option),
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
@@ -449,13 +477,32 @@ class _SearchSelectionSheetState extends State<_SearchSelectionSheet> {
                       color: colorScheme.onSurface,
                     ),
                   ),
-                  subtitle: widget.optionSubtitles?[option] != null
-                      ? Text(
-                          widget.optionSubtitles![option]!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
+                  subtitle:
+                      (widget.optionSubtitles?[option] != null ||
+                          widget.optionTrailingText?[option] != null)
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (widget.optionSubtitles?[option] != null)
+                              Text(
+                                widget.optionSubtitles![option]!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            if (widget.optionTrailingText?[option] != null)
+                              Text(
+                                widget.optionTrailingText![option]!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? colorScheme.onPrimaryContainer
+                                      : colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
                         )
                       : null,
                   leading: widget.isNumbered && isSelected
@@ -491,6 +538,8 @@ class _SearchSelectionSheetState extends State<_SearchSelectionSheet> {
                   },
                 ),
               );
+
+              return listItem;
             },
           ),
         ),

@@ -755,7 +755,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         final user = await SessionService.getSavedUser();
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(
-          (user?.role == UserRole.farmer) ? '/farmer/farm' : '/home',
+          (user?.role == UserRole.farmer) ? '/farmer/main' : '/consumer/main',
           (r) => false,
           arguments: user,
         );

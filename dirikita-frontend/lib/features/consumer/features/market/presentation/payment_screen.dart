@@ -35,7 +35,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   DateTime _preferredStartDate = DateTime.now().add(const Duration(days: 1));
   DateTime? _preferredEndDate = DateTime.now().add(const Duration(days: 90));
   bool _isUntilCancelled = false;
-  List<int> _preferredDaysOfWeek = [];
+  final _preferredDaysOfWeek = <int>[];
 
   Future<void> _handleConfirmPayment() async {
     setState(() {

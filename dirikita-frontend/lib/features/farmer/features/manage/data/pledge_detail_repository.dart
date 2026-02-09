@@ -35,17 +35,15 @@ class PledgeDetailRepository {
             variety: 'Diamante',
             quantity: 100,
             earnings: 6000.0,
+            isCompleted: true,
           ),
           HarvestEntry(
             date: now.subtract(const Duration(days: 10)),
             variety: 'Diamante',
             quantity: 100,
             earnings: 6000.0,
+            isCompleted: true,
           ),
-        ],
-        completedDates: [
-          now.subtract(const Duration(days: 12)),
-          now.subtract(const Duration(days: 10)),
         ],
       );
     }
@@ -75,17 +73,22 @@ class PledgeDetailRepository {
             variety: 'Diamante',
             quantity: 250,
             earnings: 17500.0,
+            isCompleted: true,
           ),
           HarvestEntry(
             date: now.subtract(const Duration(days: 30)),
             variety: 'Diamante',
             quantity: 250,
             earnings: 17500.0,
+            isCompleted: true,
           ),
-        ],
-        completedDates: [
-          now.subtract(const Duration(days: 32)),
-          now.subtract(const Duration(days: 30)),
+          HarvestEntry(
+            date: now.subtract(const Duration(days: 30)),
+            variety: 'Max',
+            quantity: 250,
+            earnings: 17500.0,
+            isCompleted: true,
+          ),
         ],
       );
     }

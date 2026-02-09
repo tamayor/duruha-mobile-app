@@ -152,6 +152,7 @@ class DuruhaApp extends StatelessWidget {
 
             // 3. Handle Shared/Top-level Routes
             switch (routeName) {
+              case '/':
               case '/home':
                 if (args is UserProfile) {
                   if (args.role == UserRole.farmer) {
@@ -308,7 +309,7 @@ class DuruhaApp extends StatelessWidget {
       case '/farmer/biz':
         return _protected(const FarmerBizScreen());
       case '/farmer/manage':
-        return _protected(const MonitorPledgeScreen());
+        return _protected(const ManageScreen());
       case '/farmer/tx/create':
         if (args is Map<String, dynamic>) {
           final ids = args['ids'] as List<String>;

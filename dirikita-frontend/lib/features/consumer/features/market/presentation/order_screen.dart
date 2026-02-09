@@ -120,6 +120,7 @@ class _OrderScreenState extends State<OrderScreen> {
                     final builder = entry.value;
 
                     return OrderItemCard(
+                      key: ValueKey(produceId),
                       builder: builder,
                       onUpdate: (updatedBuilder) {
                         widget.marketState.updateOrderItem(

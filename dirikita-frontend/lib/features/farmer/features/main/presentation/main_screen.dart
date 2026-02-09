@@ -10,7 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:duruha/core/widgets/duruha_section_container.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
-import 'package:duruha/features/farmer/shared/presentation/widgets/pledge_card.dart';
+import 'package:duruha/features/farmer/features/manage/presentation/widgets/pledge_card.dart';
 
 class FarmerMainScreen extends StatefulWidget {
   const FarmerMainScreen({super.key});
