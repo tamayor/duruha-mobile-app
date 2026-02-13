@@ -103,7 +103,7 @@ class DuruhaModalBottomSheet extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
               children: [
-                Icon(icon, color: theme.colorScheme.primary),
+                Icon(icon, color: theme.colorScheme.secondaryContainer),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

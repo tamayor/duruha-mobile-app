@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 // Define your breakpoints
 class DuruhaBreakpoints {
-  static const double mobileMax = 600;
+  static const double mobileMax = 480;
   static const double tabletMax = 1024;
 }
 

@@ -7,12 +7,6 @@ class DuruhaThemeToggleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var theme = Theme.of(context);
-    // Watch the value using ValueListenableBuilder if we want it to rebuild reactively
-    // strictly within this widget, but since DuruhaApp.themeNotifier triggers a full app rebuild
-    // via ValueListenableBuilder in main.dart, reading current state is fine.
-    // However, to change the ICON, we need to know the current brightness.
-    // The parent widget rebuilds when theme changes, so checking Theme.of(context) is sufficient.
-
     final isDark = theme.brightness == Brightness.dark;
 
     return IconButton(
@@ -26,10 +20,7 @@ class DuruhaThemeToggleButton extends StatelessWidget {
         color: theme.colorScheme.primary,
       ),
       style: IconButton.styleFrom(
-        backgroundColor: theme.colorScheme.onSurface.withValues(
-          alpha:
-              0.5, // Adjusted alpha to match typical 'soft' background or user's preference
-        ),
+        backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.5),
       ),
     );
   }

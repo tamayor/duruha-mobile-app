@@ -1,9 +1,11 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
+import 'package:duruha/features/farmer/features/manage/data/manage_offer_repository.dart';
 
 class ManageRepository {
   final _pledgeRepository = PledgeRepository();
+  final _offerRepository = ManageOfferRepository();
   static const String _modeKey = 'manage_is_offer_mode';
 
   /// Fetches the persisted view mode (Offer vs Pledge).
@@ -22,5 +24,10 @@ class ManageRepository {
   /// Fetches pledges from the shared repository.
   Future<List<HarvestPledge>> fetchPledges() {
     return _pledgeRepository.fetchMyPledges();
+  }
+
+  /// Fetches offers from the offer repository.
+  Future<List<HarvestOffer>> fetchOffers() {
+    return _offerRepository.fetchMyOffers();
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
 class ConsumerProfile extends UserProfile {
@@ -20,7 +21,7 @@ class ConsumerProfile extends UserProfile {
     int? segmentSize,
     String? cookingFrequency,
     List<String> qualityPreferences = const [],
-    List<ProduceItem> demandCrops = const [],
+    List<Produce> demandCrops = const [],
   }) : super(
          role: UserRole.consumer,
          consumerSegment: consumerSegment,
@@ -67,12 +68,12 @@ class ConsumerProfile extends UserProfile {
     String? landmark,
     String? postalCode,
     String? imageUrl,
-    String? dialect,
+    List<String>? dialect,
     String? consumerSegment,
     int? segmentSize,
     String? cookingFrequency,
     List<String>? qualityPreferences,
-    List<ProduceItem>? demandCrops,
+    List<Produce>? demandCrops,
   }) {
     return ConsumerProfile(
       id: id ?? this.id,

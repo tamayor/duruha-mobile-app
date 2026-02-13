@@ -1,9 +1,9 @@
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/features/sales/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
 import 'package:flutter/material.dart';
 
 class SelectedCropCard extends StatelessWidget {
-  final SelectedCropSummary crop;
+  final FarmerSelectedProduce crop;
   final VoidCallback onTap;
 
   const SelectedCropCard({super.key, required this.crop, required this.onTap});
@@ -50,7 +50,7 @@ class SelectedCropCard extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Text(
-                    '#${crop.rank}',
+                    '#${crop.rank ?? "?"}',
                     style: TextStyle(
                       color: theme.colorScheme.onSecondary,
                       fontWeight: FontWeight.bold,
@@ -107,7 +107,7 @@ class SelectedCropCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       _buildTag(
                         context,
-                        crop.pledgeCountLabel,
+                        crop.pledgeCountLabel ?? 'New Opportunity',
                         Icons.verified_outlined,
                       ),
                     ],

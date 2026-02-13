@@ -1,5 +1,6 @@
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/core/data/dialects.dart';
+import 'package:duruha/shared/user/data/dialect_repository.dart';
 import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +30,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _postalCodeController;
 
   // New State Variables
-  late String _selectedDialect;
+  late List<String> _selectedDialect;
   late String _accessibility;
   late List<String> _waterSources;
   late List<String> _paymentMethods;
@@ -37,6 +38,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late String _deliveryWindow;
 
   bool _isLoading = false;
+  List<String> _dialectOptions = [
+    'Bisaya',
+    'Tagalog',
+    'Cebuano',
+    'Hiligaynon',
+    'Ilocano',
+  ]; // Default mock
 
   final List<String> _waterSourceOptions = [
     "River / Stream",
@@ -64,6 +72,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     _initializeControllers();
     _initializeState();
+    _loadDialects();
+  }
+
+  Future<void> _loadDialects() async {
+    try {
+      final dialects = await fetchAllDialectNames();
+      if (mounted && dialects.isNotEmpty) {
+        setState(() {
+          _dialectOptions = dialects;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading dialects: $e');
+    }
   }
 
   void _initializeControllers() {
@@ -85,8 +107,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  void _initializeState() {
-    _selectedDialect = widget.profile.dialect;
+  Future<void> _initializeState() async {
+    _selectedDialect = await SessionService.getUserDialects();
     _accessibility = widget.profile.accessibilityType ?? 'Truck';
     _waterSources = List.from(widget.profile.waterSources ?? []);
     _paymentMethods = List.from(widget.profile.paymentMethods ?? []);
@@ -159,12 +181,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         deliveryWindow: _deliveryWindow,
       );
 
-      // HACK: Since copyWith might not support email yet, let's create a new instance if needed
-      // or just assume for now we don't update email via copyWith until I fix it.
-      // But wait, I really should fix it.
-      // Let's not pass email for now to avoid compilation error if I missed it.
-      // I'll perform a follow-up fix for email in copyWith.
-
       await FarmerProfileRepositoryImpl().updateProfile(updatedProfile);
 
       if (mounted) {
@@ -217,15 +233,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     validator: (val) =>
                         val?.isEmpty == true ? "Required" : null,
                   ),
-                  DuruhaDropdown(
-                    label: 'Preferred Dialect',
-                    value: _selectedDialect,
-                    items: dialectOptions,
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() => _selectedDialect = v);
-                      }
-                    },
+                  DuruhaSelectionChipGroup(
+                    title: 'Preferred Dialect',
+                    options: _dialectOptions,
+                    selectedValues: _selectedDialect,
+                    onToggle: (val) => _toggleSelection(_selectedDialect, val),
                   ),
                 ],
               ),

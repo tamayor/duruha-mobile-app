@@ -1,3 +1,4 @@
+import 'package:duruha/features/farmer/features/manage/data/manage_pledge_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -6,7 +7,6 @@ import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
-import 'package:duruha/features/farmer/features/manage/data/pledge_detail_repository.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 
@@ -30,7 +30,7 @@ class _PledgeDetailScreenState extends State<PledgeDetailScreen> {
   final _reasonController = TextEditingController();
   final _inputNameController = TextEditingController();
   final _inputCostController = TextEditingController();
-  final _repository = PledgeDetailRepository();
+  final _repository = ManagePledgeRepository();
   bool _isLoading = true;
 
   HarvestPledge? _pledge;

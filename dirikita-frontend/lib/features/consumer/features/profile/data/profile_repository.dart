@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
-import 'package:duruha/shared/user/domain/user_models.dart';
 
 class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
   @override
@@ -21,7 +20,7 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
       province: 'Bukidnon',
       postalCode: '8700',
       landmark: 'Near Cathedral',
-      dialect: 'Cebuano',
+      dialect: ['Cebuano'],
       email: 'consumer@example.com',
       consumerSegment: 'Household',
       segmentSize: 4,
@@ -29,29 +28,15 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
       qualityPreferences: ['Freshness', 'Organic'],
       demandCrops: List.generate(
         5,
-        (i) => ProduceItem(
+        (i) => Produce(
           id: 'prod_${i + 1}',
-          nameEnglish: 'Crop ${i + 1}',
-          nameScientific: 'Scientific Name',
-          category: ProduceCategory.fruitVeg,
-          namesByDialect: {},
-          availableVarieties: [],
-          imageHeroUrl: '',
-          imageThumbnailUrl: '',
-          iconUrl: '',
-          gradeGuideUrl: '',
-          unitOfMeasure: 'kg',
-          priceMinHistorical: 0,
-          priceMaxHistorical: 0,
-          currentFairMarketGuideline: 0,
-          perishabilityIndex: 1,
-          shelfLifeDays: 7,
-          requiresColdChain: false,
-          avgWeightPerUnitKg: 1,
-          growingCycleDays: 30,
-          seasonalityStart: 'Jan',
-          seasonalityEnd: 'Dec',
-          isNativeToRegion: true,
+          englishName: 'Crop ${i + 1}',
+          scientificName: 'Scientific Name',
+          category: 'Fruit Veg',
+          varieties: [],
+          dialects: [],
+          basePrice: 0,
+          baseUnit: 'kg',
         ),
       ),
     );

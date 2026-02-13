@@ -1,6 +1,6 @@
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/features/sales/data/selected_crops_repository.dart';
-import 'package:duruha/features/farmer/features/sales/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/features/sales/data/farmer_produce_repository.dart';
+import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +16,7 @@ class FarmerCropsScreen extends StatefulWidget {
 }
 
 class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
-  final _repository = SelectedCropsRepository();
+  final _repository = FarmerProduceRepository();
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
 
@@ -25,8 +25,8 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
   bool _isPledgeMode = true; // true = Pledge, false = Offer
   final Set<String> _selectedCropIds = {};
 
-  List<SelectedCropSummary> _allCrops = [];
-  List<SelectedCropSummary> _filteredCrops = [];
+  List<FarmerSelectedProduce> _allCrops = [];
+  List<FarmerSelectedProduce> _filteredCrops = [];
   bool _isLoading = true;
 
   @override
@@ -37,7 +37,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
 
   Future<void> _fetchCrops() async {
     try {
-      final crops = await _repository.fetchSelectedCrops();
+      final crops = await _repository.fetchFarmerSelectedProduce("Bisaya");
       if (mounted) {
         setState(() {
           _allCrops = crops;
@@ -67,7 +67,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
 
       // Filter by Favorites (Mock logic for now, using rank < 5 as "favorites")
       if (_showFavoritesOnly) {
-        crops = crops.where((crop) => crop.rank <= 5).toList();
+        crops = crops.where((crop) => (crop.rank ?? 99) <= 5).toList();
       }
 
       _filteredCrops = crops;
@@ -143,7 +143,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
                 hintText: 'Search crops...',
                 border: InputBorder.none,
                 hintStyle: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
               onChanged: (_) => _applyFilters(),
@@ -196,7 +196,9 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
                     child: Text(
                       'No crops found.',
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                   )
@@ -278,7 +280,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
 
   Widget _buildCropCard(
     BuildContext context,
-    SelectedCropSummary crop,
+    FarmerSelectedProduce crop,
     bool isSelected,
   ) {
     final theme = Theme.of(context);
@@ -287,7 +289,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
         color: isSelected
-            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         border: isSelected
@@ -301,7 +303,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
           boxShadow: [
             if (!isSelected)
               BoxShadow(
-                color: theme.shadowColor.withOpacity(0.05),
+                color: theme.shadowColor.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -316,7 +318,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
             side: BorderSide(
               color: isSelected
                   ? Colors.transparent
-                  : theme.colorScheme.outline.withOpacity(0.1),
+                  : theme.colorScheme.outline.withValues(alpha: 0.1),
             ),
           ),
           child: InkWell(
@@ -337,7 +339,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: Text(
-                      '#${crop.rank}',
+                      '#${crop.rank ?? "?"}',
                       style: TextStyle(
                         color: theme.colorScheme.onSecondary,
                         fontWeight: FontWeight.bold,
@@ -386,7 +388,9 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
                           crop.nameEnglish,
                           style: theme.textTheme.bodySmall?.copyWith(
                             fontStyle: FontStyle.italic,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
                           ),
                         ),
                       ],

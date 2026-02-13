@@ -532,9 +532,10 @@ class _ProduceHeaderDelegate extends SliverPersistentHeaderDelegate {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (produce.nameScientific.isNotEmpty)
+                if (produce.nameScientific != null &&
+                    produce.nameScientific!.isNotEmpty)
                   Text(
-                    produce.nameScientific,
+                    produce.nameScientific!,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       fontStyle: FontStyle.italic,

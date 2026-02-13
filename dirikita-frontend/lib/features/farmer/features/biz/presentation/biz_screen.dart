@@ -1,10 +1,9 @@
 import 'package:duruha/features/farmer/features/biz/data/biz_repository.dart';
-import 'package:duruha/features/farmer/features/sales/data/selected_crops_repository.dart';
-import 'package:duruha/features/farmer/features/sales/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/features/sales/data/farmer_produce_repository.dart';
+import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 
@@ -27,7 +26,7 @@ class FarmerBizScreen extends StatefulWidget {
 class _FarmerBizScreenState extends State<FarmerBizScreen> {
   // Repositories
   final _bizRepository = BizRepository();
-  final _cropsRepository = SelectedCropsRepository();
+  final _cropsRepository = FarmerProduceRepository();
 
   // State
   bool _isLoading = true;
@@ -40,8 +39,8 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
   DateTime _endDate = DateTime.now();
 
   // -- CROPS STATE --
-  List<SelectedCropSummary> _allCrops = [];
-  List<SelectedCropSummary> _filteredCrops = [];
+  List<FarmerSelectedProduce> _allCrops = [];
+  List<FarmerSelectedProduce> _filteredCrops = [];
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   bool _isSearchVisible = false;
@@ -65,11 +64,11 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
     setState(() => _isLoading = true);
     try {
       final pledgesFuture = _bizRepository.fetchSalesRecords();
-      final cropsFuture = _cropsRepository.fetchSelectedCrops();
+      final cropsFuture = _cropsRepository.fetchFarmerSelectedProduce("Bisaya");
 
       final results = await Future.wait([pledgesFuture, cropsFuture]);
       final pledges = results[0] as List<HarvestPledge>;
-      final crops = results[1] as List<SelectedCropSummary>;
+      final crops = results[1] as List<FarmerSelectedProduce>;
 
       if (mounted) {
         setState(() {
@@ -167,9 +166,9 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
     _filteredCrops.sort((a, b) {
       switch (_sortOption) {
         case SortOption.rankAsc:
-          return a.rank.compareTo(b.rank);
+          return (a.rank ?? 99).compareTo(b.rank ?? 99);
         case SortOption.rankDesc:
-          return b.rank.compareTo(a.rank);
+          return (b.rank ?? 0).compareTo(a.rank ?? 0);
         case SortOption.nameAsc:
           return a.nameDialect.compareTo(b.nameDialect);
         case SortOption.nameDesc:

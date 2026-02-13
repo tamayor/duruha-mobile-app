@@ -3,9 +3,10 @@ import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/sales/data/crop_details_repository.dart';
-import 'package:duruha/features/farmer/features/sales/data/selected_crops_repository.dart';
+import 'package:duruha/features/farmer/features/sales/data/farmer_produce_repository.dart';
 import 'package:duruha/features/farmer/features/sales/domain/crop_detail_models.dart';
-import 'package:duruha/features/farmer/features/sales/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
+
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
 
@@ -31,7 +32,8 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
 
   Future<_CropDetailData> _loadData() async {
     // 1. Fetch Summary (Rank, Pledge Label)
-    final summaries = await SelectedCropsRepository().fetchSelectedCrops();
+    final summaries = await FarmerProduceRepository()
+        .fetchFarmerSelectedProduce("Bisaya");
     final summary = summaries.firstWhere(
       (s) => s.id == widget.cropId,
       orElse: () => throw Exception("Crop not found in summaries"),
@@ -118,7 +120,7 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                                       ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
                                 Text(
-                                  produce.nameScientific,
+                                  produce.nameScientific ?? '',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontStyle: FontStyle.italic,
                                     color: theme.colorScheme.onSurfaceVariant,
@@ -137,7 +139,7 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              "#${summary.rank} Top Pick",
+                              "#${summary.rank ?? '?'}${(summary.rank ?? 99) <= 10 ? ' Top Pick' : ''}",
                               style: theme.textTheme.labelLarge?.copyWith(
                                 color: theme.colorScheme.onPrimaryContainer,
                                 fontWeight: FontWeight.bold,
@@ -412,7 +414,7 @@ class _CropDetailScreenState extends State<CropDetailScreen> {
 }
 
 class _CropDetailData {
-  final SelectedCropSummary summary;
+  final FarmerSelectedProduce summary;
   final Produce produce;
   final List<CropPledgeHistoryItem> history;
 

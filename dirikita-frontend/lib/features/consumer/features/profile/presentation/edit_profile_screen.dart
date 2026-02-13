@@ -1,5 +1,5 @@
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/core/data/dialects.dart';
+import 'package:duruha/shared/user/data/dialect_repository.dart';
 import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
 import 'package:flutter/material.dart';
@@ -28,12 +28,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _postalCodeController;
 
   // New State Variables
-  late String _selectedDialect;
+  late List<String> _selectedDialect;
   late String _consumerSegment;
   late String _cookingFrequency;
   late List<String> _qualityPreferences;
 
   bool _isLoading = false;
+  List<String> _dialectOptions = [
+    'Bisaya',
+    'Tagalog',
+    'Cebuano',
+    'Hiligaynon',
+    'Ilocano',
+  ]; // Default mock
 
   final List<String> _consumerSegmentOptions = [
     'Household',
@@ -62,6 +69,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     _initializeControllers();
     _initializeState();
+    _loadDialects();
+  }
+
+  Future<void> _loadDialects() async {
+    try {
+      final dialects = await fetchAllDialectNames();
+      if (mounted && dialects.isNotEmpty) {
+        setState(() {
+          _dialectOptions = dialects;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading dialects: $e');
+    }
   }
 
   void _initializeControllers() {
@@ -81,7 +102,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _initializeState() {
-    _selectedDialect = widget.profile.dialect;
+    _selectedDialect = widget.profile.dialect ?? [];
     _consumerSegment = widget.profile.consumerSegment ?? 'Household';
     _cookingFrequency = widget.profile.cookingFrequency ?? 'Daily';
     _qualityPreferences = List.from(widget.profile.qualityPreferences ?? []);
@@ -185,15 +206,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     validator: (val) =>
                         val?.isEmpty == true ? "Required" : null,
                   ),
-                  DuruhaDropdown(
-                    label: 'Preferred Dialect',
-                    value: _selectedDialect,
-                    items: dialectOptions,
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() => _selectedDialect = v);
-                      }
-                    },
+                  DuruhaSelectionChipGroup(
+                    title: 'Preferred Dialect',
+                    options: _dialectOptions,
+                    selectedValues: _selectedDialect,
+                    onToggle: (val) => _toggleSelection(_selectedDialect, val),
                   ),
                 ],
               ),

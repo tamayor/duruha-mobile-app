@@ -91,22 +91,9 @@ class _MarketScreenState extends State<MarketScreen> {
     });
   }
 
-  String _getCategoryLabel(ProduceCategory? category) {
+  String _getCategoryLabel(String? category) {
     if (category == null) return 'All';
-    switch (category) {
-      case ProduceCategory.leafy:
-        return 'Leafy';
-      case ProduceCategory.fruitVeg:
-        return 'Fruit Veg';
-      case ProduceCategory.root:
-        return 'Root';
-      case ProduceCategory.spice:
-        return 'Spice';
-      case ProduceCategory.fruit:
-        return 'Fruit';
-      case ProduceCategory.legume:
-        return 'Legume';
-    }
+    return category;
   }
 
   @override
@@ -146,8 +133,16 @@ class _MarketScreenState extends State<MarketScreen> {
         if (!_isSearching)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: DuruhaPopupMenu<ProduceCategory?>(
-              items: const [null, ...ProduceCategory.values],
+            child: DuruhaPopupMenu<String?>(
+              items: const [
+                null,
+                'leafy',
+                'fruitVeg',
+                'root',
+                'spice',
+                'fruit',
+                'legume',
+              ],
               selectedValue: _marketState.selectedCategory,
               onSelected: (category) {
                 _marketState.setSelectedCategory(category);
@@ -155,12 +150,12 @@ class _MarketScreenState extends State<MarketScreen> {
               labelBuilder: _getCategoryLabel,
               itemIcons: const {
                 null: Icons.apps,
-                ProduceCategory.leafy: Icons.eco,
-                ProduceCategory.fruitVeg: Icons.category,
-                ProduceCategory.root: Icons.park,
-                ProduceCategory.spice: Icons.waves,
-                ProduceCategory.fruit: Icons.breakfast_dining,
-                ProduceCategory.legume: Icons.grain,
+                'leafy': Icons.eco,
+                'fruitVeg': Icons.category,
+                'root': Icons.park,
+                'spice': Icons.waves,
+                'fruit': Icons.breakfast_dining,
+                'legume': Icons.grain,
               },
               showLabel: false,
               tooltip: 'Filter by Category',

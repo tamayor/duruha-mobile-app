@@ -30,7 +30,7 @@ class AuthRepository {
       postalCode: "8000",
       landmark: "Near Chapel",
       role: userRole,
-      dialect: "Cebuano",
+      dialect: ["Cebuano"],
       // Farmer
       farmAlias: userRole == UserRole.farmer ? "Happy Farm" : null,
       landArea: userRole == UserRole.farmer ? 2.5 : null,
@@ -66,7 +66,7 @@ class AuthRepository {
       role: request.email.toLowerCase().contains("consumer")
           ? UserRole.consumer
           : UserRole.farmer,
-      dialect: "Cebuano",
+      dialect: ["Cebuano"],
 
       // Farmer
       farmAlias: null,
@@ -125,7 +125,7 @@ class AuthRepository {
       landmark: data['basicInfo']?['landmark'] ?? currentUser.landmark,
       joinedAt: currentUser.joinedAt, // Keep original
       dialect:
-          (data['basicInfo']?['dialects'] as List?)?.first ??
+          (data['basicInfo']?['dialects'] as List?)?.cast<String>() ??
           currentUser.dialect,
     );
 

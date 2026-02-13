@@ -375,7 +375,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
         DateFormat('MMM d yyyy').format(DateTime.now()),
         Icons.history,
       ),
-      _DetailItem('Dialect', profile.dialect, Icons.language),
+      _DetailItem('Dialect', profile.dialect[0], Icons.language),
       _DetailItem(
         'Farm Size',
         '${profile.landArea != null ? DuruhaFormatter.formatNumber(profile.landArea!) : "0"} Ha',

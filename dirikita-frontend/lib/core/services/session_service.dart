@@ -70,7 +70,9 @@ class SessionService {
       postalCode: data['postalCode'] ?? '',
       landmark: data['landmark'] ?? '',
       joinedAt: data['joinedAt'] ?? '',
-      dialect: data['dialect'] ?? 'Cebuano',
+      dialect: (data['dialect'] is List)
+          ? List<String>.from(data['dialect'])
+          : [data['dialect']?.toString() ?? 'Cebuano'],
     );
   }
 
@@ -82,6 +84,15 @@ class SessionService {
   static Future<String?> getUserName() async {
     final data = await getUserData();
     return data?['name'];
+  }
+
+  static Future<List<String>> getUserDialects() async {
+    final data = await getUserData();
+    final dialects = data?['dialect'];
+    if (dialects is List) {
+      return dialects.map((e) => e.toString()).toList();
+    }
+    return [];
   }
 
   // Retrieve user data from local storage

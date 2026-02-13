@@ -1,3 +1,4 @@
+import 'package:duruha/shared/produce/domain/produce_basic_info.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
 
@@ -5,7 +6,7 @@ class SelectedProduceSummary extends StatelessWidget {
   final String userRole;
   final Map<String, Map<String, dynamic>> consumerDemands;
   final Map<String, List<String>> farmerPledges;
-  final List<Produce> availableProduce;
+  final List<ProduceBasicInfo> availableProduce;
   final Function(String) onRemoveItem;
   final Function(String, String) onRemoveVariety;
 
@@ -167,7 +168,7 @@ class SelectedProduceSummary extends StatelessWidget {
 
   Widget _buildProduceTile(
     BuildContext context,
-    dynamic produce,
+    ProduceBasicInfo produce,
     ThemeData theme,
   ) {
     return Container(
@@ -184,7 +185,7 @@ class SelectedProduceSummary extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
-                  produce.imageThumbnailUrl,
+                  produce.imageUrl,
                   width: 50,
                   height: 50,
                   fit: BoxFit.cover,
@@ -198,7 +199,7 @@ class SelectedProduceSummary extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      produce.nameEnglish,
+                      produce.englishName,
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         color: theme.colorScheme.onSurface,
@@ -206,7 +207,7 @@ class SelectedProduceSummary extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      produce.nameScientific,
+                      produce.scientificName,
                       style: TextStyle(
                         fontStyle: FontStyle.italic,
                         color: theme.colorScheme.onSecondary.withValues(

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
 class FarmerProfile extends UserProfile {
@@ -23,7 +24,7 @@ class FarmerProfile extends UserProfile {
     required List<String> paymentMethods,
     required List<String> operatingDays,
     required String deliveryWindow,
-    List<ProduceItem> pledgedCrops = const [],
+    List<Produce> pledgedCrops = const [],
     this.trustScore = 0,
     this.cropPoints = 0,
     this.unlockedBadgeIds = const [],
@@ -84,7 +85,7 @@ class FarmerProfile extends UserProfile {
     String? landmark,
     String? postalCode,
     String? imageUrl,
-    String? dialect,
+    List<String>? dialect,
     String? farmAlias,
     double? landArea,
     String? accessibilityType,
@@ -92,7 +93,7 @@ class FarmerProfile extends UserProfile {
     List<String>? paymentMethods,
     List<String>? operatingDays,
     String? deliveryWindow,
-    List<ProduceItem>? pledgedCrops,
+    List<Produce>? pledgedCrops,
     int? trustScore,
     int? cropPoints,
     List<String>? unlockedBadgeIds,

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 enum DuruhaSnackBarType { success, error, warning, info, neutral }
 
 class DuruhaSnackBar {
+  static OverlayEntry? _currentOverlay;
+
   static void show(
     BuildContext context, {
     required String message,
@@ -13,12 +15,13 @@ class DuruhaSnackBar {
     String? actionLabel,
     IconData? customIcon,
     Color? customColor,
-    bool floating = true,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    // Remove any existing snackbar immediately
+    _currentOverlay?.remove();
+    _currentOverlay = null;
 
-    // Define colors and icons based on type
+    final theme = Theme.of(context);
+
     Color backgroundColor;
     Color foregroundColor;
     IconData icon;
@@ -30,8 +33,8 @@ class DuruhaSnackBar {
         icon = Icons.check_circle_outline_rounded;
         break;
       case DuruhaSnackBarType.error:
-        backgroundColor = colorScheme.error;
-        foregroundColor = colorScheme.onError;
+        backgroundColor = theme.colorScheme.error;
+        foregroundColor = theme.colorScheme.onError;
         icon = Icons.error_outline_rounded;
         break;
       case DuruhaSnackBarType.warning:
@@ -40,102 +43,47 @@ class DuruhaSnackBar {
         icon = Icons.warning_amber_rounded;
         break;
       case DuruhaSnackBarType.info:
-        backgroundColor = colorScheme.secondary;
-        foregroundColor = colorScheme.onSecondary;
+        backgroundColor = theme.colorScheme.secondary;
+        foregroundColor = theme.colorScheme.onSecondary;
         icon = Icons.info_outline_rounded;
         break;
       case DuruhaSnackBarType.neutral:
-        backgroundColor = colorScheme.surfaceContainerHighest;
-        foregroundColor = colorScheme.onSurfaceVariant;
+      default:
+        backgroundColor = theme.colorScheme.surfaceContainerHighest;
+        foregroundColor = theme.colorScheme.onSurfaceVariant;
         icon = Icons.notifications_none_rounded;
         break;
     }
 
-    if (customColor != null) {
-      backgroundColor = customColor;
-      // Simple contrast check for custom color could go here,
-      // but for now we trust the dev or default to white for safety on custom darks
-      foregroundColor = theme.colorScheme.onPrimary;
-    }
+    if (customColor != null) backgroundColor = customColor;
+    if (customIcon != null) icon = customIcon;
 
-    if (customIcon != null) {
-      icon = customIcon;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            // Icon Area
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: foregroundColor.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: foregroundColor, size: 24),
-            ),
-            const SizedBox(width: 16),
-
-            // Text Area
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (title != null)
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: foregroundColor,
-                      ),
-                    ),
-                  Text(
-                    message,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: foregroundColor.withValues(alpha: 0.9),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Action Button
-            if (actionLabel != null && onActionPressed != null)
-              TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  onActionPressed();
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: foregroundColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(60, 36),
-                ),
-                child: Text(
-                  actionLabel,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-          ],
-        ),
+    _currentOverlay = OverlayEntry(
+      builder: (context) => _SnackBarOverlay(
+        title: title,
+        message: message,
         backgroundColor: backgroundColor,
-        behavior: floating ? SnackBarBehavior.floating : SnackBarBehavior.fixed,
-        elevation: floating ? 4 : 0,
-        margin: floating ? const EdgeInsets.all(16) : null,
-        shape: floating
-            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-            : null,
+        foregroundColor: foregroundColor,
+        icon: icon,
+        actionLabel: actionLabel,
+        onActionPressed: () {
+          _currentOverlay?.remove();
+          _currentOverlay = null;
+          onActionPressed?.call();
+        },
         duration: duration,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        onDismissed: () {
+          _currentOverlay?.remove();
+          _currentOverlay = null;
+        },
       ),
     );
+
+    Overlay.of(context).insert(_currentOverlay!);
   }
 
-  // Quick Helpers for common types
+  // --- RESTORED CONVENIENCE FUNCTIONS ---
+
   static void showSuccess(
     BuildContext context,
     String message, {
@@ -177,6 +125,172 @@ class DuruhaSnackBar {
       message: message,
       title: title,
       type: DuruhaSnackBarType.info,
+    );
+  }
+
+  static void showNeutral(
+    BuildContext context,
+    String message, {
+    String? title,
+  }) {
+    show(
+      context,
+      message: message,
+      title: title,
+      type: DuruhaSnackBarType.neutral,
+    );
+  }
+}
+
+// --- INTERNAL OVERLAY WIDGET ---
+class _SnackBarOverlay extends StatefulWidget {
+  final String? title;
+  final String message;
+  final Color backgroundColor, foregroundColor;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback onActionPressed;
+  final VoidCallback onDismissed;
+  final Duration duration;
+
+  const _SnackBarOverlay({
+    required this.message,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.icon,
+    required this.onActionPressed,
+    required this.onDismissed,
+    required this.duration,
+    this.title,
+    this.actionLabel,
+  });
+
+  @override
+  State<_SnackBarOverlay> createState() => _SnackBarOverlayState();
+}
+
+class _SnackBarOverlayState extends State<_SnackBarOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0, -1.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
+
+    _controller.forward();
+
+    Future.delayed(widget.duration, () {
+      if (mounted) {
+        _controller.reverse().then((_) => widget.onDismissed());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: SlideTransition(
+          position: _offsetAnimation,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 500,
+                ), // Better for tablets/web
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: widget.backgroundColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: widget.foregroundColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        widget.icon,
+                        color: widget.foregroundColor,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (widget.title != null)
+                            Text(
+                              widget.title!,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: widget.foregroundColor,
+                                fontSize: 14,
+                              ),
+                            ),
+                          Text(
+                            widget.message,
+                            style: TextStyle(
+                              color: widget.foregroundColor.withValues(
+                                alpha: 0.9,
+                              ),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (widget.actionLabel != null)
+                      TextButton(
+                        onPressed: widget.onActionPressed,
+                        child: Text(
+                          widget.actionLabel!,
+                          style: TextStyle(
+                            color: widget.foregroundColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -26,13 +26,13 @@ class MarketState extends ChangeNotifier {
   // Filtering state
   String _searchQuery = '';
   bool _showFavoritesOnly = false;
-  ProduceCategory? _selectedCategory;
+  String? _selectedCategory;
   final Set<String> _favoriteProduceIds = {};
 
   // Getters
   String get searchQuery => _searchQuery;
   bool get showFavoritesOnly => _showFavoritesOnly;
-  ProduceCategory? get selectedCategory => _selectedCategory;
+  String? get selectedCategory => _selectedCategory;
   List<Produce> get selectedProduceList => _selectedProduce.values.toList();
   int get selectedCount => _selectedProduce.length;
   bool get hasSelectedItems => _selectedProduce.isNotEmpty;
@@ -69,7 +69,7 @@ class MarketState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSelectedCategory(ProduceCategory? category) {
+  void setSelectedCategory(String? category) {
     _selectedCategory = category;
     notifyListeners();
   }

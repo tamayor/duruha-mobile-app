@@ -129,3 +129,55 @@ class TransactionRequest {
     'pledges': pledges.map((p) => p.toJson()).toList(),
   };
 }
+
+class HarvestOffer {
+  final String id;
+  final String cropName;
+  final List<String> variants;
+  final Map<String, double> varietyQuantities;
+  final DateTime startDate;
+  final DateTime disposalDate;
+  final double totalHarvestQty;
+  final double reservedQty;
+  final String imageUrl;
+  final DateTime createdAt;
+
+  HarvestOffer({
+    required this.id,
+    required this.cropName,
+    required this.variants,
+    required this.varietyQuantities,
+    required this.startDate,
+    required this.disposalDate,
+    required this.totalHarvestQty,
+    required this.reservedQty,
+    this.imageUrl = 'assets/images/placeholder.png',
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'crop_name': cropName,
+    'selected_variants': variants,
+    'variety_quantities': varietyQuantities,
+    'start_date': startDate.toIso8601String(),
+    'disposal_date': disposalDate.toIso8601String(),
+    'total_harvest_qty': totalHarvestQty,
+    'reserved_qty': reservedQty,
+    'image_url': imageUrl,
+    'created_at': createdAt.toIso8601String(),
+  };
+
+  factory HarvestOffer.fromJson(Map<String, dynamic> json) => HarvestOffer(
+    id: json['id'],
+    cropName: json['crop_name'],
+    variants: List<String>.from(json['selected_variants']),
+    varietyQuantities: Map<String, double>.from(json['variety_quantities']),
+    startDate: DateTime.parse(json['start_date']),
+    disposalDate: DateTime.parse(json['disposal_date']),
+    totalHarvestQty: (json['total_harvest_qty'] as num).toDouble(),
+    reservedQty: (json['reserved_qty'] as num).toDouble(),
+    imageUrl: json['image_url'] ?? 'assets/images/placeholder.png',
+    createdAt: DateTime.parse(json['created_at']),
+  );
+}

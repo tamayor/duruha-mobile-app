@@ -4,6 +4,7 @@ import 'package:duruha/features/onboarding/presentation/components/produce_selec
 import 'package:duruha/features/auth/data/auth_repository.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
+import 'package:duruha/shared/user/data/dialect_repository.dart';
 import 'package:duruha/features/onboarding/presentation/components/terms_and_conditions_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/role_selection_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/basic_info_step.dart';
@@ -11,10 +12,8 @@ import 'package:duruha/features/onboarding/presentation/components/onboarding_su
 
 import 'package:duruha/main.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/core/data/dialects.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:duruha/shared/produce/domain/produce_model.dart'; // Import ProduceCategory
 import 'package:flutter/material.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -67,23 +66,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // Dialect Data
   final List<String> _selectedDialects = [];
-  final List<String> _dialectOptions = dialectOptions;
+  List<String> _dialectOptions = [];
 
   // Search Data
   String _produceSearchQuery = '';
   final _searchController = TextEditingController();
-  ProduceCategory? _selectedCategory;
   bool _isSearchActive = false;
 
   // Define category icons mapping
-  static const Map<ProduceCategory, IconData> _categoryIcons = {
-    ProduceCategory.leafy: Icons.eco,
-    ProduceCategory.fruitVeg: Icons.bakery_dining,
-    ProduceCategory.root: Icons.grass,
-    ProduceCategory.spice: Icons.flare,
-    ProduceCategory.fruit: Icons.apple,
-    ProduceCategory.legume: Icons.grain,
-  };
 
   // Logistics & Payment
   final List<String> _paymentMethods = [];
@@ -126,6 +116,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void initState() {
     super.initState();
     _initPersistence();
+    _loadDialects();
+  }
+
+  Future<void> _loadDialects() async {
+    try {
+      final dialects = await fetchAllDialectNames();
+      if (mounted && dialects.isNotEmpty) {
+        setState(() {
+          _dialectOptions = dialects;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading dialects: $e');
+    }
   }
 
   // --- Persistence ---
@@ -140,9 +144,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
       // key prefix: onboarding_
       await prefs.setInt('onboarding_page', _currentPage);
-      if (_userRole != null)
+      if (_userRole != null) {
         await prefs.setString('onboarding_role', _userRole!);
-
+      }
       // Basic Info
       await prefs.setString('onboarding_name', _nameController.text);
       await prefs.setString('onboarding_email', _emailController.text);
@@ -158,8 +162,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       await prefs.setStringList('onboarding_dialects', _selectedDialects);
       await prefs.setStringList('onboarding_payment', _paymentMethods);
       await prefs.setStringList('onboarding_days', _operatingDays);
-      if (_deliveryWindow != null)
+      if (_deliveryWindow != null) {
         await prefs.setString('onboarding_window', _deliveryWindow!);
+      }
 
       // Consumer
       await prefs.setString('onboarding_segment', _consumerSegment);
@@ -521,66 +526,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  Widget _buildFloatingSearchBar() {
-    if (!_isSearchActive) return const SizedBox.shrink();
-
-    return Positioned(
-      top: 10,
-      left: 16,
-      right: 16,
-      child: Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(30),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'Search produce...',
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    hintStyle: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  onChanged: (v) => setState(() => _produceSearchQuery = v),
-                ),
-              ),
-              DuruhaPopupMenu<ProduceCategory?>(
-                selectedValue: _selectedCategory,
-                tooltip: "Filter by Category",
-                items: [null, ..._categoryIcons.keys],
-                itemIcons: {null: Icons.grid_view, ..._categoryIcons},
-                labelBuilder: (category) {
-                  if (category == null) return "All";
-                  final name = category.name;
-                  return name.substring(0, 1).toUpperCase() + name.substring(1);
-                },
-                onSelected: (value) {
-                  setState(() => _selectedCategory = value);
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  setState(() {
-                    _isSearchActive = false;
-                    _produceSearchQuery = '';
-                    _searchController.clear();
-                  });
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // _buildHeader removed
 
   // --- Page Content ---
@@ -698,11 +643,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         const SizedBox(height: 24), // Space
         Expanded(
           child: ProduceSelectionStep(
+            dialects: _selectedDialects,
             userRole: _userRole ?? 'Consumer',
             consumerDemands: _consumerDemands,
             farmerPledges: _farmerPledges,
             searchQuery: _produceSearchQuery,
-            selectedCategory: _selectedCategory,
             onItemToggled: (id, isSelected) {
               setState(() {
                 if (_userRole == 'Consumer') {
@@ -767,16 +712,50 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return DuruhaScaffold(
-      appBarTitle: _currentPage < 5 ? _getStepTitle() : null,
+      // 1. Title Logic
+      appBarTitle: !_isSearchActive && _currentPage < 5
+          ? _getStepTitle()
+          : null,
+      appBarTitleWidget: _isSearchActive
+          ? TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search produce...',
+                border: InputBorder.none,
+                hintStyle: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onPrimary.withValues(alpha: 0.5),
+                ),
+              ),
+              style: theme.textTheme.bodyLarge,
+              onChanged: (v) => setState(() => _produceSearchQuery = v),
+            )
+          : null,
       showBackButton: _currentPage > 0 && _currentPage < 5,
       onBackPressed: _prevPage,
       appBarActions: [
-        if (_currentPage == 3 && !_isSearchActive)
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => setState(() => _isSearchActive = true),
-          ),
+        // Search Toggle (Page 3 only)
+        if (_currentPage == 3)
+          if (_isSearchActive)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _isSearchActive = false;
+                  _produceSearchQuery = '';
+                  _searchController.clear();
+                });
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () => setState(() => _isSearchActive = true),
+            ),
+
+        // Theme Toggle
         IconButton(
           icon: Icon(
             Theme.of(context).brightness == Brightness.dark
@@ -823,9 +802,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               ),
             ],
           ),
-
-          // Floating Search Bar - Positioned over everything
-          _buildFloatingSearchBar(),
 
           // 2. Bottom Floating Action Bar
           if (_currentPage > 0 && _currentPage < 5)

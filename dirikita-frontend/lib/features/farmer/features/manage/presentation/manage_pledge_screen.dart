@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/features/farmer/features/manage/presentation/widgets/pledge_card.dart';
 
@@ -27,68 +28,52 @@ class ManagePledgeScreen extends StatelessWidget {
 
     return DefaultTabController(
       length: 2,
-      child: Column(
-        children: [
-          // Tab Bar
-          Container(
-            color: theme.colorScheme.surface,
-            child: TabBar(
-              labelColor: theme.colorScheme.onPrimary,
-              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-              labelStyle: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-              unselectedLabelStyle: theme.textTheme.titleMedium,
-              indicatorColor: theme.colorScheme.onPrimary,
-              indicatorSize: TabBarIndicatorSize.label,
-              tabs: const [
-                Tab(text: "Active Harvests"),
-                Tab(text: "Pledge History"),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                // Active Harvests Tab
-                activePledges.isEmpty
-                    ? _buildEmptyState(
-                        theme,
-                        Icons.eco_outlined,
-                        "No active pledges.",
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: activePledges.length,
-                        itemBuilder: (context, index) {
-                          return PledgeCard(
-                            pledge: activePledges[index],
-                            isActive: true,
-                          );
-                        },
-                      ),
+      child: DuruhaScrollHideWrapper(
+        bar: const DuruhaTabBar(
+          tabs: [
+            Tab(text: "Active Harvests"),
+            Tab(text: "Pledge History"),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            // Active Harvests Tab
+            activePledges.isEmpty
+                ? _buildEmptyState(
+                    theme,
+                    Icons.eco_outlined,
+                    "No active pledges.",
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: activePledges.length,
+                    itemBuilder: (context, index) {
+                      return PledgeCard(
+                        pledge: activePledges[index],
+                        isActive: true,
+                      );
+                    },
+                  ),
 
-                // Pledge History Tab
-                historyPledges.isEmpty
-                    ? _buildEmptyState(
-                        theme,
-                        Icons.history_toggle_off,
-                        "No pledge history.",
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: historyPledges.length,
-                        itemBuilder: (context, index) {
-                          return PledgeCard(
-                            pledge: historyPledges[index],
-                            isActive: false,
-                          );
-                        },
-                      ),
-              ],
-            ),
-          ),
-        ],
+            // Pledge History Tab
+            historyPledges.isEmpty
+                ? _buildEmptyState(
+                    theme,
+                    Icons.history_toggle_off,
+                    "No pledge history.",
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: historyPledges.length,
+                    itemBuilder: (context, index) {
+                      return PledgeCard(
+                        pledge: historyPledges[index],
+                        isActive: false,
+                      );
+                    },
+                  ),
+          ],
+        ),
       ),
     );
   }

@@ -1,7 +1,7 @@
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 
-class PledgeDetailRepository {
+class ManagePledgeRepository {
   final _sharedRepository = PledgeRepository();
 
   /// Fetches a single pledge by ID with simulation delay.

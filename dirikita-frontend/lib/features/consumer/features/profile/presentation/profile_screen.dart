@@ -271,7 +271,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
         DateFormat('MMM d yyyy').format(DateTime.now()),
         Icons.history,
       ),
-      _DetailItem('Dialect', profile.dialect, Icons.language),
+      _DetailItem('Dialect', profile.dialect.join(', '), Icons.language),
       _DetailItem(
         'Segment',
         profile.consumerSegment ?? 'Household',

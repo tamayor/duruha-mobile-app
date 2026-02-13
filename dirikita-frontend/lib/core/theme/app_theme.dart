@@ -74,21 +74,21 @@ class DuruhaTheme {
       useMaterial3: true,
       fontFamily: 'Roboto',
       scaffoldBackgroundColor: parchment50,
-      primaryColor: goblin600,
+      primaryColor: goblin500,
 
       colorScheme: const ColorScheme(
         brightness: Brightness.light,
         // Primary: Brand Identity
         primary: parchment50,
         onPrimary: parchment800, // Text on primary
-        primaryContainer: parchment100,
-        onPrimaryContainer: parchment950,
+        primaryContainer: parchment200,
+        onPrimaryContainer: parchment800,
 
         // Secondary: Accents
         secondary: goblin50,
         onSecondary: goblin950,
-        secondaryContainer: goblin100,
-        onSecondaryContainer: goblin900,
+        secondaryContainer: goblin200,
+        onSecondaryContainer: goblin800,
 
         // Surface: Paper background
         surface: parchment50,
@@ -142,30 +142,30 @@ class DuruhaTheme {
       useMaterial3: true,
       fontFamily: 'Roboto',
       scaffoldBackgroundColor: goblin950,
-      primaryColor: goblin300,
+      primaryColor: parchment500,
 
       colorScheme: const ColorScheme(
         brightness: Brightness.dark,
         // Primary: Brand Identity (Lighter for dark mode)
         primary: goblin950,
         onPrimary: goblin50, // Dark text on light primary
-        primaryContainer: goblin700,
+        primaryContainer: goblin600,
         onPrimaryContainer: goblin200,
 
         // Secondary: Accents
-        secondary: parchment700,
+        secondary: parchment900,
         onSecondary: parchment50,
-        secondaryContainer: parchment800,
+        secondaryContainer: parchment600,
         onSecondaryContainer: parchment200,
 
         // Surface: Paper background
         surface: goblin950,
         onSurface: parchment50, // Primary text color
         // Surface Container: Layering
-        surfaceContainer: goblin900,
-        surfaceContainerHigh: goblin800,
-        surfaceContainerHighest: goblin700,
-        onSurfaceVariant: goblin200, // Secondary text/icons
+        surfaceContainer: goblin800,
+        surfaceContainerHigh: goblin700,
+        surfaceContainerHighest: goblin600,
+        onSurfaceVariant: goblin400, // Secondary text/icons
 
         outline: goblin500,
         outlineVariant: parchment500,

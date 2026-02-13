@@ -20,6 +20,7 @@ class _ManageScreenState extends State<ManageScreen> {
   bool _isLoading = true;
   bool _isOfferMode = false;
   List<HarvestPledge> _pledges = [];
+  List<HarvestOffer> _offers = [];
 
   @override
   void initState() {
@@ -30,12 +31,14 @@ class _ManageScreenState extends State<ManageScreen> {
   Future<void> _fetchData() async {
     try {
       final savedMode = await _repository.fetchViewMode();
-      final data = await _repository.fetchPledges();
+      final pledges = await _repository.fetchPledges();
+      final offers = await _repository.fetchOffers();
       if (!mounted) return;
 
       setState(() {
         _isOfferMode = savedMode;
-        _pledges = data;
+        _pledges = pledges;
+        _offers = offers;
         _isLoading = false;
       });
     } catch (e) {
@@ -67,10 +70,10 @@ class _ManageScreenState extends State<ManageScreen> {
             labelFalse: "",
             iconTrue: Icons.local_offer_rounded,
             iconFalse: Icons.handshake_rounded,
-            contentColorTrue: theme.colorScheme.onTertiary,
-            contentColorFalse: theme.colorScheme.onPrimary,
-            colorTrue: theme.colorScheme.primary,
-            colorFalse: theme.colorScheme.secondary,
+            contentColorTrue: theme.colorScheme.onPrimaryContainer,
+            contentColorFalse: theme.colorScheme.onSecondaryContainer,
+            colorTrue: theme.colorScheme.primaryContainer,
+            colorFalse: theme.colorScheme.secondaryContainer,
           ),
         ),
         const SizedBox(width: 16),
@@ -82,7 +85,7 @@ class _ManageScreenState extends State<ManageScreen> {
       body: _isLoading
           ? const FarmerLoadingScreen()
           : _isOfferMode
-          ? ManageOfferScreen(pledges: _pledges)
+          ? ManageOfferScreen(offers: _offers)
           : ManagePledgeScreen(pledges: _pledges),
     );
   }

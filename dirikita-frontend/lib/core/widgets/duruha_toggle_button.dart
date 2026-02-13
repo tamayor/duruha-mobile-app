@@ -146,13 +146,15 @@ class _DuruhaToggleButtonState extends State<DuruhaToggleButton>
                   color: theme.colorScheme.outline.withValues(alpha: 0.1),
                   width: 1,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: currentColor.withValues(alpha: 0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: isIconOnly
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: currentColor.withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
               ),
               child: Center(
                 child: Row(

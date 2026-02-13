@@ -1,6 +1,5 @@
-import 'package:duruha/core/helpers/duruha_responsive.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
-import 'package:duruha/shared/produce/domain/produce_model.dart';
+import 'package:duruha/shared/produce/domain/produce_basic_info.dart';
 import 'package:duruha/features/onboarding/presentation/components/selected_produce_summary.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:flutter/material.dart';
@@ -10,9 +9,9 @@ class ProduceSelectionStep extends StatefulWidget {
   final Map<String, Map<String, dynamic>> consumerDemands;
   final Map<String, List<String>> farmerPledges;
   final String searchQuery;
-  final ProduceCategory? selectedCategory;
   final Function(String, bool) onItemToggled;
   final Function(String, String, bool) onFarmerPledgeChanged;
+  final List<String> dialects;
 
   const ProduceSelectionStep({
     super.key,
@@ -20,9 +19,9 @@ class ProduceSelectionStep extends StatefulWidget {
     required this.consumerDemands,
     required this.farmerPledges,
     required this.searchQuery,
-    required this.selectedCategory,
     required this.onItemToggled,
     required this.onFarmerPledgeChanged,
+    required this.dialects,
   });
 
   @override
@@ -30,18 +29,20 @@ class ProduceSelectionStep extends StatefulWidget {
 }
 
 class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
-  List<Produce> _produceList = [];
+  List<ProduceBasicInfo> _produceList = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchProduce();
+    _fetchProduce(widget.dialects[0]);
   }
 
-  Future<void> _fetchProduce() async {
+  Future<void> _fetchProduce(String dialect) async {
     try {
-      final produce = await ProduceRepository().getAllProduce();
+      final produce = await ProduceRepository().fetchProduceBasicInfo([
+        dialect,
+      ]);
       if (mounted) {
         setState(() {
           _produceList = produce;
@@ -90,24 +91,16 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Filter Data
-    bool useList = context.isMobile;
     final filteredProduce = _produceList.where((p) {
-      // Category Filter
-      if (widget.selectedCategory != null &&
-          p.category != widget.selectedCategory) {
-        return false;
-      }
-
       // Search Filter
       if (widget.searchQuery.isNotEmpty) {
         final query = widget.searchQuery.toLowerCase();
-        return p.nameEnglish.toLowerCase().contains(query) ||
-            p.nameScientific.toLowerCase().contains(query);
+        return p.englishName.toLowerCase().contains(query) ||
+            (p.scientificName).toLowerCase().contains(query) ||
+            (p.localName).toLowerCase().contains(query);
       }
       return true;
     }).toList();
-
     // Calculate selected count for the summary button
     final selectedCount = widget.userRole == 'Consumer'
         ? widget.consumerDemands.length
@@ -121,26 +114,31 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : DuruhaDataGrid(
-                      data: filteredProduce,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                      maxCrossAxisExtent: 200,
-                      isList: useList,
-                      itemBuilder: (context, produce) {
-                        final isSelected = widget.userRole == 'Consumer'
-                            ? widget.consumerDemands.containsKey(produce.id)
-                            : widget.farmerPledges.containsKey(produce.id);
+                  : SingleChildScrollView(
+                      child: Column(
+                        children: filteredProduce.map((produce) {
+                          final isSelected = widget.userRole == 'Consumer'
+                              ? widget.consumerDemands.containsKey(produce.id)
+                              : widget.farmerPledges.containsKey(produce.id);
 
-                        return DuruhaSelectionCard(
-                          isList: useList,
-                          title: produce.nameEnglish,
-                          subtitle: produce.nameScientific,
-                          imageUrl: produce.imageThumbnailUrl,
-                          isSelected: isSelected,
-                          onTap: () =>
-                              widget.onItemToggled(produce.id, !isSelected),
-                        );
-                      },
+                          return Padding(
+                            padding: const EdgeInsets.only(
+                              left: 16,
+                              right: 16,
+                              bottom: 12,
+                            ),
+                            child: DuruhaSelectionCard(
+                              isList: true, // Always list in Column view
+                              title: produce.localName,
+                              subtitle: produce.englishName,
+                              imageUrl: produce.imageUrl,
+                              isSelected: isSelected,
+                              onTap: () =>
+                                  widget.onItemToggled(produce.id, !isSelected),
+                            ),
+                          );
+                        }).toList(),
+                      ),
                     ),
             ),
           ],

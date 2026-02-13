@@ -1,94 +1,75 @@
 import 'package:flutter/material.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
-import 'package:duruha/features/farmer/features/manage/presentation/widgets/pledge_card.dart';
+import 'package:duruha/features/farmer/features/manage/presentation/widgets/offer_card.dart';
 
 class ManageOfferScreen extends StatelessWidget {
-  final List<HarvestPledge> pledges;
+  final List<HarvestOffer> offers;
 
-  const ManageOfferScreen({super.key, required this.pledges});
+  const ManageOfferScreen({super.key, required this.offers});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final now = DateTime.now();
 
-    // Filter active vs history
-    final activePledges = pledges
-        .where((p) => p.harvestDate.isAfter(now))
+    // Filter active vs history based on disposal date
+    final activeOffers = offers
+        .where((o) => o.disposalDate.isAfter(now))
         .toList();
-    final historyPledges = pledges
-        .where((p) => p.harvestDate.isBefore(now))
+    final historyOffers = offers
+        .where((o) => o.disposalDate.isBefore(now))
         .toList();
 
-    // Sort active by harvest date soonest
-    activePledges.sort((a, b) => a.harvestDate.compareTo(b.harvestDate));
-    // Sort history by recent
-    historyPledges.sort((a, b) => b.harvestDate.compareTo(a.harvestDate));
+    // Sort active by disposal date soonest
+    activeOffers.sort((a, b) => a.disposalDate.compareTo(b.disposalDate));
+    // Sort history by recent disposal
+    historyOffers.sort((a, b) => b.disposalDate.compareTo(a.disposalDate));
 
     return DefaultTabController(
       length: 2,
-      child: Column(
-        children: [
-          // Tab Bar
-          Container(
-            color: theme.colorScheme.surface,
-            child: TabBar(
-              labelColor: theme.colorScheme.onTertiary,
-              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-              labelStyle: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-              unselectedLabelStyle: theme.textTheme.titleMedium,
-              indicatorColor: theme.colorScheme.onTertiary,
-              indicatorSize: TabBarIndicatorSize.label,
-              tabs: const [
-                Tab(text: "Active Offers"),
-                Tab(text: "Offer History"),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                // Active Offers Tab
-                activePledges.isEmpty
-                    ? _buildEmptyState(
-                        theme,
-                        Icons.local_offer_outlined,
-                        "No active offers.",
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: activePledges.length,
-                        itemBuilder: (context, index) {
-                          return PledgeCard(
-                            pledge: activePledges[index],
-                            isActive: true,
-                          );
-                        },
-                      ),
+      child: DuruhaScrollHideWrapper(
+        bar: const DuruhaTabBar(
+          tabs: [
+            Tab(text: "Active Offers"),
+            Tab(text: "Offer History"),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            // Active Offers Tab
+            activeOffers.isEmpty
+                ? _buildEmptyState(
+                    theme,
+                    Icons.local_offer_outlined,
+                    "No active offers.",
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: activeOffers.length,
+                    itemBuilder: (context, index) {
+                      return OfferCard(
+                        offer: activeOffers[index],
+                        isActive: true,
+                      );
+                    },
+                  ),
 
-                // Offer History Tab
-                historyPledges.isEmpty
-                    ? _buildEmptyState(
-                        theme,
-                        Icons.history,
-                        "No offer history.",
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: historyPledges.length,
-                        itemBuilder: (context, index) {
-                          return PledgeCard(
-                            pledge: historyPledges[index],
-                            isActive: false,
-                          );
-                        },
-                      ),
-              ],
-            ),
-          ),
-        ],
+            // Offer History Tab
+            historyOffers.isEmpty
+                ? _buildEmptyState(theme, Icons.history, "No offer history.")
+                : ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: historyOffers.length,
+                    itemBuilder: (context, index) {
+                      return OfferCard(
+                        offer: historyOffers[index],
+                        isActive: false,
+                      );
+                    },
+                  ),
+          ],
+        ),
       ),
     );
   }

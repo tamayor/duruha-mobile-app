@@ -18,7 +18,6 @@ import 'package:duruha/features/farmer/features/main/presentation/main_screen.da
 import 'package:duruha/features/farmer/features/main/presentation/crop_study_screen.dart';
 
 import 'package:duruha/features/farmer/features/sales/presentation/sales_screen.dart';
-import 'package:duruha/features/farmer/features/biz/presentation/crop_detail_screen.dart';
 import 'package:duruha/features/farmer/features/manage/presentation/manage_screen.dart';
 import 'package:duruha/features/farmer/features/manage/presentation/pledge_detail_screen.dart';
 import 'package:duruha/features/farmer/features/biz/presentation/biz_screen.dart';
@@ -26,10 +25,11 @@ import 'package:duruha/features/farmer/features/programs/presentation/programs_s
 import 'package:duruha/features/farmer/features/tx/presentation/transaction_create_screen.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/ratings_screen.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
-import 'package:duruha/shared/produce/presentation/produce_presentation_screen.dart';
+import 'package:duruha/shared/produce/presentation/produce_detailed_screen.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
-// Placeholder for missing screens
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 class PlaceholderScreen extends StatelessWidget {
   final String title;
   const PlaceholderScreen(this.title, {super.key});
@@ -107,7 +107,11 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-void main() {
+void main() async {
+  await Supabase.initialize(
+    url: 'https://zovkuqlrejlcgjsjanyp.supabase.co',
+    anonKey: 'sb_publishable_g0FiMD-sceVNIhF94-Unhg_DS1X2bTd',
+  );
   runApp(const DuruhaApp());
 }
 
@@ -208,7 +212,7 @@ class DuruhaApp extends StatelessWidget {
               default:
                 if (routeName.startsWith('/produce/')) {
                   final id = routeName.replaceFirst('/produce/', '');
-                  screen = ProducePresentationScreen(produceId: id);
+                  screen = _protected(ProduceDetailedScreen(produceId: id));
                 }
             }
 
@@ -325,7 +329,7 @@ class DuruhaApp extends StatelessWidget {
         return _protected(const FarmerProfileRatingsScreen());
       case '/farmer/biz/crops/':
         if (args is String) {
-          return _protected(CropDetailScreen(cropId: args));
+          // return _protected(CropDetailScreen(cropId: args));
         }
         break;
       default:

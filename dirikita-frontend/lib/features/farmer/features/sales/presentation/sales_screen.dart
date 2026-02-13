@@ -1,6 +1,7 @@
+import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/farmer/features/sales/data/selected_crops_repository.dart';
-import 'package:duruha/features/farmer/features/sales/domain/selected_crop_summary.dart';
+import 'package:duruha/features/farmer/features/sales/data/farmer_produce_repository.dart';
+import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +17,7 @@ class FarmerSalesScreen extends StatefulWidget {
 }
 
 class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
-  final _repository = SelectedCropsRepository();
+  final _repository = FarmerProduceRepository();
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
 
@@ -25,8 +26,8 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
   bool _isPledgeMode = true; // true = Pledge, false = Offer
   final Set<String> _selectedCropIds = {};
 
-  List<SelectedCropSummary> _allCrops = [];
-  List<SelectedCropSummary> _filteredCrops = [];
+  List<FarmerSelectedProduce> _allCrops = [];
+  List<FarmerSelectedProduce> _filteredCrops = [];
   bool _isLoading = true;
 
   @override
@@ -37,7 +38,8 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
 
   Future<void> _fetchCrops() async {
     try {
-      final crops = await _repository.fetchSelectedCrops();
+      final crops = await _repository.fetchFarmerSelectedProduce("Bisaya");
+      print(crops);
       if (mounted) {
         setState(() {
           _allCrops = crops;
@@ -65,13 +67,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
         }).toList();
       }
 
-      // Filter by Favorites (Mock logic for now, using rank < 5 as "favorites")
-      if (_showFavoritesOnly) {
-        crops = crops.where((crop) => crop.rank <= 5).toList();
-      }
-
       _filteredCrops = crops;
-      // Removed sort logic call as SortOption was removed
     });
   }
 
@@ -159,7 +155,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
                 hintText: 'Search crops...',
                 border: InputBorder.none,
                 hintStyle: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
               onChanged: (_) => _applyFilters(),
@@ -208,7 +204,9 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
                     child: Text(
                       'No crops found.',
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                   )
@@ -288,11 +286,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
     );
   }
 
-  Widget _buildCropCard(
-    BuildContext context,
-    SelectedCropSummary crop,
-    bool isSelected,
-  ) {
+  Widget _buildCropCard(BuildContext context, crop, bool isSelected) {
     final theme = Theme.of(context);
 
     return AnimatedContainer(
@@ -383,6 +377,27 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
                             ),
                           ),
                         ),
+                        if (_isPledgeMode) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Icon(
+                                Icons.trending_up,
+                                size: 14,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "${DuruhaFormatter.formatNumber(crop.total30DaysDemand)} kg demand",
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.normal,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                       ],
                     ),
                   ),
