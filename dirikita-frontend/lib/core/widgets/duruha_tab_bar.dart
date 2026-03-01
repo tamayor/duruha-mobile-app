@@ -7,6 +7,7 @@ class DuruhaTabBar extends StatelessWidget implements PreferredSizeWidget {
   final Color? labelColor;
   final Color? unselectedLabelColor;
   final bool isGlass;
+  final Widget? trailing;
 
   const DuruhaTabBar({
     super.key,
@@ -16,6 +17,7 @@ class DuruhaTabBar extends StatelessWidget implements PreferredSizeWidget {
     this.labelColor,
     this.unselectedLabelColor,
     this.isGlass = false,
+    this.trailing,
   });
 
   @override
@@ -39,23 +41,30 @@ class DuruhaTabBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             )
           : null,
-      child: TabBar(
-        controller: controller,
-        tabs: tabs,
-        labelColor: activeLabelColor,
-        unselectedLabelColor: inactiveLabelColor,
-        labelStyle: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-        unselectedLabelStyle: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.normal,
-        ),
-        indicatorColor: activeIndicatorColor,
-        indicatorSize: TabBarIndicatorSize.label,
-        indicatorWeight: 3,
-        dividerColor: colorScheme.outline.withValues(alpha: 0.5),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: TabBar(
+              controller: controller,
+              tabs: tabs,
+              labelColor: activeLabelColor,
+              unselectedLabelColor: inactiveLabelColor,
+              labelStyle: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+              unselectedLabelStyle: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.normal,
+              ),
+              indicatorColor: activeIndicatorColor,
+              indicatorSize: TabBarIndicatorSize.label,
+              indicatorWeight: 3,
+              dividerColor: colorScheme.outline.withValues(alpha: 0.5),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+          ),
+          if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
+        ],
       ),
     );
   }

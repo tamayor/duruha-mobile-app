@@ -6,21 +6,19 @@ import 'package:flutter/material.dart';
 
 class ProduceSelectionStep extends StatefulWidget {
   final String userRole;
-  final Map<String, Map<String, dynamic>> consumerDemands;
-  final Map<String, List<String>> farmerPledges;
+  final List<String> consumerFavProduce;
+  final List<String> farmerFavProduce;
   final String searchQuery;
   final Function(String, bool) onItemToggled;
-  final Function(String, String, bool) onFarmerPledgeChanged;
   final List<String> dialects;
 
   const ProduceSelectionStep({
     super.key,
     required this.userRole,
-    required this.consumerDemands,
-    required this.farmerPledges,
+    required this.consumerFavProduce,
+    required this.farmerFavProduce,
     required this.searchQuery,
     required this.onItemToggled,
-    required this.onFarmerPledgeChanged,
     required this.dialects,
   });
 
@@ -29,34 +27,129 @@ class ProduceSelectionStep extends StatefulWidget {
 }
 
 class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
-  List<ProduceBasicInfo> _produceList = [];
-  bool _isLoading = true;
+  // ── Data ──────────────────────────────────────────────────────────────────
+  final List<ProduceBasicInfo> _produceList = [];
+  int _offset = 0;
+  int _totalCount = 0;
+
+  /// Keeps ProduceBasicInfo for every item the user has selected, regardless
+  /// of which page is currently loaded or what the active search is.
+  final Map<String, ProduceBasicInfo> _selectedProduceCache = {};
+
+  // ── Status ────────────────────────────────────────────────────────────────
+  bool _isInitialLoading = true;
+  bool _isLoadingMore = false;
+
+  bool get _hasMore => _produceList.length < _totalCount;
+
+  // ── Scroll ────────────────────────────────────────────────────────────────
+  final _scrollController = ScrollController();
+  static const _triggerDistance = 200.0; // px from bottom to trigger next load
 
   @override
   void initState() {
     super.initState();
-    _fetchProduce(widget.dialects[0]);
+    _fetchPage(reset: true);
+    _scrollController.addListener(_onScroll);
   }
 
-  Future<void> _fetchProduce(String dialect) async {
+  @override
+  void didUpdateWidget(covariant ProduceSelectionStep oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When the parent's search query changes, reset and re-fetch
+    if (oldWidget.searchQuery != widget.searchQuery) {
+      _fetchPage(reset: true);
+    }
+    // Keep cache in sync: remove any item that was just deselected
+    final currentIds =
+        (widget.userRole == 'Consumer'
+                ? widget.consumerFavProduce
+                : widget.farmerFavProduce)
+            .toSet();
+    _selectedProduceCache.removeWhere((id, _) => !currentIds.contains(id));
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ── Scroll listener ───────────────────────────────────────────────────────
+  void _onScroll() {
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - _triggerDistance) {
+      _loadMore();
+    }
+  }
+
+  void _loadMore() {
+    if (!_isLoadingMore && _hasMore) {
+      _fetchPage(reset: false);
+    }
+  }
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
+  Future<void> _fetchPage({required bool reset}) async {
+    if (reset) {
+      // Avoid concurrent reset calls
+      if (_isInitialLoading && _produceList.isEmpty && _offset == 0) {
+        // First ever load — already in initial loading state
+      } else {
+        setState(() {
+          _produceList.clear();
+          _offset = 0;
+          _totalCount = 0;
+          _isInitialLoading = true;
+        });
+      }
+    } else {
+      if (_isLoadingMore || !_hasMore) return;
+      setState(() => _isLoadingMore = true);
+    }
+
     try {
-      final produce = await ProduceRepository().fetchProduceBasicInfo([
-        dialect,
-      ]);
+      final repo = ProduceRepository();
+
+      // Pass search from parent so the RPC filters server-side too
+      final (items, total) = await repo.fetchProduceBasicInfoPaged(
+        search: widget.searchQuery,
+        offset: _offset,
+      );
+
       if (mounted) {
         setState(() {
-          _produceList = produce;
-          _isLoading = false;
+          _produceList.addAll(items);
+          _totalCount = total;
+          _offset = _produceList.length;
+          _isInitialLoading = false;
+          _isLoadingMore = false;
         });
       }
     } catch (e) {
-      debugPrint('Error fetching produce: $e');
+      debugPrint('❌ [ProduceSelectionStep] fetchPage error: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isInitialLoading = false;
+          _isLoadingMore = false;
+        });
       }
     }
   }
 
+  // ── Cache helpers ─────────────────────────────────────────────────────────
+  /// Call this whenever a card tap triggers onItemToggled so the cache stays
+  /// in sync with the parent's favProduce lists.
+  void _handleToggle(ProduceBasicInfo produce, bool selected) {
+    if (selected) {
+      _selectedProduceCache[produce.id] = produce;
+    } else {
+      _selectedProduceCache.remove(produce.id);
+    }
+    widget.onItemToggled(produce.id, selected);
+  }
+
+  // ── Summary sheet ─────────────────────────────────────────────────────────
   void _showSummary() {
     showModalBottomSheet(
       context: context,
@@ -68,10 +161,13 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
         maxChildSize: 0.9,
         builder: (_, scrollController) => SelectedProduceSummary(
           userRole: widget.userRole,
-          consumerDemands: widget.consumerDemands,
-          farmerPledges: widget.farmerPledges,
-          availableProduce: _produceList, // Pass the list here
+          consumerFavProduce: widget.consumerFavProduce,
+          farmerFavProduce: widget.farmerFavProduce,
+          // Use the persistent cache so items selected via search
+          // still appear even when that search is no longer active.
+          availableProduce: _selectedProduceCache.values.toList(),
           onRemoveItem: (id) {
+            _selectedProduceCache.remove(id);
             widget.onItemToggled(id, false);
             setState(() {});
             if (Navigator.canPop(context)) {
@@ -79,77 +175,75 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
               _showSummary();
             }
           },
-          onRemoveVariety: (id, variety) {
-            widget.onFarmerPledgeChanged(id, variety, false);
-            Navigator.pop(context);
-            _showSummary();
-          },
         ),
       ),
     );
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final filteredProduce = _produceList.where((p) {
-      // Search Filter
-      if (widget.searchQuery.isNotEmpty) {
-        final query = widget.searchQuery.toLowerCase();
-        return p.englishName.toLowerCase().contains(query) ||
-            (p.scientificName).toLowerCase().contains(query) ||
-            (p.localName).toLowerCase().contains(query);
-      }
-      return true;
-    }).toList();
-    // Calculate selected count for the summary button
     final selectedCount = widget.userRole == 'Consumer'
-        ? widget.consumerDemands.length
-        : widget.farmerPledges.length;
+        ? widget.consumerFavProduce.length
+        : widget.farmerFavProduce.length;
 
     return Stack(
       children: [
-        Column(
-          children: [
-            // 2. Data Grid
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                      child: Column(
-                        children: filteredProduce.map((produce) {
-                          final isSelected = widget.userRole == 'Consumer'
-                              ? widget.consumerDemands.containsKey(produce.id)
-                              : widget.farmerPledges.containsKey(produce.id);
-
-                          return Padding(
-                            padding: const EdgeInsets.only(
-                              left: 16,
-                              right: 16,
-                              bottom: 12,
-                            ),
-                            child: DuruhaSelectionCard(
-                              isList: true, // Always list in Column view
-                              title: produce.localName,
-                              subtitle: produce.englishName,
-                              imageUrl: produce.imageUrl,
-                              isSelected: isSelected,
-                              onTap: () =>
-                                  widget.onItemToggled(produce.id, !isSelected),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
+        // ─── Grid ──────────────────────────────────────────────────────────
+        if (_isInitialLoading)
+          const Center(child: CircularProgressIndicator())
+        else
+          GridView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 4,
+              bottom: 100,
             ),
-          ],
-        ),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.85,
+            ),
+            // +1 extra cell for the bottom loading indicator
+            itemCount:
+                _produceList.length + (_isLoadingMore || _hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              // Last cell: full-width loading spinner
+              if (index == _produceList.length) {
+                return Center(
+                  child: _isLoadingMore
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const SizedBox.shrink(),
+                );
+              }
 
-        // Floating Summary Button
+              final produce = _produceList[index];
+              final isSelected = widget.userRole == 'Consumer'
+                  ? widget.consumerFavProduce.contains(produce.id)
+                  : widget.farmerFavProduce.contains(produce.id);
+
+              return DuruhaSelectionCard(
+                isList: false,
+                title: produce.localName,
+                imageUrl: produce.imageUrl,
+                isSelected: isSelected,
+                onTap: () => _handleToggle(produce, !isSelected),
+              );
+            },
+          ),
+
+        // ─── Floating Summary Button ────────────────────────────────────────
         Positioned(
           bottom: 24,
-          right: 24, // Positioned in the corner for one-handed thumb use
+          right: 24,
           child: AnimatedScale(
-            // Using Scale instead of Opacity feels more modern for a FAB
             scale: selectedCount > 0 ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 300),
             child: FloatingActionButton(
@@ -157,7 +251,7 @@ class _ProduceSelectionStepState extends State<ProduceSelectionStep> {
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
               elevation: 4,
-              shape: const CircleBorder(), // Forces the circular shape
+              shape: const CircleBorder(),
               child: Badge(
                 label: Text(
                   '$selectedCount',

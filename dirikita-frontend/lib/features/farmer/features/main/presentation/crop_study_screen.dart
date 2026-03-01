@@ -4,11 +4,10 @@ import 'package:duruha/core/widgets/duruha_widgets.dart';
 
 import 'package:duruha/features/farmer/features/main/data/study_repository.dart';
 import 'package:duruha/features/farmer/features/main/domain/study_model.dart';
-import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 // Re-implementing SparklinePainter inside here to avoid dependency issues if file was deleted
 
@@ -189,11 +188,11 @@ class _CropStudyScreenState extends State<CropStudyScreen> {
             ? study.nationalForecasts[index]
             : localData; // Fallback
 
-        final dateParts = localData.month.split('\n');
-        final monthName = dateParts.first;
-        final year = dateParts.length > 1
-            ? dateParts.last
-            : DateTime.now().year.toString();
+        // final dateParts = localData.month.split('\n');
+        // final monthName = dateParts.first;
+        // final year = dateParts.length > 1
+        //     ? dateParts.last
+        //     : DateTime.now().year.toString();
 
         // Calculate ratios
         final localRatio = (localData.fulfilledKg / localData.demandKg).clamp(

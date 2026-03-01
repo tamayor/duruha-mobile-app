@@ -19,8 +19,10 @@ class DuruhaTextField extends StatelessWidget {
   final String? Function(String?)?
   validator; // Custom validation logic (e.g., email check)
   final bool enabled;
+  final String? helperText;
   final Function(String)? onChanged; // Callback for text changes
   final FocusNode? focusNode;
+  final EdgeInsetsGeometry? padding;
 
   const DuruhaTextField({
     super.key,
@@ -34,8 +36,10 @@ class DuruhaTextField extends StatelessWidget {
     this.isRequired = true, // Defaults to required!
     this.enabled = true,
     this.validator,
+    this.helperText,
     this.onChanged,
     this.focusNode,
+    this.padding,
   });
 
   bool get _isNumericInput =>
@@ -52,7 +56,7 @@ class DuruhaTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: padding ?? const EdgeInsets.only(bottom: 16.0),
       child: TextFormField(
         enabled: enabled,
         controller: controller,
@@ -74,6 +78,7 @@ class DuruhaTextField extends StatelessWidget {
           enabled: enabled,
           icon: icon,
           suffix: suffix, // Pass to decoration
+          helperText: helperText,
         ),
 
         // Comprehensive Validation Logic
@@ -110,8 +115,8 @@ class _DecimalInputFormatter extends TextInputFormatter {
     // Check if the new text is valid
     final text = newValue.text;
 
-    // Only allow digits and one decimal point
-    if (!RegExp(r'^[0-9]*\.?[0-9]*$').hasMatch(text)) {
+    // Only allow digits, one decimal point, and optional leading sign
+    if (!RegExp(r'^[+-]?[0-9]*\.?[0-9]*$').hasMatch(text)) {
       return oldValue;
     }
 

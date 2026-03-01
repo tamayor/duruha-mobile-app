@@ -1,6 +1,27 @@
 import 'produce_variety.dart';
 import 'produce_dialect.dart';
 
+class ProduceCursor {
+  final String? updatedAt;
+  final String? id;
+
+  ProduceCursor({this.updatedAt, this.id});
+}
+
+class PaginatedProduce {
+  final List<Produce> data;
+  final int count;
+  final bool hasMore;
+  final ProduceCursor? nextCursor;
+
+  PaginatedProduce({
+    required this.data,
+    required this.count,
+    required this.hasMore,
+    this.nextCursor,
+  });
+}
+
 class ProducePricingEconomics {
   final double duruhaConsumerPrice;
   final double duruhaFarmerPayout;
@@ -42,12 +63,11 @@ class Produce {
   final String category;
   final DateTime? updatedAt;
   final String? crossContaminationRisk;
-  final int crushWeightTolerance;
-  final String respirationRate;
-  final String storageGroup;
-  final bool isEthyleneProducer;
-  final bool isEthyleneSensitive;
-  final double basePrice;
+  final int? crushWeightTolerance;
+  final String? respirationRate;
+  final String? storageGroup;
+  final bool? isEthyleneProducer;
+  final bool? isEthyleneSensitive;
   final List<ProduceVariety> varieties;
   final List<ProduceDialect> dialects;
 
@@ -56,11 +76,8 @@ class Produce {
   String? get nameScientific => scientificName;
   String get unitOfMeasure => baseUnit;
   List<ProduceVariety> get availableVarieties => varieties;
-  double get currentFairMarketGuideline => basePrice;
 
   // Legacy aliases for recommendations (mostly mocks, but used in UI)
-  double get priceMinHistorical => basePrice * 0.9;
-  double get priceMaxHistorical => basePrice * 1.1;
   int get growingCycleDays => 90;
   String get seasonalityStart => 'Dec';
   String get seasonalityEnd => 'Feb';
@@ -78,13 +95,6 @@ class Produce {
     return {for (var d in dialects) d.dialectName.toLowerCase(): d.localName};
   }
 
-  ProducePricingEconomics get pricingEconomics => ProducePricingEconomics(
-    duruhaConsumerPrice: basePrice,
-    duruhaFarmerPayout: basePrice * 0.7,
-    marketBenchmarkRetail: basePrice * 1.25,
-    marketBenchmarkFarmgate: basePrice * 0.45,
-  );
-
   Produce({
     required this.id,
     required this.englishName,
@@ -100,7 +110,6 @@ class Produce {
     this.storageGroup = 'Ambient',
     this.isEthyleneProducer = false,
     this.isEthyleneSensitive = false,
-    required this.basePrice,
     this.varieties = const [],
     this.dialects = const [],
   });
@@ -128,7 +137,6 @@ class Produce {
       storageGroup: json['storage_group']?.toString() ?? 'Ambient',
       isEthyleneProducer: json['is_ethylene_producer'] == true,
       isEthyleneSensitive: json['is_ethylene_sensitive'] == true,
-      basePrice: bPrice,
       varieties: (json['varieties'] as List? ?? [])
           .map((v) => ProduceVariety.fromJson(v, bPrice))
           .toList(),
@@ -147,4 +155,13 @@ class Produce {
         )
         .localName;
   }
+}
+
+extension ProducePricingExtension on Produce {
+  ProducePricingEconomics get pricingEconomics => ProducePricingEconomics(
+    duruhaConsumerPrice: (id.hashCode % 100 + 50).toDouble(),
+    duruhaFarmerPayout: (id.hashCode % 100 + 40).toDouble(),
+    marketBenchmarkRetail: (id.hashCode % 100 + 60).toDouble(),
+    marketBenchmarkFarmgate: (id.hashCode % 100 + 30).toDouble(),
+  );
 }

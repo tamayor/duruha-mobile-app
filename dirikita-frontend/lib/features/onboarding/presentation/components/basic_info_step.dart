@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 class BasicInfoStep extends StatelessWidget {
   final TextEditingController nameController;
-  final TextEditingController emailController;
   final TextEditingController phoneController;
   final TextEditingController telephoneController;
   final TextEditingController streetAddressController;
@@ -28,11 +27,14 @@ class BasicInfoStep extends StatelessWidget {
   final List<String> deliveryWindowOptions;
   final String? selectedDeliveryWindow;
   final ValueChanged<String?> onDeliveryWindowChanged;
+  final double? latitude;
+  final double? longitude;
+  final bool isLocating;
+  final VoidCallback onCaptureLocation;
 
   const BasicInfoStep({
     super.key,
     required this.nameController,
-    required this.emailController,
     required this.phoneController,
     required this.telephoneController,
     required this.streetAddressController,
@@ -53,6 +55,10 @@ class BasicInfoStep extends StatelessWidget {
     required this.deliveryWindowOptions,
     required this.selectedDeliveryWindow,
     required this.onDeliveryWindowChanged,
+    this.latitude,
+    this.longitude,
+    required this.isLocating,
+    required this.onCaptureLocation,
   });
 
   @override
@@ -72,13 +78,6 @@ class BasicInfoStep extends StatelessWidget {
                       controller: nameController,
                       label: "Full Name",
                       icon: Icons.person_outline,
-                    ),
-                    DuruhaTextField(
-                      controller: emailController,
-                      label: "Email Address (Optional)",
-                      icon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                      isRequired: false,
                     ),
                     DuruhaTextField(
                       controller: phoneController,
@@ -114,30 +113,64 @@ class BasicInfoStep extends StatelessWidget {
                       label: "City / Municipality",
                       icon: Icons.location_city_outlined,
                     ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DuruhaTextField(
-                            controller: postalCodeController,
-                            label: "Postal Code",
-                            icon: Icons.markunread_mailbox_outlined,
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: DuruhaTextField(
-                            controller: provinceController,
-                            label: "Province",
-                            icon: Icons.map_outlined,
-                          ),
-                        ),
-                      ],
+                    DuruhaTextField(
+                      controller: postalCodeController,
+                      label: "Postal Code",
+                      icon: Icons.markunread_mailbox_outlined,
+                      keyboardType: TextInputType.number,
+                    ),
+                    DuruhaTextField(
+                      controller: provinceController,
+                      label: "Province",
+                      icon: Icons.map_outlined,
                     ),
                     DuruhaTextField(
                       controller: landmarkController,
                       label: "Nearby Landmark",
                       icon: Icons.place_outlined,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "GPS Coordinates",
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              Text(
+                                latitude != null && longitude != null
+                                    ? "${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}"
+                                    : "Not set",
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isLocating)
+                          const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          TextButton.icon(
+                            onPressed: onCaptureLocation,
+                            icon: Icon(
+                              Icons.my_location,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                            label: Text(
+                              latitude != null ? "Update" : "Capture",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),

@@ -1,59 +1,69 @@
 import 'dart:io';
-
+import 'package:duruha/supabase_config.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
-import 'package:duruha/shared/produce/domain/produce_model.dart';
 
+/// Calls the unified `manage_profile` RPC on Supabase.
+/// Handles both GET and UPDATE operations for consumers.
 class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
   @override
-  Future<ConsumerProfile> getConsumerProfile(String consumerId) async {
-    // Simulate API delay
-    await Future.delayed(const Duration(milliseconds: 500));
-    // Return mock data for now
+  Future<ConsumerProfile> getConsumerProfile(String userId) async {
+    try {
+      final response = await supabase.rpc(
+        'manage_profile',
+        params: {'p_user_id': userId, 'p_mode': 'get'},
+      );
 
-    return ConsumerProfile(
-      id: 'consumer-001',
-      name: 'Elly Consumer',
-      joinedAt: DateTime.now().toString(),
-      phone: '09177654321',
-      barangay: 'Barangay 5',
-      city: 'Malaybalay City',
-      province: 'Bukidnon',
-      postalCode: '8700',
-      landmark: 'Near Cathedral',
-      dialect: ['Cebuano'],
-      email: 'consumer@example.com',
-      consumerSegment: 'Household',
-      segmentSize: 4,
-      cookingFrequency: 'Daily',
-      qualityPreferences: ['Freshness', 'Organic'],
-      demandCrops: List.generate(
-        5,
-        (i) => Produce(
-          id: 'prod_${i + 1}',
-          englishName: 'Crop ${i + 1}',
-          scientificName: 'Scientific Name',
-          category: 'Fruit Veg',
-          varieties: [],
-          dialects: [],
-          basePrice: 0,
-          baseUnit: 'kg',
-        ),
-      ),
-    );
+      return ConsumerProfile.fromJson(
+        Map<String, dynamic>.from(response as Map),
+      );
+    } catch (e) {
+      throw Exception('Failed to fetch consumer profile: $e');
+    }
   }
 
   @override
   Future<String> uploadProfileImage(File file) async {
-    // Simulate network upload
+    // Mock implementation – replace with Supabase Storage upload
     await Future.delayed(const Duration(seconds: 2));
-    // Return a mock URL
     return 'https://i.pravatar.cc/300?img=${DateTime.now().millisecond % 70}';
   }
 
   @override
   Future<void> updateProfile(ConsumerProfile profile) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
-    return;
+    try {
+      final payload = {
+        // Base user fields
+        'name': profile.name,
+        'email': profile.email,
+        'phone': profile.phone,
+        'barangay': profile.barangay,
+        'city': profile.city,
+        'province': profile.province,
+        'postal_code': profile.postalCode,
+        'landmark': profile.landmark,
+        'image_url': profile.imageUrl,
+        'dialect': profile.dialect,
+        if (profile.latitude != null) 'latitude': profile.latitude,
+        if (profile.longitude != null) 'longitude': profile.longitude,
+
+        // Consumer-specific fields
+        'consumer_id': profile.consumerId,
+        'consumer_segment': profile.consumerSegment,
+        'cooking_frequency': profile.cookingFrequency,
+        'quality_preferences': profile.qualityPreferences,
+        'fav_produce': profile.consumerFavProduce.map((p) => p.id).toList(),
+      };
+
+      await supabase.rpc(
+        'manage_profile',
+        params: {
+          'p_user_id': profile.id,
+          'p_mode': 'update',
+          'p_data': payload,
+        },
+      );
+    } catch (e) {
+      throw Exception('Failed to update consumer profile: $e');
+    }
   }
 }

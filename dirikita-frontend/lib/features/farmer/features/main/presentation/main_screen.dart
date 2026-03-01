@@ -5,12 +5,12 @@ import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.da
 import 'package:duruha/features/farmer/features/main/data/recommendation_repository.dart';
 import 'package:duruha/features/farmer/features/main/domain/recommendation_model.dart';
 import 'package:duruha/features/farmer/features/main/presentation/widgets/recommendation_card.dart';
-import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:duruha/core/widgets/duruha_section_container.dart';
 import 'package:duruha/features/farmer/shared/data/pledge_repository.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
-import 'package:duruha/features/farmer/features/manage/presentation/widgets/pledge_card.dart';
+import 'package:duruha/features/farmer/features/manage/pledge/presentation/widgets/pledge_card.dart';
 
 class FarmerMainScreen extends StatefulWidget {
   const FarmerMainScreen({super.key});

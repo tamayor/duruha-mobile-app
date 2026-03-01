@@ -4,6 +4,7 @@ class ProduceBasicInfo {
   final String imageUrl;
   final String localName;
   final String scientificName;
+  final int varietyCount;
 
   ProduceBasicInfo({
     required this.id,
@@ -11,6 +12,7 @@ class ProduceBasicInfo {
     required this.imageUrl,
     required this.localName,
     required this.scientificName,
+    this.varietyCount = 0,
   });
 
   factory ProduceBasicInfo.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class ProduceBasicInfo {
       imageUrl: json['image_url']?.toString() ?? '',
       localName: json['local_name']?.toString() ?? '',
       scientificName: json['scientific_name']?.toString() ?? '',
+      varietyCount: (json['variety_count'] as num?)?.toInt() ?? 0,
     );
   }
 }

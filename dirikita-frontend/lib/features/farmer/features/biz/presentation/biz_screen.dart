@@ -1,8 +1,9 @@
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/features/farmer/features/biz/data/biz_repository.dart';
 import 'package:duruha/features/farmer/features/sales/data/farmer_produce_repository.dart';
 import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
-import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
@@ -63,12 +64,14 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
   Future<void> _fetchAllData() async {
     setState(() => _isLoading = true);
     try {
+      final userId = await SessionService.getUserId() ?? '';
       final pledgesFuture = _bizRepository.fetchSalesRecords();
-      final cropsFuture = _cropsRepository.fetchFarmerSelectedProduce("Bisaya");
+      final cropsFuture = _cropsRepository.fetchFarmerProduce(userId);
 
       final results = await Future.wait([pledgesFuture, cropsFuture]);
       final pledges = results[0] as List<HarvestPledge>;
-      final crops = results[1] as List<FarmerSelectedProduce>;
+      final cropsResult = results[1] as ProducePaginatedResult;
+      final crops = cropsResult.data;
 
       if (mounted) {
         setState(() {

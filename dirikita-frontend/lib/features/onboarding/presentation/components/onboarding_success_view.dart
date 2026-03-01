@@ -101,7 +101,7 @@ class OnboardingSuccessView extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
-                              color: colorScheme.primary,
+                              color: colorScheme.onPrimary,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -133,7 +133,7 @@ class OnboardingSuccessView extends StatelessWidget {
                                   "$userRole Account",
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: colorScheme.secondary,
+                                    color: colorScheme.onSecondary,
                                     fontSize: 12,
                                   ),
                                 ),

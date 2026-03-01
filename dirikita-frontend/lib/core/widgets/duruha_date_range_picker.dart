@@ -54,7 +54,7 @@ class DuruhaDateRangePicker extends StatelessWidget {
               final picked = await showDateRangePicker(
                 context: context,
                 firstDate: now,
-                lastDate: DateTime(now.year + 2),
+                lastDate: DateTime(2101),
                 initialDateRange: DateTimeRange(
                   start: initialStart,
                   end: initialEnd.isBefore(initialStart)
@@ -67,6 +67,28 @@ class DuruhaDateRangePicker extends StatelessWidget {
                       colorScheme: theme.colorScheme.copyWith(
                         surface: theme.colorScheme.surface,
                         onSurface: theme.colorScheme.onSurface,
+                      ),
+                      datePickerTheme: DatePickerThemeData(
+                        dayForegroundColor: WidgetStateProperty.resolveWith((
+                          states,
+                        ) {
+                          if (states.contains(WidgetState.disabled)) {
+                            return theme.colorScheme.onSurface.withValues(
+                              alpha: 0.1,
+                            );
+                          }
+                          return null; // use default
+                        }),
+                        yearForegroundColor: WidgetStateProperty.resolveWith((
+                          states,
+                        ) {
+                          if (states.contains(WidgetState.disabled)) {
+                            return theme.colorScheme.onSurface.withValues(
+                              alpha: 0.1,
+                            );
+                          }
+                          return null; // use default
+                        }),
                       ),
                     ),
                     child: child!,
@@ -102,7 +124,7 @@ class DuruhaDateRangePicker extends StatelessWidget {
                           startDate != null
                               ? dateFormat.format(startDate!)
                               : (startPlaceholder ?? ''),
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                          style: theme.textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.w600,
                             color: startDate != null
                                 ? theme.colorScheme.onSurface
@@ -119,9 +141,11 @@ class DuruhaDateRangePicker extends StatelessWidget {
                         ),
                         Text(
                           endDate != null
-                              ? dateFormat.format(endDate!)
+                              ? (endDate!.year >= 2100
+                                    ? 'Infinity'
+                                    : dateFormat.format(endDate!))
                               : (endPlaceholder ?? ''),
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                          style: theme.textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.w600,
                             color: endDate != null
                                 ? theme.colorScheme.onSurface
@@ -130,10 +154,6 @@ class DuruhaDateRangePicker extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),

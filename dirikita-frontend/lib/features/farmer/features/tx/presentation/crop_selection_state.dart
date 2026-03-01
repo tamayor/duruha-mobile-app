@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../shared/domain/pledge_model.dart';
 import '../data/transaction_draft_service.dart';
+import 'package:duruha/shared/produce/domain/market_listing_model.dart';
 
 class CropSelectionState {
   final TextEditingController dateController;
@@ -9,8 +10,9 @@ class CropSelectionState {
   // Removed single harvestDate and harvestWindow in favor of list
   // DateTime? harvestDate;
   // DateTimeRange? harvestWindow;
-  DateTime? availableDate;
-  DateTime? disposalDate;
+  // Per-variety availability dates (for Offer mode)
+  Map<String, DateTime?> varietyAvailableDates = {};
+  Map<String, DateTime?> varietyDisposalDates = {};
   String selectedUnit;
   List<String> selectedVariants;
   Map<String, TextEditingController> varietyQuantityControllers;
@@ -22,6 +24,13 @@ class CropSelectionState {
   List<HarvestEntry> perDatePledges = [];
 
   bool isLoadingDemand = false;
+
+  // Selected produce form/listing per variety (variety name -> MarketListing)
+  Map<String, MarketListing?> selectedVarietyForms = {};
+
+  // Canonical offer data: one entry per selected variety+form combination.
+  // Written by OfferForm and consumed by validation + review screen.
+  List<OfferFormEntry> offerEntries = [];
 
   CropSelectionState({
     required this.dateController,

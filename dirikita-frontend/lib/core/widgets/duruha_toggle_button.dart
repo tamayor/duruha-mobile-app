@@ -76,16 +76,13 @@ class _DuruhaToggleButtonState extends State<DuruhaToggleButton>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // User requested uniform color "althroughout"
-    // We use the provided colors if available, otherwise default to a single color (primary or secondary as requested)
-    // The user recently changed defaults to secondary, so we'll stick to that pattern
-    final activeColor = widget.colorTrue ?? theme.colorScheme.secondary;
-    final inactiveColor = widget.colorFalse ?? theme.colorScheme.secondary;
+    final activeColor = widget.colorTrue ?? theme.colorScheme.primary;
+    final inactiveColor = widget.colorFalse ?? theme.colorScheme.tertiary;
 
     final activeContentColor =
-        widget.contentColorTrue ?? theme.colorScheme.onSecondary;
+        widget.contentColorTrue ?? theme.colorScheme.onPrimary;
     final inactiveContentColor =
-        widget.contentColorFalse ?? theme.colorScheme.onSecondary;
+        widget.contentColorFalse ?? theme.colorScheme.onTertiary;
 
     final isActive = widget.value;
     final currentColor = isActive ? activeColor : inactiveColor;
@@ -116,8 +113,8 @@ class _DuruhaToggleButtonState extends State<DuruhaToggleButton>
 
               if (description != null) {
                 final snackColor = newValue
-                    ? (widget.colorTrue ?? theme.colorScheme.onPrimary)
-                    : (widget.colorFalse ?? theme.colorScheme.onSecondary);
+                    ? (widget.colorTrue ?? theme.colorScheme.primary)
+                    : (widget.colorFalse ?? theme.colorScheme.tertiary);
 
                 DuruhaSnackBar.show(
                   context,
@@ -139,23 +136,23 @@ class _DuruhaToggleButtonState extends State<DuruhaToggleButton>
               padding: isIconOnly
                   ? EdgeInsets.zero
                   : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: currentColor,
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
-                  width: 1,
-                ),
-                boxShadow: isIconOnly
-                    ? null
-                    : [
+              decoration: isIconOnly
+                  ? null
+                  : BoxDecoration(
+                      color: currentColor,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                      boxShadow: [
                         BoxShadow(
                           color: currentColor.withValues(alpha: 0.3),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
                       ],
-              ),
+                    ),
               child: Center(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

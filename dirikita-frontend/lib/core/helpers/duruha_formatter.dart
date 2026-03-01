@@ -49,10 +49,19 @@ class DuruhaFormatter {
     }
   }
 
-  /// Formats a date to a readable string (e.g., February 3, 2026)
+  /// Formats a date to a readable string (e.g., Feb 3, 2026)
   static String formatDate(DateTime date) {
     try {
       return DateFormat('MMM d, y').format(date);
+    } catch (e) {
+      return date.toIso8601String().split('T')[0];
+    }
+  }
+
+  /// Formats a date to a readable string (e.g., February 3, 2026)
+  static String formatDateTime(DateTime date) {
+    try {
+      return DateFormat('MMM d, y hh:mm a').format(date);
     } catch (e) {
       return date.toIso8601String().split('T')[0];
     }

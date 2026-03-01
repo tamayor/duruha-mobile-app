@@ -45,19 +45,43 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
 
   Future<void> _loadData() async {
     try {
-      final allProduce = await _produceRepository.getAllProduce();
-      final filtered = allProduce
-          .where((p) => widget.selectedCropIds.contains(p.id))
-          .toList();
+      //debugPrint(
+      //  "🔍 [TX CREATE] Loading data for IDs: ${widget.selectedCropIds}",
+      //);
+      if (widget.selectedCropIds.isEmpty) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final produce = await _produceRepository.fetchProduceByIds(
+        widget.selectedCropIds,
+        mode: "for_farmer",
+      );
+      debugPrint(
+        "🎯 [TX CREATE] Fetched ${widget.selectedCropIds} matches from master view",
+      );
+
+      if (produce.isEmpty) {
+        //debugPrint(
+        //  "⚠️ [TX CREATE] MISMATCH! Selected IDs not found in master view.",
+        //);
+        if (mounted) {
+          DuruhaSnackBar.showError(
+            context,
+            "Could not load crop details. Please try again or re-select crops.",
+          );
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _selectedProduce = filtered;
+          _selectedProduce = produce;
         });
 
-        for (var produce in filtered) {
+        for (var produce in produce) {
           // Load draft if exists
           final draft = await TransactionDraftService.getDraft(produce.id);
+          if (!mounted) return;
 
           final state = CropSelectionState(
             dateController: TextEditingController(),
@@ -67,8 +91,22 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
           );
 
           if (draft != null) {
-            state.availableDate = draft.availableDate;
-            state.disposalDate = draft.disposalDate;
+            state.varietyAvailableDates = draft.varietyAvailableDates;
+            state.varietyDisposalDates = draft.varietyDisposalDates;
+
+            // Migration: If old global dates exist, apply to all varieties
+            if (state.varietyAvailableDates.isEmpty &&
+                draft.availableDate != null) {
+              for (var v in produce.availableVarieties) {
+                state.varietyAvailableDates[v.name] = draft.availableDate;
+              }
+            }
+            if (state.varietyDisposalDates.isEmpty &&
+                draft.disposalDate != null) {
+              for (var v in produce.availableVarieties) {
+                state.varietyDisposalDates[v.name] = draft.disposalDate;
+              }
+            }
 
             if (draft.selectedHarvestDates.isNotEmpty) {
               state.selectedHarvestDates = draft.selectedHarvestDates;
@@ -132,7 +170,14 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint("❌ [TX CREATE] Error: $e");
+      if (mounted) {
+        DuruhaSnackBar.showError(
+          context,
+          "Error loading data: ${e.toString()}",
+        );
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -151,16 +196,17 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
 
     final draft = CropDraftData(
       selectedHarvestDates: state.selectedHarvestDates,
-      availableDate: state.availableDate,
-      disposalDate: state.disposalDate,
       selectedUnit: state.selectedUnit,
       varietyQuantities: quantities,
+      varietyAvailableDates: state.varietyAvailableDates,
+      varietyDisposalDates: state.varietyDisposalDates,
       simulatedDemand: state.simulatedDemand,
       perDatePledges: state.perDatePledges,
       dateSpecificDemand: state.dateSpecificDemand,
     );
 
     await TransactionDraftService.saveDraft(cropId, draft);
+    if (!mounted) return;
   }
 
   Future<void> _clearAll() async {
@@ -177,6 +223,7 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
 
   Future<void> _removeProduce(String produceId) async {
     await TransactionDraftService.clearDraft(produceId);
+    if (!mounted) return;
     setState(() {
       _selectedProduce.removeWhere((p) => p.id == produceId);
       _cropStates.remove(produceId);
@@ -209,9 +256,6 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
     for (var produce in _selectedProduce) {
       final state = _cropStates[produce.id]!;
 
-      // Calculate total quantity from ALL controllers (for Offer) OR per-date (for Pledge)
-      double total = 0;
-
       if (widget.mode == 'pledge') {
         // 1. Filter out dates that don't have any pledges
         final validDates = state.selectedHarvestDates.where((date) {
@@ -242,44 +286,24 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
           );
           return;
         }
-
-        // Re-calculate total based on filtered dates
-        total = 0;
-        for (var date in state.selectedHarvestDates) {
-          final normalized = DateTime(date.year, date.month, date.day);
-          final breakdown = state.perDatePledgesMap[normalized];
-          if (breakdown != null) {
-            total += breakdown.values.fold(0.0, (sum, val) => sum + val);
-          }
-        }
       } else {
-        // Offer mode validation
-        // First calculate total quantity for Offer mode
-        for (var entry in state.varietyQuantityControllers.entries) {
-          final qty = double.tryParse(entry.value.text) ?? 0;
-          if (qty > 0) {
-            total += qty;
-          }
+        // Offer mode validation — based on the new offerEntries structure
+        final entries = state.offerEntries;
+
+        final hasAnyQty = entries.any((e) => e.quantity > 0);
+        if (!hasAnyQty) {
+          DuruhaSnackBar.showWarning(
+            context,
+            'Please select at least one form and enter a quantity for ${produce.nameEnglish}',
+          );
+          return;
         }
 
-        if (state.availableDate == null) {
+        final missingDate = entries.any((e) => e.quantity > 0 && !e.hasDate);
+        if (missingDate) {
           DuruhaSnackBar.showWarning(
             context,
-            "Please set available date for ${produce.nameEnglish}",
-          );
-          return;
-        }
-        if (state.disposalDate == null) {
-          DuruhaSnackBar.showWarning(
-            context,
-            "Please set disposal date for ${produce.nameEnglish}",
-          );
-          return;
-        }
-        if (total <= 0) {
-          DuruhaSnackBar.showWarning(
-            context,
-            "Please set quantity for selected varieties of ${produce.nameEnglish}",
+            'Please set availability dates for all forms with quantities in ${produce.nameEnglish}',
           );
           return;
         }
@@ -317,7 +341,7 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
 
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         Navigator.of(context).pop(_selectedProduce.map((p) => p.id).toList());
       },
@@ -332,30 +356,13 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
               icon: const Icon(Icons.refresh_rounded),
               tooltip: 'Clear Draft',
               onPressed: () async {
-                final confirm = await showDialog<bool>(
+                final confirm = await DuruhaDialog.show(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("Clear Drafts?"),
-                    content: const Text(
-                      "This will clear all entered data for these crops.",
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(
-                          "Cancel",
-                          style: TextStyle(color: theme.colorScheme.onPrimary),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(
-                          "Clear",
-                          style: TextStyle(color: theme.colorScheme.error),
-                        ),
-                      ),
-                    ],
-                  ),
+                  title: "Clear Drafts?",
+                  message: "This will clear all entered data for these crops.",
+                  confirmText: "CLEAR",
+                  isDanger: true,
+                  icon: Icons.delete_sweep_rounded,
                 );
 
                 if (confirm == true) {
@@ -371,8 +378,8 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
         floatingActionButton: _selectedProduce.isNotEmpty && !_isLoading
             ? FloatingActionButton.extended(
                 onPressed: _goToReview,
-                backgroundColor: theme.colorScheme.secondary,
-                foregroundColor: theme.colorScheme.onSecondary,
+                backgroundColor: theme.colorScheme.tertiary,
+                foregroundColor: theme.colorScheme.onTertiary,
                 elevation: 8,
                 label: _selectedProduce.isNotEmpty
                     ? Text("Continue")
@@ -407,6 +414,9 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             child: DuruhaSectionContainer(
+              isShrinkable: true,
+              initialShrunk: true,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               title: widget.mode == 'pledge'
                   ? "Pledge Details"
                   : "Offer Details",
@@ -444,15 +454,11 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
                     produce: produce,
                     state: _cropStates[produce.id]!,
                     onAvailableDatePicked: (date) {
-                      setState(() {
-                        _cropStates[produce.id]!.availableDate = date;
-                      });
+                      // Deprecated, OfferForm handles its own variety dates
                       _saveDraft(produce.id);
                     },
                     onDisposalDatePicked: (date) {
-                      setState(() {
-                        _cropStates[produce.id]!.disposalDate = date;
-                      });
+                      // Deprecated
                       _saveDraft(produce.id);
                     },
                     onStateChanged: () => _saveDraft(produce.id),

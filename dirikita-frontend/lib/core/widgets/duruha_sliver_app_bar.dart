@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 class DuruhaSliverAppBar extends StatelessWidget {
   final String title;
+  final String? subtitle;
+  final Widget? titleWidget;
   final String imageUrl;
   final List<Widget>? actions;
   final double expandedHeight;
@@ -12,6 +14,8 @@ class DuruhaSliverAppBar extends StatelessWidget {
   const DuruhaSliverAppBar({
     super.key,
     required this.title,
+    this.subtitle,
+    this.titleWidget,
     required this.imageUrl,
     this.actions,
     this.expandedHeight = 280,
@@ -25,12 +29,42 @@ class DuruhaSliverAppBar extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    Widget buildTitle() {
+      if (titleWidget != null) return titleWidget!;
+
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (subtitle != null)
+            Text(
+              subtitle!,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w500,
+                fontSize:
+                    12, // Needs to be small to avoid clipping during collapse
+              ),
+            ),
+        ],
+      );
+    }
+
     return SliverAppBar(
       pinned: true,
       expandedHeight: expandedHeight,
       stretch: stretch,
       backgroundColor: backgroundColor ?? theme.scaffoldBackgroundColor,
       surfaceTintColor: Colors.transparent,
+      centerTitle: true,
+      title: titleWidget,
       leading:
           leading ??
           IconButton(
@@ -42,17 +76,13 @@ class DuruhaSliverAppBar extends StatelessWidget {
           ),
       actions: actions,
       flexibleSpace: FlexibleSpaceBar(
+        centerTitle: true,
         stretchModes: const [
           StretchMode.zoomBackground,
           StretchMode.blurBackground,
         ],
-        title: Text(
-          title,
-          style: TextStyle(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        titlePadding: const EdgeInsets.only(bottom: 16),
+        title: titleWidget != null ? null : buildTitle(),
         background: Stack(
           fit: StackFit.expand,
           children: [

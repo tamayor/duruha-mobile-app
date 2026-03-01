@@ -1,66 +1,107 @@
-import 'package:duruha/shared/produce/domain/produce_model.dart';
-
-enum UserRole { farmer, consumer }
+enum UserRole { farmer, consumer, admin }
 
 class UserProfile {
   final String id;
   final String joinedAt;
   final String name;
   final String? email;
-  final String phone;
-  final String barangay;
-  final String city;
-  final String province;
-  final String landmark;
-  final String postalCode;
+  final String? phone;
+  final String? barangay;
+  final String? city;
+  final String? province;
+  final String? landmark;
+  final String? postalCode;
   final String? imageUrl;
-  final UserRole role;
+  final double? latitude;
+  final double? longitude;
+  final UserRole? role;
   final List<String> dialect;
-  // Farmer Specific
-  final String? farmAlias;
-  final double? landArea;
-  final String? accessibilityType;
-  final List<String>? waterSources;
-  final List<Produce>? pledgedCrops;
-  final List<String>? paymentMethods;
-  final List<String>? operatingDays;
-  final String? deliveryWindow;
-
-  // Consumer Specific
-  final String? consumerSegment; // Household, Restaurant, etc.
-  final int? segmentSize;
-  final String? cookingFrequency;
-  final List<String>? qualityPreferences;
-  final List<Produce>? demandCrops;
 
   UserProfile({
     required this.id,
     required this.joinedAt,
     required this.name,
     this.email,
-    required this.phone,
-    required this.barangay,
-    required this.city,
-    required this.province,
-    required this.landmark,
-    required this.postalCode,
+    this.phone,
+    this.barangay,
+    this.city,
+    this.province,
+    this.landmark,
+    this.postalCode,
     this.imageUrl,
-    required this.role,
-    required this.dialect,
-    this.farmAlias,
-    this.landArea,
-    this.accessibilityType,
-    this.waterSources,
-    this.pledgedCrops,
-    this.paymentMethods,
-    this.operatingDays,
-    this.deliveryWindow,
-    this.consumerSegment,
-    this.segmentSize,
-    this.cookingFrequency,
-    this.qualityPreferences,
-    this.demandCrops,
+    this.latitude,
+    this.longitude,
+    this.role,
+    this.dialect = const [],
   });
 
   bool get isFarmer => role == UserRole.farmer;
+  bool get isConsumer => role == UserRole.consumer;
+  bool get isAdmin => role == UserRole.admin;
+
+  // Convert UserProfile to JSON for Supabase
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'joined_at': joinedAt,
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'barangay': barangay,
+      'city': city,
+      'province': province,
+      'landmark': landmark,
+      'postal_code': postalCode,
+      'image_url': imageUrl,
+      'location': latitude != null && longitude != null
+          ? 'POINT($longitude $latitude)'
+          : null,
+      'role': role == UserRole.farmer
+          ? 'FARMER'
+          : (role == UserRole.admin ? 'ADMIN' : 'CONSUMER'),
+      'dialect': dialect,
+    };
+  }
+
+  // Create UserProfile from Supabase JSON
+  factory UserProfile.fromJson(Map<String, dynamic> json) {
+    // GPS: the manage_profile RPC returns flat 'latitude'/'longitude' keys.
+    // Legacy direct-table queries return a PostGIS 'location' object.
+    double? lat;
+    double? lng;
+
+    if (json['latitude'] != null) {
+      lat = (json['latitude'] as num?)?.toDouble();
+      lng = (json['longitude'] as num?)?.toDouble();
+    } else if (json['location'] != null && json['location'] is Map) {
+      final coords = json['location']['coordinates'];
+      lat = (coords?[1] as num?)?.toDouble();
+      lng = (coords?[0] as num?)?.toDouble();
+    }
+
+    return UserProfile(
+      id: json['id'] as String,
+      joinedAt:
+          json['joined_at'] as String? ?? DateTime.now().toIso8601String(),
+      name: json['name'] as String? ?? '',
+      email: json['email'] as String?,
+      phone: json['phone'] as String? ?? '',
+      barangay: json['barangay'] as String? ?? '',
+      city: json['city'] as String? ?? '',
+      province: json['province'] as String? ?? '',
+      landmark: json['landmark'] as String? ?? '',
+      postalCode: json['postal_code'] as String? ?? '',
+      imageUrl: json['image_url'] as String?,
+      latitude: lat,
+      longitude: lng,
+      role: json['role']?.toString().toUpperCase() == 'FARMER'
+          ? UserRole.farmer
+          : (json['role']?.toString().toUpperCase() == 'ADMIN'
+                ? UserRole.admin
+                : UserRole.consumer),
+      dialect: json['dialect'] != null
+          ? List<String>.from(json['dialect'] as List)
+          : ['Cebuano'],
+    );
+  }
 }

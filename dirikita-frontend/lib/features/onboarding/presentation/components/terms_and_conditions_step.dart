@@ -65,7 +65,7 @@ class _TermsAndConditionsStepState extends State<TermsAndConditionsStep> {
                 "Review Our Terms",
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
+                  color: colorScheme.onPrimary,
                 ),
               ),
               const SizedBox(height: 4),

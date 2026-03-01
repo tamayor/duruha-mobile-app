@@ -3,6 +3,7 @@ import 'package:duruha/features/farmer/features/tx/data/transaction_draft_servic
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 
 class DemandCalendarPicker extends StatefulWidget {
   final String cropId;
@@ -138,13 +139,36 @@ class _DemandCalendarPickerState extends State<DemandCalendarPicker> {
     final firstWeekdayOffset = firstDayOfMonth.weekday - 1;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: Container(
-        width: 360, // reasonable width
-        padding: const EdgeInsets.all(16),
+        width: 380,
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Premium Header with Icon
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.calendar_month_rounded,
+                size: 32,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Select Harvest Dates",
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 20),
             // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -260,8 +284,9 @@ class _DemandCalendarPickerState extends State<DemandCalendarPicker> {
                           boxShadow: isSelected
                               ? [
                                   BoxShadow(
-                                    color: theme.colorScheme.primary
-                                        .withOpacity(0.3),
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.3,
+                                    ),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -313,23 +338,24 @@ class _DemandCalendarPickerState extends State<DemandCalendarPicker> {
 
             // Footer
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () {
-                    widget.onDatesChanged([], {}); // Clear selection and demand
-                    setState(() => _tempSelectedDates.clear());
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    "Clear",
-                    style: TextStyle(color: Colors.red),
+                Expanded(
+                  child: DuruhaButton(
+                    text: "Clear",
+                    isOutline: true,
+                    onPressed: () {
+                      widget.onDatesChanged([], {});
+                      setState(() => _tempSelectedDates.clear());
+                      Navigator.pop(context);
+                    },
                   ),
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Done"),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DuruhaButton(
+                    text: "Done",
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ),
               ],
             ),

@@ -51,115 +51,88 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
     VoidCallback? onSaveSuccess,
   }) async {
     final controller = TextEditingController(
-      text: currentLocalName == "-" ? "" : currentLocalName,
+      text: currentLocalName == "" ? "" : currentLocalName,
     );
-    bool isSaving = false;
-    final theme = Theme.of(context);
-    await showDialog(
+
+    final result = await DuruhaDialog.show(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: theme.colorScheme.surface,
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: 100,
-                vertical: 100,
-              ),
-              title: Text("Edit $dialectName Name"),
-              content: DuruhaTextField(
-                controller: controller,
-                label: 'Local Name',
-                icon: Icons.edit,
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.pop(context),
-                  child: Text(
-                    "Cancel",
-                    style: TextStyle(color: theme.colorScheme.onError),
-                  ),
-                ),
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          final newName = controller.text.trim();
-                          if (newName.isEmpty) return;
-
-                          setDialogState(() => isSaving = true);
-                          try {
-                            await _repository.updateProduceLocalName(
-                              widget.produceId,
-                              dialectName,
-                              newName,
-                            );
-                            if (context.mounted) {
-                              // Update local state for immediate UI feedback
-                              setState(() {
-                                final index = _localDialects.indexWhere(
-                                  (d) =>
-                                      d.dialectName.toLowerCase() ==
-                                      dialectName.toLowerCase(),
-                                );
-                                if (index != -1) {
-                                  _localDialects[index] = ProduceDialect(
-                                    dialectName: dialectName,
-                                    localName: newName,
-                                  );
-                                } else {
-                                  _localDialects.add(
-                                    ProduceDialect(
-                                      dialectName: dialectName,
-                                      localName: newName,
-                                    ),
-                                  );
-                                }
-                              });
-
-                              onSaveSuccess?.call();
-                              Navigator.pop(context);
-                              DuruhaSnackBar.showSuccess(
-                                context,
-                                "Updated $dialectName name to $newName",
-                              );
-                              _refresh();
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              setDialogState(() => isSaving = false);
-                              DuruhaSnackBar.showError(
-                                context,
-                                "Failed to update: $e",
-                              );
-                            }
-                          }
-                        },
-                  child: isSaving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          "Save",
-                          style: TextStyle(color: theme.colorScheme.onPrimary),
-                        ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      title: "Edit $dialectName Name",
+      message: "Enter the local name for this dialect.",
+      icon: Icons.edit_rounded,
+      confirmText: "Save",
+      extraContentBuilder: (dialogContext) => Padding(
+        padding: const EdgeInsets.only(top: 16.0),
+        child: DuruhaTextField(
+          controller: controller,
+          label: 'Local Name',
+          icon: Icons.edit,
+        ),
+      ),
     );
+
+    if (result == true) {
+      final newName = controller.text.trim();
+      if (newName.isEmpty) return;
+      if (!context.mounted) return;
+
+      final payloadDialects = _localDialects.map((d) {
+        if (d.dialectName.toLowerCase() == dialectName.toLowerCase()) {
+          return {'dialect_name': dialectName, 'local_name': newName};
+        }
+        return {'dialect_name': d.dialectName, 'local_name': d.localName};
+      }).toList();
+
+      if (!payloadDialects.any(
+        (d) =>
+            (d['dialect_name'] as String).toLowerCase() ==
+            dialectName.toLowerCase(),
+      )) {
+        payloadDialects.add({
+          'dialect_name': dialectName,
+          'local_name': newName,
+        });
+      }
+
+      try {
+        await _repository.updateProduceDialects(
+          widget.produceId,
+          payloadDialects,
+        );
+
+        if (context.mounted) {
+          setState(() {
+            final index = _localDialects.indexWhere(
+              (d) => d.dialectName.toLowerCase() == dialectName.toLowerCase(),
+            );
+            if (index != -1) {
+              _localDialects[index] = ProduceDialect(
+                dialectName: dialectName,
+                localName: newName,
+              );
+            } else {
+              _localDialects.add(
+                ProduceDialect(dialectName: dialectName, localName: newName),
+              );
+            }
+          });
+
+          onSaveSuccess?.call();
+          DuruhaSnackBar.showSuccess(
+            context,
+            "Updated $dialectName name to $newName",
+          );
+          _refresh();
+        }
+      } catch (e) {
+        if (context.mounted) {
+          DuruhaSnackBar.showError(context, "Failed to update: $e");
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_localDialects.isEmpty && widget.dialects.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
     final theme = Theme.of(context);
     return FutureBuilder<List<String>>(
       key: _refreshKey,
@@ -184,7 +157,7 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
 
         return GestureDetector(
           onTap: () {
-            DuruhaModalBottomSheet.show(
+            DuruhaBottomSheet.show(
               context: context,
               title: "Local Names",
               icon: Icons.language,
@@ -226,7 +199,7 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
                           );
                           return match.localName;
                         } catch (e) {
-                          return "-";
+                          return "";
                         }
                       }
 
@@ -242,8 +215,7 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
                                   child: Text(
                                     "DIALECT",
                                     style: theme.textTheme.labelSmall?.copyWith(
-                                      color:
-                                          theme.colorScheme.onPrimaryContainer,
+                                      color: theme.colorScheme.onSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -253,9 +225,7 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
                                   child: Text(
                                     "LOCAL NAME",
                                     style: theme.textTheme.labelSmall?.copyWith(
-                                      color: theme
-                                          .colorScheme
-                                          .onSecondaryContainer,
+                                      color: theme.colorScheme.onSecondary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -304,10 +274,10 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
                                                 color: isPreferred
                                                     ? theme
                                                           .colorScheme
-                                                          .onPrimaryContainer
+                                                          .onPrimary
                                                     : theme
                                                           .colorScheme
-                                                          .onPrimary,
+                                                          .onSecondary,
                                               ),
                                         ),
                                         if (isPreferred)
@@ -317,7 +287,7 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
                                                 ?.copyWith(
                                                   color: theme
                                                       .colorScheme
-                                                      .onPrimaryContainer,
+                                                      .onPrimary,
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -353,12 +323,11 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
                                                       color: isPreferred
                                                           ? theme
                                                                 .colorScheme
-                                                                .onSecondaryContainer
+                                                                .onTertiary
                                                           : theme
                                                                 .colorScheme
-                                                                .onPrimary,
-                                                      fontStyle:
-                                                          localName == "-"
+                                                                .onSecondary,
+                                                      fontStyle: localName == ""
                                                           ? FontStyle.italic
                                                           : null,
                                                     ),
@@ -389,59 +358,89 @@ class _ProduceDialectWidgetState extends State<ProduceDialectWidget> {
               ),
             );
           },
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              ...sortedDialects.take(3).map((d) {
-                final isPref = prefs.contains(d.dialectName.toLowerCase());
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isPref
-                        ? theme.colorScheme.onPrimaryContainer
-                        : theme.colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: isPref
-                        ? null
-                        : Border.all(
-                            color: theme.colorScheme.onPrimaryContainer
-                                .withValues(alpha: 0.2),
-                          ),
-                  ),
-                  child: Text(
-                    "${d.localName} (${d.dialectName})",
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: isPref
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onPrimary,
-                      fontWeight: FontWeight.bold,
+          child: FutureBuilder<List<String>>(
+            future: fetchAllDialectNames(),
+            builder: (context, snapshot) {
+              final allDialectNames = snapshot.data ?? [];
+
+              // If we have local dialects, prioritize them.
+              // Otherwise, show all with blank names.
+              final List<ProduceDialect> displayDialects;
+              if (_localDialects.isNotEmpty) {
+                displayDialects = sortedDialects;
+              } else if (allDialectNames.isNotEmpty) {
+                displayDialects = allDialectNames
+                    .map(
+                      (name) =>
+                          ProduceDialect(dialectName: name, localName: ""),
+                    )
+                    .toList();
+              } else {
+                return const SizedBox.shrink();
+              }
+
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  ...displayDialects.take(3).map((d) {
+                    final isPref = prefs.contains(d.dialectName.toLowerCase());
+                    final hasLocalName = d.localName.isNotEmpty;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isPref
+                            ? theme.colorScheme.primaryContainer
+                            : theme.colorScheme.tertiaryContainer.withValues(
+                                alpha: 0.1,
+                              ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: isPref
+                            ? null
+                            : Border.all(
+                                color: theme.colorScheme.onPrimaryContainer
+                                    .withValues(alpha: 0.2),
+                              ),
+                      ),
+                      child: Text(
+                        hasLocalName
+                            ? "${d.localName} (${d.dialectName})"
+                            : d.dialectName,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: isPref
+                              ? theme.colorScheme.onPrimaryContainer
+                              : theme.colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.bold,
+                          fontStyle: hasLocalName ? null : FontStyle.italic,
+                        ),
+                      ),
+                    );
+                  }),
+                  if (displayDialects.length > 3)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        "+${displayDialects.length - 3} more",
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                );
-              }),
-              if (sortedDialects.length > 3)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    "+${sortedDialects.length - 3} more",
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-            ],
+                ],
+              );
+            },
           ),
         );
       },

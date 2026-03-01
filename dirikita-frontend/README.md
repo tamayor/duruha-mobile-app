@@ -645,7 +645,7 @@ DuruhaSelectionChipGroup(
 
 ---
 
-#### DuruhaModalBottomSheet
+#### DuruhaBottomSheet
 
 **Purpose**: Action sheet from bottom of screen.
 
@@ -653,7 +653,7 @@ DuruhaSelectionChipGroup(
 
 **Usage**:
 ```dart
-DuruhaModalBottomSheet.show(
+DuruhaBottomSheet.show(
   context: context,
   title: 'More Options',
   child: Column(children: [...]),

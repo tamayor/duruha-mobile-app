@@ -1,9 +1,10 @@
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/sales/data/farmer_produce_repository.dart';
 import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
-import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -23,7 +24,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
 
   bool _isSearchVisible = false;
   bool _showFavoritesOnly = false;
-  bool _isPledgeMode = true; // true = Pledge, false = Offer
+  bool _isPledgeMode = false; // false = Offer (Pledge disabled for now)
   final Set<String> _selectedCropIds = {};
 
   List<FarmerSelectedProduce> _allCrops = [];
@@ -33,16 +34,36 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchCrops();
+    _loadPersistenceSettings();
+  }
+
+  Future<void> _loadPersistenceSettings() async {
+    final showFavs = await SessionService.getFavoritePreference();
+    // Mode preference ignored for now - forcing Offer Mode
+    if (mounted) {
+      setState(() {
+        _showFavoritesOnly = showFavs;
+        _isPledgeMode = false;
+      });
+      _fetchCrops();
+    }
   }
 
   Future<void> _fetchCrops() async {
     try {
-      final crops = await _repository.fetchFarmerSelectedProduce("Bisaya");
-      print(crops);
+      final userId = await SessionService.getUserId() ?? '';
+      // The original call did not have a 'dialect' argument.
+      // The instruction implies removing it, but it was not present.
+      // The 'favoritesOnly' argument is retained as it was in the original code.
+      final result = await _repository.fetchFarmerProduce(
+        userId,
+        favoritesOnly: _showFavoritesOnly,
+        searchQuery: _searchController.text,
+      );
+
       if (mounted) {
         setState(() {
-          _allCrops = crops;
+          _allCrops = result.data;
           _applyFilters();
           _isLoading = false;
         });
@@ -71,11 +92,12 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
     });
   }
 
-  void _toggleFavoriteFilter() {
+  void _toggleFavoriteFilter() async {
     setState(() {
       _showFavoritesOnly = !_showFavoritesOnly;
-      _applyFilters();
     });
+    await SessionService.saveFavoritePreference(_showFavoritesOnly);
+    _fetchCrops();
   }
 
   void _toggleSelection(String cropId) {
@@ -161,7 +183,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
               onChanged: (_) => _applyFilters(),
             )
           : Text(
-              _isPledgeMode ? 'Pledge Crops' : 'Offer Crops',
+              _isPledgeMode ? 'Pledge Produce' : 'Offer Produce',
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w600,
                 letterSpacing: -0.5,
@@ -181,7 +203,9 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
           onPressed: _toggleFavoriteFilter,
           icon: Icon(
             _showFavoritesOnly ? Icons.favorite : Icons.favorite_border,
-            color: _showFavoritesOnly ? Colors.red : null,
+            color: _showFavoritesOnly
+                ? Colors.red
+                : theme.colorScheme.onSecondary,
           ),
           tooltip: "Show Favorites",
         ),
@@ -211,7 +235,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
                     ),
                   )
                 : ListView.separated(
-                    // Add top padding for the floating toggle
+                    // Added top padding back for the floating toggle
                     padding: const EdgeInsets.fromLTRB(20, 80, 20, 100),
                     itemCount: _filteredCrops.length,
                     separatorBuilder: (context, index) =>
@@ -223,7 +247,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
                     },
                   ),
           ),
-          // FLOATING TOGGLE (Top Left)
+          // FLOATING TOGGLE (Top Left) - Disabled for now
           Positioned(top: 20, left: 20, child: _buildModeToggle(context)),
 
           // BOTTOM FLOATING ACTION BAR
@@ -235,191 +259,213 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
   }
 
   Widget _buildModeToggle(BuildContext context) {
-    final theme = Theme.of(context);
-
     return DuruhaToggleButton(
       value: _isPledgeMode,
-      onChanged: (val) {
+      onChanged: (val) async {
+        if (val == true) {
+          DuruhaSnackBar.showInfo(context, "Pledge mode is coming soon!");
+          return;
+        }
         setState(() {
           _isPledgeMode = val;
         });
+        await SessionService.saveModePreference(val);
       },
       labelTrue: "Pledge Mode",
       labelFalse: "Offer Mode",
       iconTrue: Icons.handshake,
       iconFalse: Icons.local_offer,
-      colorTrue: theme.colorScheme.secondaryContainer,
-      colorFalse: theme.colorScheme.primaryContainer,
-      descriptionTrue: "Create a contract for future harvest.",
-      descriptionFalse: "Sell your current stock immediately.",
     );
   }
 
   Widget _buildBottomFab(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     final count = _selectedCropIds.length;
     final icon = _isPledgeMode ? Icons.handshake : Icons.local_offer;
-    final color = _isPledgeMode
-        ? theme.colorScheme.secondaryContainer
-        : theme.colorScheme.primaryContainer;
-    final onColor = _isPledgeMode
-        ? theme.colorScheme.onSecondaryContainer
-        : theme.colorScheme.onPrimaryContainer;
+
+    final backgroundColor = _isPledgeMode ? scheme.primary : scheme.tertiary;
+
+    final foregroundColor = _isPledgeMode
+        ? scheme.onPrimary
+        : scheme.onTertiary;
+
+    final fab = FloatingActionButton(
+      onPressed: _onActionPressed,
+      backgroundColor: backgroundColor,
+      foregroundColor: foregroundColor,
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Icon(icon, size: 24),
+    );
+
+    if (count == 0) return fab;
 
     return Badge(
       label: Text(
         '$count',
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          color: scheme.onError,
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       largeSize: 24,
-      backgroundColor: theme.colorScheme.error,
-      offset: const Offset(-5, -5), // Adjust badge position if needed
-      child: FloatingActionButton(
-        onPressed: _onActionPressed,
-        backgroundColor: color,
-        foregroundColor: onColor,
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Icon(icon, size: 24),
-      ),
+      backgroundColor: scheme.error,
+      offset: const Offset(-5, -5),
+      child: fab,
     );
   }
 
   Widget _buildCropCard(BuildContext context, crop, bool isSelected) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
         color: isSelected
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+            ? scheme.primaryContainer.withValues(alpha: 0.25)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
-        border: isSelected
-            ? Border.all(color: theme.colorScheme.onSecondary, width: 1)
-            : null,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            if (!isSelected)
-              BoxShadow(
-                color: theme.shadowColor.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-          ],
+        border: Border.all(
+          color: isSelected ? scheme.primary : scheme.outlineVariant,
+          width: isSelected ? 1.5 : 1,
         ),
-        child: Material(
-          color: theme.colorScheme.surface,
-          elevation: 0,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: isSelected
-                  ? Colors.transparent
-                  : theme.colorScheme.outline.withOpacity(0.1),
-            ),
-          ),
-          child: InkWell(
-            onTap: () {
-              Navigator.pushNamed(context, '/produce/${crop.id}');
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  // Image / Icon
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                      image: crop.imageUrl != null
-                          ? DecorationImage(
-                              image: NetworkImage(crop.imageUrl!),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: crop.imageUrl == null
-                        ? const Center(
-                            child: Text('🌱', style: TextStyle(fontSize: 24)),
+      ),
+      child: Material(
+        color: scheme.surface,
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.pushNamed(context, '/produce/${crop.id}');
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                // Image / Icon
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: scheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                    image: crop.imageUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(crop.imageUrl!),
+                            fit: BoxFit.cover,
                           )
                         : null,
                   ),
-                  const SizedBox(width: 16),
-
-                  // Details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          crop.nameDialect,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          crop.nameEnglish,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontStyle: FontStyle.italic,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
+                  child: crop.imageUrl == null
+                      ? Center(
+                          child: Text(
+                            '🌱',
+                            style: TextStyle(
+                              fontSize: 24,
+                              color: scheme.onTertiaryContainer,
                             ),
                           ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 16),
+
+                // Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        crop.nameDialect,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: scheme.onSurface,
                         ),
-                        if (_isPledgeMode) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Icon(
-                                Icons.trending_up,
-                                size: 14,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "${DuruhaFormatter.formatNumber(crop.total30DaysDemand)} kg demand",
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.normal,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            crop.nameEnglish,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (crop.varietyCount > 0) ...[
+                            Text(
+                              " • ",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant.withValues(
+                                  alpha: 0.5,
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
+                            ),
+                            Text(
+                              crop.varietyCount.toString(),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSecondary,
+                              ),
+                            ),
+                            Text(
+                              " varieties",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant.withValues(
+                                  alpha: 0.5,
+                                ),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
                         ],
+                      ),
+                      if (_isPledgeMode) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Icon(
+                              Icons.trending_up,
+                              size: 14,
+                              color: scheme.tertiary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "${DuruhaFormatter.formatNumber(crop.total30DaysDemand)} kg demand",
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
-                    ),
+                    ],
                   ),
+                ),
 
-                  // Add/Remove Button
-                  IconButton.filledTonal(
-                    onPressed: () => _toggleSelection(crop.id),
-                    icon: Icon(
-                      isSelected ? Icons.check : Icons.add,
-                      color: isSelected
-                          ? theme.colorScheme.onSecondary
-                          : theme.colorScheme.onPrimaryContainer,
-                    ),
-                    style: IconButton.styleFrom(
-                      backgroundColor: isSelected
-                          ? theme.colorScheme.secondary
-                          : theme.colorScheme.surfaceContainerHighest,
-                    ),
-                    tooltip: isSelected ? "Remove from List" : "Add to List",
+                // Add / Remove Button
+                IconButton.filledTonal(
+                  onPressed: () => _toggleSelection(crop.id),
+                  icon: Icon(isSelected ? Icons.check : Icons.add),
+                  style: IconButton.styleFrom(
+                    backgroundColor: isSelected
+                        ? scheme.primary
+                        : scheme.secondaryContainer,
+                    foregroundColor: isSelected
+                        ? scheme.onPrimary
+                        : scheme.onSecondaryContainer,
                   ),
-                ],
-              ),
+                  tooltip: isSelected ? "Remove from List" : "Add to List",
+                ),
+              ],
             ),
           ),
         ),

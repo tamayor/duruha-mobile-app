@@ -6,6 +6,11 @@ class DuruhaButton extends StatefulWidget {
   final bool isLoading;
   final bool isOutline;
   final Color? backgroundColor;
+  final Icon? icon;
+  final bool isFullWidth;
+  final double? width;
+  final double height;
+  final bool isSmall;
 
   const DuruhaButton({
     super.key,
@@ -14,135 +19,97 @@ class DuruhaButton extends StatefulWidget {
     this.isLoading = false,
     this.isOutline = false,
     this.backgroundColor,
+    this.icon,
+    this.isFullWidth = true,
+    this.width,
+    this.height = 52,
+    this.isSmall = false,
   });
 
   @override
   State<DuruhaButton> createState() => _DuruhaButtonState();
 }
 
-class _DuruhaButtonState extends State<DuruhaButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _widthAnimation;
-  late Animation<double> _opacityAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-
-    _widthAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-    _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-      ),
-    );
-
-    if (widget.isLoading) {
-      _controller.forward();
-    }
-  }
-
-  @override
-  void didUpdateWidget(DuruhaButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isLoading != oldWidget.isLoading) {
-      if (widget.isLoading) {
-        _controller.forward();
-      } else {
-        _controller.reverse();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
+class _DuruhaButtonState extends State<DuruhaButton> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final buttonWidth = widget.isLoading
-            ? 52.0 +
-                  (_widthAnimation.value *
-                      (MediaQuery.of(context).size.width - 84))
-            : double.infinity;
+    final effectiveHeight = widget.isSmall ? 36.0 : widget.height;
+    final buttonWidth = widget.isLoading
+        ? effectiveHeight
+        : (widget.width ??
+              (widget.isFullWidth ? MediaQuery.of(context).size.width : null));
 
-        return Center(
-          child: AbsorbPointer(
-            absorbing: widget.isLoading,
-            child: SizedBox(
-              width: buttonWidth,
-              height: 52,
-              child: widget.isOutline
-                  ? OutlinedButton(
-                      onPressed: widget.onPressed,
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: colorScheme.outline),
-                        foregroundColor: colorScheme.onSecondary,
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: _buildChild(theme),
-                    )
-                  : FilledButton(
-                      onPressed: widget.onPressed,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colorScheme.primaryContainer,
-                        foregroundColor: colorScheme.onPrimaryContainer,
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        elevation: 2,
-                      ),
-                      child: _buildChild(theme),
-                    ),
-            ),
-          ),
-        );
-      },
+    return Center(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: buttonWidth,
+        height: effectiveHeight,
+        curve: Curves.easeInOut,
+        child: widget.isOutline
+            ? OutlinedButton(
+                onPressed: widget.isLoading ? null : widget.onPressed,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: colorScheme.outline),
+                  foregroundColor: colorScheme.onSecondary,
+                  shape: const StadiumBorder(),
+                  padding: EdgeInsets.symmetric(
+                    vertical: widget.isSmall ? 4 : 12,
+                    horizontal: widget.isSmall ? 12 : 24,
+                  ),
+                ),
+                child: _buildChild(theme),
+              )
+            : FilledButton(
+                onPressed: widget.isLoading ? null : widget.onPressed,
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      widget.backgroundColor ?? colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  shape: const StadiumBorder(),
+                  padding: EdgeInsets.symmetric(
+                    vertical: widget.isSmall ? 4 : 12,
+                    horizontal: widget.isSmall ? 12 : 24,
+                  ),
+                  elevation: 2,
+                ),
+                child: _buildChild(theme),
+              ),
+      ),
     );
   }
 
   Widget _buildChild(ThemeData theme) {
     if (widget.isLoading) {
       return SizedBox(
-        height: 20,
-        width: 20,
+        height: 24,
+        width: 24,
         child: CircularProgressIndicator(
           color: widget.isOutline
               ? theme.colorScheme.primary
-              : theme.colorScheme.onSecondary,
+              : theme.colorScheme.onPrimary,
           strokeWidth: 2.5,
         ),
       );
     }
-    return FadeTransition(
-      opacity: Tween<double>(
-        begin: 1.0,
-        end: 1.0 - _opacityAnimation.value,
-      ).animate(_controller),
-      child: Text(
-        widget.text,
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
-          letterSpacing: 0.5,
-        ),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            widget.text,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: widget.isSmall ? 12 : 16,
+              letterSpacing: 0.5,
+            ),
+          ),
+          if (widget.icon != null) ...[const SizedBox(width: 8), widget.icon!],
+        ],
       ),
     );
   }

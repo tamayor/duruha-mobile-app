@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
+import 'package:duruha/supabase_config.dart';
 
 class SessionService {
   static const String _userKey = 'current_user_profile';
@@ -10,20 +11,7 @@ class SessionService {
   // Save user profile to local storage
   static Future<void> saveUser(UserProfile user) async {
     final prefs = await SharedPreferences.getInstance();
-    // Assuming we want to store the basic info.
-    // Usually, we'd have a toJson() method in UserProfile.
-    final userData = {
-      'id': user.id,
-      'name': user.name,
-      'phone': user.phone,
-      'role': user.role.name,
-      'barangay': user.barangay,
-      'city': user.city,
-      'landmark': user.landmark,
-      'joinedAt': user.joinedAt,
-      'dialect': user.dialect,
-    };
-    await prefs.setString(_userKey, jsonEncode(userData));
+    await prefs.setString(_userKey, jsonEncode(user.toJson()));
     await updateLastActive();
   }
 
@@ -36,49 +24,176 @@ class SessionService {
   // Check if session has expired (7 days inactivity)
   // Returns true if session was cleared
   static Future<bool> clearIfExpired() async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastActiveStr = prefs.getString(_lastActiveKey);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastActiveStr = prefs.getString(_lastActiveKey);
 
-    if (lastActiveStr != null) {
-      final lastActive = DateTime.parse(lastActiveStr);
-      final difference = DateTime.now().difference(lastActive);
+      if (lastActiveStr != null) {
+        final lastActive = DateTime.parse(lastActiveStr);
+        final difference = DateTime.now().difference(lastActive);
 
-      if (difference.inDays >= 7) {
-        await clearSession();
-        return true;
+        if (difference.inDays >= 7) {
+          await clearSession();
+          return true;
+        } else {
+          // Heartbeat: Update last active if not expired
+          await updateLastActive();
+        }
+      } else if (await isLoggedIn()) {
+        // If logged in but no timestamp, set it now to start tracking
+        await updateLastActive();
       }
-    } else if (await isLoggedIn()) {
-      // If logged in but no timestamp, set it now to start tracking
+    } catch (e) {
+      debugPrint("❌ [SESSION] Error checking expiry: $e");
+      // If timestamp is corrupted, better to keep the session and reset the timestamp
       await updateLastActive();
     }
     return false;
   }
 
-  // Retrieve user data from local storage as a UserProfile (partial)
+  // Retrieve user data from local storage as a UserProfile
   static Future<UserProfile?> getSavedUser() async {
     final data = await getUserData();
-    if (data == null) return null;
+    if (data == null) {
+      // If local data is missing but session exists, try to re-sync
+      final session = supabase.auth.currentSession;
+      if (session != null) {
+        debugPrint(
+          "🔄 [SESSION] Local profile missing but session exists. Syncing...",
+        );
+        return await syncProfile(session.user.id);
+      }
+      return null;
+    }
+    return UserProfile.fromJson(data);
+  }
 
-    return UserProfile(
-      id: data['id'] ?? '',
-      name: data['name'] ?? '',
-      phone: data['phone'] ?? '',
-      role: data['role'] == 'farmer' ? UserRole.farmer : UserRole.consumer,
-      barangay: data['barangay'] ?? '',
-      city: data['city'] ?? '',
-      province: data['province'] ?? '',
-      postalCode: data['postalCode'] ?? '',
-      landmark: data['landmark'] ?? '',
-      joinedAt: data['joinedAt'] ?? '',
-      dialect: (data['dialect'] is List)
-          ? List<String>.from(data['dialect'])
-          : [data['dialect']?.toString() ?? 'Cebuano'],
-    );
+  static Future<UserProfile?> syncProfile(String userId) async {
+    try {
+      final authUser = supabase.auth.currentUser;
+      if (authUser == null) return null;
+
+      // 1. Try fetching by ID first (preferred)
+      var response = await supabase
+          .from('users')
+          .select('*, user_farmers(farmer_id), user_consumers(consumer_id)')
+          .eq('id', userId)
+          .maybeSingle();
+
+      // 2. Fallback: Try fetching by email and LINK if found
+      if (response == null && authUser.email != null) {
+        debugPrint(
+          "🔄 [SESSION] Profile not found by ID. Trying email: ${authUser.email}",
+        );
+        response = await supabase
+            .from('users')
+            .select('*, user_farmers(farmer_id), user_consumers(consumer_id)')
+            .eq('email', authUser.email!)
+            .maybeSingle();
+
+        if (response != null) {
+          debugPrint(
+            "🔗 [SESSION] Found profile by email. Linking ID ${authUser.id} to ${authUser.email}",
+          );
+          await supabase
+              .from('users')
+              .update({'id': authUser.id})
+              .eq('email', authUser.email!);
+
+          // Refresh response with updated ID
+          response['id'] = authUser.id;
+        }
+      }
+
+      if (response == null) {
+        debugPrint("⚠️ [SESSION] No profile found in DB for ID or email.");
+        return null;
+      }
+
+      final userData = Map<String, dynamic>.from(response);
+
+      // Flatten joined IDs
+      if (response['user_farmers'] != null &&
+          (response['user_farmers'] as List).isNotEmpty) {
+        userData['farmer_id'] = response['user_farmers'][0]['farmer_id'];
+      }
+      if (response['user_consumers'] != null &&
+          (response['user_consumers'] as List).isNotEmpty) {
+        userData['consumer_id'] = response['user_consumers'][0]['consumer_id'];
+      }
+
+      final profile = UserProfile.fromJson(userData);
+      await saveUser(profile);
+      return profile;
+    } catch (e) {
+      debugPrint("❌ [SESSION] Error syncing profile: $e");
+      return null;
+    }
   }
 
   static Future<String?> getUserId() async {
     final data = await getUserData();
     return data?['id'];
+  }
+
+  static Future<String?> getRoleId() async {
+    final data = await getUserData();
+    if (data == null) return null;
+    final role = data['role']?.toString().toUpperCase();
+    final roleId = role == 'FARMER' ? data['farmer_id'] : data['consumer_id'];
+
+    if (roleId != null) return roleId as String;
+
+    // If missing, try to sync from DB
+    return await syncRoleId();
+  }
+
+  /// Fetches the farmer_id or consumer_id from Supabase based on user_id
+  /// and updates the local session.
+  static Future<String?> syncRoleId() async {
+    try {
+      final data = await getUserData();
+      if (data == null) return null;
+
+      final userId = data['id'];
+      final role = data['role']?.toString().toUpperCase();
+      if (userId == null || role == null) return null;
+
+      String? roleId;
+      if (role == 'FARMER') {
+        final res = await supabase
+            .from('user_farmers')
+            .select('farmer_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+        roleId = res?['farmer_id'];
+      } else if (role == 'CONSUMER') {
+        final res = await supabase
+            .from('user_consumers')
+            .select('consumer_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+        roleId = res?['consumer_id'];
+      }
+
+      if (roleId != null) {
+        debugPrint("🔄 [SESSION] Synced roleId: $roleId for user: $userId");
+        final updatedData = Map<String, dynamic>.from(data);
+        if (role == 'farmer') {
+          updatedData['farmer_id'] = roleId;
+        } else {
+          updatedData['consumer_id'] = roleId;
+        }
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_userKey, jsonEncode(updatedData));
+      }
+
+      return roleId;
+    } catch (e) {
+      debugPrint("❌ [SESSION] Error syncing roleId: $e");
+      return null;
+    }
   }
 
   static Future<String?> getUserName() async {
@@ -105,16 +220,15 @@ class SessionService {
     return null;
   }
 
-  // Clear session (logout)
+  // Clear session (local profile)
   static Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
   }
 
-  // Check if user is logged in
+  // Check if user is logged in via Supabase Auth
   static Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.containsKey(_userKey);
+    return supabase.auth.currentSession != null;
   }
 
   static const String _isFavoriteKey = 'is_favorites_only';
@@ -129,6 +243,20 @@ class SessionService {
   static Future<bool> getFavoritePreference() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_isFavoriteKey) ?? false;
+  }
+
+  static const String _salesModeKey = 'is_pledge_mode';
+
+  // Save sales mode preference (Pledge vs Offer)
+  static Future<void> saveModePreference(bool isPledge) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_salesModeKey, isPledge);
+  }
+
+  // Get sales mode preference
+  static Future<bool> getModePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_salesModeKey) ?? true; // Default to true (Pledge)
   }
 
   static const String _themeKey = 'app_theme_mode';

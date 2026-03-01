@@ -53,6 +53,8 @@ class HarvestPledge {
   final Map<String, double>? varietyQuantities;
   final List<HarvestEntry>? perDatePledges;
   final List<DateTime>? completedDates;
+  final Map<String, DateTime?>? varietyAvailableDates;
+  final Map<String, DateTime?>? varietyDisposalDates;
 
   HarvestPledge({
     this.id,
@@ -75,9 +77,11 @@ class HarvestPledge {
     this.varietyQuantities,
     this.perDatePledges,
     this.completedDates,
+    this.varietyAvailableDates,
+    this.varietyDisposalDates,
   });
 
-  /// Compatibility getter to return the old structure: Map<DateTime, Map<String, double>>
+  /// Compatibility getter to return the old structure: `Map<DateTime, Map<String, double>>`
   Map<DateTime, Map<String, double>> get perDatePledgesMap {
     if (perDatePledges == null) return {};
     final map = <DateTime, Map<String, double>>{};
@@ -115,6 +119,12 @@ class HarvestPledge {
     'image_url': imageUrl,
     'created_at':
         createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+    'variety_available_dates': varietyAvailableDates?.map(
+      (key, value) => MapEntry(key, value?.toIso8601String()),
+    ),
+    'variety_disposal_dates': varietyDisposalDates?.map(
+      (key, value) => MapEntry(key, value?.toIso8601String()),
+    ),
   };
 }
 
@@ -128,56 +138,4 @@ class TransactionRequest {
     'mode': mode,
     'pledges': pledges.map((p) => p.toJson()).toList(),
   };
-}
-
-class HarvestOffer {
-  final String id;
-  final String cropName;
-  final List<String> variants;
-  final Map<String, double> varietyQuantities;
-  final DateTime startDate;
-  final DateTime disposalDate;
-  final double totalHarvestQty;
-  final double reservedQty;
-  final String imageUrl;
-  final DateTime createdAt;
-
-  HarvestOffer({
-    required this.id,
-    required this.cropName,
-    required this.variants,
-    required this.varietyQuantities,
-    required this.startDate,
-    required this.disposalDate,
-    required this.totalHarvestQty,
-    required this.reservedQty,
-    this.imageUrl = 'assets/images/placeholder.png',
-    required this.createdAt,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'crop_name': cropName,
-    'selected_variants': variants,
-    'variety_quantities': varietyQuantities,
-    'start_date': startDate.toIso8601String(),
-    'disposal_date': disposalDate.toIso8601String(),
-    'total_harvest_qty': totalHarvestQty,
-    'reserved_qty': reservedQty,
-    'image_url': imageUrl,
-    'created_at': createdAt.toIso8601String(),
-  };
-
-  factory HarvestOffer.fromJson(Map<String, dynamic> json) => HarvestOffer(
-    id: json['id'],
-    cropName: json['crop_name'],
-    variants: List<String>.from(json['selected_variants']),
-    varietyQuantities: Map<String, double>.from(json['variety_quantities']),
-    startDate: DateTime.parse(json['start_date']),
-    disposalDate: DateTime.parse(json['disposal_date']),
-    totalHarvestQty: (json['total_harvest_qty'] as num).toDouble(),
-    reservedQty: (json['reserved_qty'] as num).toDouble(),
-    imageUrl: json['image_url'] ?? 'assets/images/placeholder.png',
-    createdAt: DateTime.parse(json['created_at']),
-  );
 }

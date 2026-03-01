@@ -6,6 +6,7 @@ class FarmerSelectedProduce {
   final String? pledgeCountLabel;
   final int? rank;
   final double total30DaysDemand;
+  final int varietyCount;
 
   FarmerSelectedProduce({
     required this.id,
@@ -15,6 +16,7 @@ class FarmerSelectedProduce {
     this.pledgeCountLabel,
     this.rank,
     this.total30DaysDemand = 0.0,
+    this.varietyCount = 0,
   });
 
   factory FarmerSelectedProduce.fromJson(Map<String, dynamic> json) {
@@ -28,6 +30,7 @@ class FarmerSelectedProduce {
           ? json['rank'] as int?
           : int.tryParse(json['rank']?.toString() ?? ''),
       total30DaysDemand: (json['total_30_days_demand'] ?? 0.0).toDouble(),
+      varietyCount: json['variety_count'] as int? ?? 0,
     );
   }
 }

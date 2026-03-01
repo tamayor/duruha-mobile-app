@@ -1,4 +1,5 @@
 import 'package:duruha/core/helpers/duruha_color_helper.dart';
+import 'package:duruha/shared/produce/presentation/produce_varieties_screen.dart';
 import 'package:duruha/shared/produce/presentation/widgets/produce_dialect_widget.dart';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,8 @@ import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/presentation/widgets/variety_widgets.dart';
+import 'package:duruha/shared/produce/domain/produce_variety.dart';
+import 'package:duruha/core/services/session_service.dart';
 
 class ProduceDetailedScreen extends StatefulWidget {
   final String produceId;
@@ -18,9 +21,13 @@ class ProduceDetailedScreen extends StatefulWidget {
 
 class _ProduceDetailedScreenState extends State<ProduceDetailedScreen> {
   final _repository = ProduceRepository();
+  final _varietiesSectionKey = GlobalKey<VarietiesSectionState>();
   Produce? _details;
+  List<ProduceVariety> _localVarieties = [];
   bool _isLoading = true;
+  bool _isFavorite = false;
   String? _errorMessage;
+  String? _userDialect;
 
   @override
   void initState() {
@@ -31,10 +38,26 @@ class _ProduceDetailedScreenState extends State<ProduceDetailedScreen> {
   Future<void> _loadDetails() async {
     try {
       final details = await _repository.fetchProduceById(widget.produceId);
+      final userId = await SessionService.getUserId();
+      final user = await SessionService.getSavedUser();
+
+      if (userId != null && user != null) {
+        final favs = await _repository.fetchFavoriteProduceIds(
+          userId,
+          user.role?.name.toUpperCase(),
+        );
+        _isFavorite = favs.contains(widget.produceId);
+        if (user.dialect.isNotEmpty) {
+          _userDialect = user.dialect.first;
+        }
+      }
 
       if (!mounted) return;
+      if (details == null) throw Exception("Produce not found");
+      final produce = details;
       setState(() {
-        _details = details;
+        _details = produce;
+        _localVarieties = List.from(produce.varieties);
         _isLoading = false;
       });
     } catch (e) {
@@ -47,8 +70,51 @@ class _ProduceDetailedScreenState extends State<ProduceDetailedScreen> {
     }
   }
 
+  Future<void> _toggleFavorite() async {
+    final userId = await SessionService.getUserId();
+    final user = await SessionService.getSavedUser();
+
+    if (!mounted) return;
+
+    if (userId == null || user == null) {
+      DuruhaSnackBar.showError(context, "Please login to favorite items");
+      return;
+    }
+
+    // Optimistic UI
+    setState(() {
+      _isFavorite = !_isFavorite;
+    });
+
+    try {
+      await _repository.toggleFavorite(
+        userId,
+        user.role?.name.toUpperCase(),
+        widget.produceId,
+      );
+      if (!mounted) return;
+      DuruhaSnackBar.showSuccess(
+        context,
+        _isFavorite ? "Added to favorites" : "Removed from favorites",
+      );
+    } catch (e) {
+      // Revert on error
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+      if (!mounted) return;
+      DuruhaSnackBar.showError(context, "Failed to update favorites");
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator.adaptive()),
@@ -64,26 +130,78 @@ class _ProduceDetailedScreenState extends State<ProduceDetailedScreen> {
 
     final produce = _details!;
 
+    final List<Widget> slivers = [];
+
+    // Only use slivers.addAll for varieties as requested
+    slivers.addAll(
+      VarietiesSection.buildSlivers(
+        context: context,
+        produce: produce,
+        varieties: _localVarieties,
+        onEdit: (v) =>
+            _varietiesSectionKey.currentState?.showEditDialog(context, v),
+      ),
+    );
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
+          // 1. Unified App Bar (Search logic removed)
           DuruhaSliverAppBar(
-            title: produce.englishName,
+            title: produce.getLocalName(_userDialect ?? ''),
             imageUrl: produce.imageHeroUrl,
+            expandedHeight: 200,
+            actions: [
+              IconButton(
+                icon: Icon(
+                  _isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: _isFavorite
+                      ? Colors.red
+                      : theme.colorScheme.onSecondary,
+                ),
+                onPressed: _toggleFavorite,
+              ),
+            ],
           ),
+
+          // 2. Header and Logistics Sections
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _HeaderSection(produce: produce),
-                const SizedBox(height: 32),
-                VarietiesSection(produce: produce),
-                const SizedBox(height: 32),
-                _LogisticsSection(produce: produce),
-                const SizedBox(height: 48),
-              ]),
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HeaderSection(produce: produce),
+                  const SizedBox(height: 32),
+                  _LogisticsSection(produce: produce),
+                ],
+              ),
             ),
           ),
+
+          // 4. "View All" Button at the bottom of the list
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsetsGeometry.symmetric(horizontal: 16),
+              child: DuruhaButton(
+                text: "View All Varieties",
+                icon: Icon(Icons.arrow_forward),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProduceVarietiesScreen(
+                        title: produce.englishName,
+                        produce: produce,
+                        varieties: _localVarieties,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
     );
@@ -129,14 +247,6 @@ class _HeaderSection extends StatelessWidget {
             TagChip(tag: produce.category, icon: Icons.category_outlined),
             const SizedBox(width: 8),
             TagChip(tag: produce.baseUnit, icon: Icons.scale_outlined),
-            const Spacer(),
-            Text(
-              DuruhaFormatter.formatCurrency(produce.basePrice),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onPrimary,
-              ),
-            ),
           ],
         ),
       ],
@@ -150,42 +260,38 @@ class _LogisticsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DuruhaSectionContainer(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 100, // Fixed height for Bento items to align
-              child: _buildBentoRow([
-                _FeatureTile(
-                  label: "Storage",
-                  value: produce.storageGroup,
-                  icon: Icons.warehouse_rounded,
-                  color: DuruhaColorHelper.getColor(
-                    context,
-                    produce.storageGroup,
-                  ),
-                ),
-                _FeatureTile(
-                  label: "Respiration",
-                  value: produce.respirationRate,
-                  icon: Icons.air_rounded,
-                  color: DuruhaColorHelper.getColor(
-                    context,
-                    produce.respirationRate,
-                  ),
-                ),
-              ]),
+        SizedBox(
+          height: 100, // Fixed height for Bento items to align
+          child: _buildBentoRow([
+            _FeatureTile(
+              label: "Storage",
+              value: produce.storageGroup ?? "",
+              icon: Icons.warehouse_rounded,
+              color: DuruhaColorHelper.getColor(
+                context,
+                produce.storageGroup ?? "",
+              ),
             ),
-            const SizedBox(height: 12),
-            _buildRiskPanel(),
-            const SizedBox(height: 24),
-            buildCrushMetric(produce.crushWeightTolerance, context),
-            const SizedBox(height: 32),
-            _buildStatusFooter(context),
-          ],
+            _FeatureTile(
+              label: "Respiration",
+              value: produce.respirationRate ?? "",
+              icon: Icons.air_rounded,
+              color: DuruhaColorHelper.getColor(
+                context,
+                produce.respirationRate ?? "",
+              ),
+            ),
+          ]),
         ),
+        const SizedBox(height: 12),
+        _buildRiskPanel(),
+        const SizedBox(height: 24),
+        buildCrushMetric(produce.crushWeightTolerance ?? 0, context),
+        const SizedBox(height: 32),
+        _buildStatusFooter(context),
       ],
     );
   }
@@ -242,7 +348,7 @@ class _LogisticsSection extends StatelessWidget {
         children: [
           _RiskRow(
             label: "Ethylene Production",
-            isHigh: produce.isEthyleneProducer,
+            isHigh: produce.isEthyleneProducer ?? false,
             icon: Icons.warning_amber_rounded,
           ),
           const SizedBox(height: 16),
@@ -250,7 +356,7 @@ class _LogisticsSection extends StatelessWidget {
           const SizedBox(height: 16),
           _RiskRow(
             label: "Ethylene Sensitivity",
-            isHigh: produce.isEthyleneSensitive,
+            isHigh: produce.isEthyleneSensitive ?? false,
             icon: Icons.sensors_rounded,
           ),
         ],
@@ -483,15 +589,20 @@ class TagChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.4),
+        color: theme.colorScheme.tertiaryContainer,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: theme.colorScheme.onSecondaryContainer),
+          Icon(icon, size: 12, color: theme.colorScheme.onTertiaryContainer),
           const SizedBox(width: 4),
-          Text(tag, style: theme.textTheme.labelSmall),
+          Text(
+            tag,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onTertiaryContainer,
+            ),
+          ),
         ],
       ),
     );

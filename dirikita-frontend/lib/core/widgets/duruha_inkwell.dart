@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 
+enum InkwellVariation {
+  modern, // Android 12+ Glimmer
+  classic, // Standard Material Ripple
+  subtle, // No splash, just a gentle highlight
+  glass, // High-contrast for dark/gradient backgrounds
+  brand, // Uses your primary brand color strongly
+}
+
 class DuruhaInkwell extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -9,6 +17,7 @@ class DuruhaInkwell extends StatelessWidget {
   final Border? border;
   final List<BoxShadow>? shadow;
   final EdgeInsetsGeometry? padding;
+  final InkwellVariation variation; // <--- New Parameter
 
   const DuruhaInkwell({
     super.key,
@@ -20,18 +29,25 @@ class DuruhaInkwell extends StatelessWidget {
     this.border,
     this.shadow,
     this.padding,
+    this.variation = InkwellVariation.modern, // Default
   });
 
   @override
   Widget build(BuildContext context) {
-    // 1. We use Material to provide the 'ink' surface
+    final theme = Theme.of(context);
+
+    // 1. Get variation settings
+    final settings = _getVariationSettings(theme);
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: shadow,
       ),
       child: Material(
-        color: Colors.transparent, // Let the 'Ink' decoration show through
+        color: Colors.transparent,
+        clipBehavior: Clip.antiAlias, // Ensures splash follows border radius
+        borderRadius: BorderRadius.circular(borderRadius),
         child: Ink(
           decoration: BoxDecoration(
             color: backgroundColor ?? Colors.transparent,
@@ -41,20 +57,63 @@ class DuruhaInkwell extends StatelessWidget {
           ),
           child: InkWell(
             onTap: onTap,
-            // 2. This ensures the splash stays inside the rounded corners
             borderRadius: BorderRadius.circular(borderRadius),
-            // 3. Customizing the 'feel' of the interaction
-            splashColor: Theme.of(
-              context,
-            ).colorScheme.secondary.withValues(alpha: 0.12),
-            highlightColor: Theme.of(
-              context,
-            ).colorScheme.secondary.withValues(alpha: 0.05),
-            splashFactory: InkSparkle.splashFactory, // Modern 'glimmer' effect
+            // Apply variation settings
+            splashFactory: settings.factory,
+            splashColor: settings.splashColor,
+            highlightColor: settings.highlightColor,
             child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
           ),
         ),
       ),
     );
   }
+
+  // 2. Logic to define the 5 variations
+  _InkwellStyle _getVariationSettings(ThemeData theme) {
+    switch (variation) {
+      case InkwellVariation.modern:
+        return _InkwellStyle(
+          factory: InkSparkle.splashFactory,
+          splashColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+          highlightColor: Colors.transparent,
+        );
+      case InkwellVariation.classic:
+        return _InkwellStyle(
+          factory: InkRipple.splashFactory,
+          splashColor: theme.colorScheme.onSurface.withValues(alpha: 0.1),
+          highlightColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+        );
+      case InkwellVariation.subtle:
+        return _InkwellStyle(
+          factory: NoSplash.splashFactory,
+          splashColor: Colors.transparent,
+          highlightColor: theme.colorScheme.onSurface.withValues(alpha: 0.04),
+        );
+      case InkwellVariation.glass:
+        return _InkwellStyle(
+          factory: InkSparkle.splashFactory,
+          splashColor: Colors.white.withValues(alpha: 0.25),
+          highlightColor: Colors.white.withValues(alpha: 0.1),
+        );
+      case InkwellVariation.brand:
+        return _InkwellStyle(
+          factory: InkRipple.splashFactory,
+          splashColor: theme.colorScheme.primary.withValues(alpha: 0.2),
+          highlightColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+        );
+    }
+  }
+}
+
+// Simple helper class to hold the styles
+class _InkwellStyle {
+  final InteractiveInkFeatureFactory factory;
+  final Color splashColor;
+  final Color highlightColor;
+  _InkwellStyle({
+    required this.factory,
+    required this.splashColor,
+    required this.highlightColor,
+  });
 }

@@ -10,7 +10,9 @@ class DuruhaInput extends StatelessWidget {
   final TextInputType? keyboardType;
   final String? hintText;
   final String? errorText;
+  final String? helperText;
   final ValueChanged<String>? onChanged;
+  final String? suffixText;
 
   const DuruhaInput({
     super.key,
@@ -21,7 +23,9 @@ class DuruhaInput extends StatelessWidget {
     this.keyboardType,
     this.hintText,
     this.errorText,
+    this.helperText,
     this.onChanged,
+    this.suffixText,
   });
 
   bool get _isNumericInput =>
@@ -48,6 +52,8 @@ class DuruhaInput extends StatelessWidget {
           icon: icon,
           hintText: hintText,
           errorText: errorText,
+          helperText: helperText,
+          suffix: suffixText,
         ),
       ),
     );

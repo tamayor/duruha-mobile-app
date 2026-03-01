@@ -10,6 +10,7 @@ class CropRecommendation {
   final double currentPledgeKg; // Current amount pledged by others
   final double targetPledgeKg; // Total amount the market needs
   final String imageUrl;
+
   final double priceMin;
   final double priceMax;
 

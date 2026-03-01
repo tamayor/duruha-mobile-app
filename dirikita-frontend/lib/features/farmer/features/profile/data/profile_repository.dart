@@ -1,75 +1,71 @@
 import 'dart:io';
-
+import 'package:duruha/supabase_config.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
-import 'package:duruha/shared/produce/domain/produce_model.dart';
 
+/// Calls the unified `manage_profile` RPC on Supabase.
+/// Handles both GET and UPDATE operations for farmers.
 class FarmerProfileRepositoryImpl implements FarmerProfileRepository {
   @override
-  Future<FarmerProfile> getFarmerProfile(String farmerId) async {
-    // Simulate API delay
-    await Future.delayed(const Duration(milliseconds: 500));
-    // Return mock data for now
-    // In a real app, we would use farmerId to fetch specific data
+  Future<FarmerProfile> getFarmerProfile(String userId) async {
+    try {
+      final response = await supabase.rpc(
+        'manage_profile',
+        params: {'p_user_id': userId, 'p_mode': 'get'},
+      );
 
-    return FarmerProfile(
-      id: 'farmer-001',
-      name: 'Elly Farmer',
-      joinedAt: DateTime.now().toString(),
-      phone: '09171234567',
-      barangay: 'Barangay 1',
-      city: 'Malaybalay City',
-      province: 'Davao del Sur',
-      postalCode: '8000',
-      landmark: 'Near Plaza',
-      dialect: ['Cebuano'],
-      // Farmer Details
-      email: 'elly@example.com',
-      farmAlias: 'Green Valley Farm',
-      landArea: 2.5,
-      accessibilityType: 'Truck',
-      waterSources: ['Irrigation Canal', 'Rain Catchment'],
-      paymentMethods: ['Cash', 'GCash'],
-      operatingDays: ['Mon', 'Wed', 'Fri'],
-      deliveryWindow: 'AM',
-      pledgedCrops: List.generate(
-        10,
-        (i) => Produce(
-          id: 'prod_${i + 1}',
-          englishName: 'Crop ${i + 1}',
-          scientificName: 'Scientific Name',
-          category: 'Fruit Veg',
-          varieties: [],
-          dialects: [],
-          basePrice: 0,
-          baseUnit: 'kg',
-        ),
-      ),
-      trustScore: 982,
-      cropPoints: 14500,
-      unlockedBadgeIds: [
-        'years_silver',
-        'transactions_bronze',
-        'earnings_gold',
-        'variety_gold',
-      ],
-      // imageUrl: 'https://i.pravatar.cc/300?img=12', // Uncomment to test with image
-    );
+      return FarmerProfile.fromJson(Map<String, dynamic>.from(response as Map));
+    } catch (e) {
+      throw Exception('Failed to fetch farmer profile: $e');
+    }
   }
 
   @override
   Future<String> uploadProfileImage(File file) async {
-    // Simulate network upload
+    // Mock implementation – replace with Supabase Storage upload
     await Future.delayed(const Duration(seconds: 2));
-    // Return a mock URL
     return 'https://i.pravatar.cc/300?img=${DateTime.now().millisecond % 70}';
   }
 
   @override
   Future<void> updateProfile(FarmerProfile profile) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
-    // In a real app, we would send the updated profile to the API
-    // For now, we just simulate success
-    return;
+    try {
+      final payload = {
+        // Base user fields
+        'name': profile.name,
+        'email': profile.email,
+        'phone': profile.phone,
+        'barangay': profile.barangay,
+        'city': profile.city,
+        'province': profile.province,
+        'postal_code': profile.postalCode,
+        'landmark': profile.landmark,
+        'image_url': profile.imageUrl,
+        'dialect': profile.dialect,
+        'payment_methods': profile.paymentMethods,
+        'operating_days': profile.operatingDays,
+        'delivery_window': profile.deliveryWindow,
+        if (profile.latitude != null) 'latitude': profile.latitude,
+        if (profile.longitude != null) 'longitude': profile.longitude,
+
+        // Farmer-specific fields
+        'farmer_id': profile.farmerId,
+        'farmer_alias': profile.farmerAlias,
+        'land_area': profile.landArea,
+        'accessibility_type': profile.accessibilityType,
+        'water_sources': profile.waterSources,
+        'fav_produce': profile.farmerFavProduce.map((p) => p.id).toList(),
+      };
+
+      await supabase.rpc(
+        'manage_profile',
+        params: {
+          'p_user_id': profile.id,
+          'p_mode': 'update',
+          'p_data': payload,
+        },
+      );
+    } catch (e) {
+      throw Exception('Failed to update farmer profile: $e');
+    }
   }
 }

@@ -14,7 +14,6 @@ Future<List<String>> fetchAllDialectNames() async {
         .map((item) => item['dialect_name'].toString())
         .toList();
   } catch (e) {
-    print('Error fetching dialects: $e');
     return [];
   }
 }

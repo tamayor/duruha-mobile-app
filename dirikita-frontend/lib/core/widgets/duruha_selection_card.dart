@@ -2,24 +2,25 @@ import 'package:duruha/core/widgets/duruha_inkwell.dart';
 import 'package:flutter/material.dart';
 
 class DuruhaSelectionCard extends StatelessWidget {
-  final String title, subtitle;
+  final String title;
+  final String? subtitle;
   final Widget? subtitleWidget;
   final String? imageUrl;
   final IconData? icon;
   final bool isSelected;
-  final bool isList; // Manual override from parent
+  final bool isList;
   final VoidCallback onTap;
   final Widget? trailing;
 
   const DuruhaSelectionCard({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     this.subtitleWidget,
     this.imageUrl,
     this.icon,
     required this.isSelected,
-    required this.isList, // Required to handle parent layout logic
+    required this.isList,
     required this.onTap,
     this.trailing,
   });
@@ -29,14 +30,11 @@ class DuruhaSelectionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    // The logic: If parent says isList, we force Horizontal.
-    // Otherwise, we use the vertical grid style.
     Widget content = isList
         ? _buildHorizontal(colorScheme)
         : _buildVertical(colorScheme);
 
     return Padding(
-      // Small margin to prevent borders from touching in a list
       padding: EdgeInsets.symmetric(vertical: isList ? 4 : 0),
       child: Card(
         margin: EdgeInsets.zero,
@@ -48,9 +46,8 @@ class DuruhaSelectionCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
-            // Subtle border when not selected, Primary when selected
-            color: isSelected ? colorScheme.outline : colorScheme.outline,
-            width: isSelected ? 0 : 1,
+            color: isSelected ? colorScheme.primary : colorScheme.outline,
+            width: isSelected ? 2 : 1,
           ),
         ),
         child: DuruhaInkwell(
@@ -59,7 +56,7 @@ class DuruhaSelectionCard extends StatelessWidget {
               ? ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 90),
                   child: content,
-                ) // Flexible height for List with minHeight
+                )
               : content,
         ),
       ),
@@ -95,7 +92,7 @@ class DuruhaSelectionCard extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: colorScheme.onSecondary,
+                    color: colorScheme.onPrimary,
                   ),
                   maxLines: 1,
                 ),
@@ -104,7 +101,7 @@ class DuruhaSelectionCard extends StatelessWidget {
                   subtitleWidget!
                 else
                   Text(
-                    subtitle,
+                    subtitle ?? "",
                     style: TextStyle(
                       fontSize: 12,
                       color: colorScheme.onSecondary.withValues(alpha: 0.8),
@@ -125,14 +122,19 @@ class DuruhaSelectionCard extends StatelessWidget {
   }
 
   // 2. VERTICAL (GRID) STYLE
+  // FIX: replaced Expanded with a fixed SizedBox(height: 140) so the image
+  // always has a concrete height to paint into. Expanded requires a bounded
+  // parent height which is not always guaranteed in a grid cell.
   Widget _buildVertical(ColorScheme colorScheme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
+        SizedBox(
+          height: 140,
           child: Stack(
+            fit: StackFit.expand,
             children: [
-              Positioned.fill(child: _buildImage(colorScheme)),
+              _buildImage(colorScheme),
               if (isSelected)
                 Positioned(
                   top: 10,
@@ -157,15 +159,18 @@ class DuruhaSelectionCard extends StatelessWidget {
                 maxLines: 1,
               ),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colorScheme.onSurfaceVariant,
+              if (subtitleWidget != null)
+                subtitleWidget!
+              else
+                Text(
+                  subtitle ?? "",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
             ],
           ),
         ),
@@ -174,9 +179,9 @@ class DuruhaSelectionCard extends StatelessWidget {
   }
 
   Widget _buildImage(ColorScheme colorScheme) {
+    // Priority 1: icon
     if (icon != null) {
       return Container(
-        padding: const EdgeInsets.all(16),
         color: colorScheme.surfaceContainerHighest,
         child: Center(
           child: Icon(
@@ -187,12 +192,98 @@ class DuruhaSelectionCard extends StatelessWidget {
         ),
       );
     }
+
+    // Priority 2: imageUrl
     if (imageUrl != null) {
-      return imageUrl!.startsWith('http')
-          ? Image.network(imageUrl!, fit: BoxFit.cover)
-          : Image.asset(imageUrl!, fit: BoxFit.cover);
+      // Sanitize: trim whitespace and strip trailing '?'
+      final sanitized = imageUrl!.trim().replaceAll(RegExp(r'\?+$'), '');
+
+      // Empty after sanitizing
+      if (sanitized.isEmpty) {
+        return _buildPlaceholder(colorScheme);
+      }
+
+      // Network image
+      if (sanitized.startsWith('http://') || sanitized.startsWith('https://')) {
+        return Image.network(
+          sanitized,
+          fit: BoxFit.cover,
+          // Required by some CDNs / Supabase storage
+          headers: const {
+            'User-Agent': 'Duruha/1.0 (contact: support@duruha.com)',
+          },
+          // Show a shimmer-style placeholder while loading
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              color: colorScheme.surfaceContainerHighest,
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                        : null,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+            );
+          },
+          // Show broken image icon on error
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint(
+              'DuruhaSelectionCard image error for "$sanitized": $error',
+            );
+            return _buildBrokenImage(colorScheme);
+          },
+        );
+      }
+
+      // Asset image
+      return Image.asset(
+        sanitized,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint(
+            'DuruhaSelectionCard asset error for "$sanitized": $error',
+          );
+          return _buildBrokenImage(colorScheme);
+        },
+      );
     }
-    return const SizedBox();
+
+    // Priority 3: nothing provided
+    return _buildPlaceholder(colorScheme);
+  }
+
+  Widget _buildPlaceholder(ColorScheme colorScheme) {
+    return Container(
+      color: colorScheme.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          Icons.image_outlined,
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          size: 32,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrokenImage(ColorScheme colorScheme) {
+    return Container(
+      color: colorScheme.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: colorScheme.onSurfaceVariant,
+          size: 32,
+        ),
+      ),
+    );
   }
 
   Widget _buildCheck(ColorScheme colorScheme, {bool isBadge = false}) {

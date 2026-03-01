@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:duruha/features/auth/data/auth_repository.dart';
-import 'package:duruha/features/auth/domain/auth_models.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/features/auth/presentation/otp_verification_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -11,68 +11,46 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
 
-  Future<void> _signup() async {
-    // Basic Validation
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _passwordController.text.isEmpty ||
-        _confirmPasswordController.text.isEmpty) {
-      DuruhaSnackBar.showError(context, "Please fill in all fields");
+  Future<void> _sendOtp() async {
+    if (_emailController.text.isEmpty) {
+      DuruhaSnackBar.showError(context, "Please enter your email");
       return;
     }
 
-    if (_passwordController.text != _confirmPasswordController.text) {
-      DuruhaSnackBar.showError(context, "Passwords do not match");
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    // API Payload Preparation
-    final request = SignupRequest(
-      fullName: _nameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-      confirmPassword: _confirmPasswordController.text,
-    );
-
-    debugPrint('🚀 [API PREP] Signup Payload: ${request.toJson()}');
+    setState(() => _isLoading = true);
 
     try {
-      // Call Repository
       final authRepo = AuthRepository();
-      final response = await authRepo.signup(request);
+      await authRepo.sendOtp(_emailController.text.trim());
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      // Navigate to Onboarding
-      Navigator.pushReplacementNamed(
+      DuruhaSnackBar.showSuccess(context, "Verification code sent!");
+
+      Navigator.push(
         context,
-        '/onboarding',
-        arguments: response.user,
+        MaterialPageRoute(
+          builder: (context) =>
+              OtpVerificationScreen(email: _emailController.text.trim()),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      DuruhaSnackBar.showError(context, "Signup failed. Please try again.");
+      DuruhaSnackBar.showError(
+        context,
+        e.toString().replaceAll('Exception: ', ''),
+      );
     }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -137,13 +115,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 48),
 
-                // 3. USE CUSTOM INPUTS
-                DuruhaInput(
-                  label: "Full Name",
-                  icon: Icons.person_outline,
-                  controller: _nameController,
-                ),
-
                 DuruhaInput(
                   label: "Email Address",
                   icon: Icons.email_outlined,
@@ -151,25 +122,11 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _emailController,
                 ),
 
-                DuruhaInput(
-                  label: "Password",
-                  icon: Icons.lock_outline,
-                  isPassword: true,
-                  controller: _passwordController,
-                ),
-
-                DuruhaInput(
-                  label: "Confirm Password",
-                  icon: Icons.lock_outline,
-                  isPassword: true,
-                  controller: _confirmPasswordController,
-                ),
-
                 const SizedBox(height: 32),
                 DuruhaButton(
-                  text: "Create Account",
+                  text: "Send Verification Code",
                   isLoading: _isLoading,
-                  onPressed: _signup,
+                  onPressed: _sendOtp,
                 ),
 
                 const SizedBox(height: 24),

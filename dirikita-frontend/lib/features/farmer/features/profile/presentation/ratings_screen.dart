@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 
@@ -26,7 +27,7 @@ class FarmerProfileRatingsScreen extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const DuruhaScaffold(
             appBarTitle: "Program Profile",
-            body: Center(child: CircularProgressIndicator()),
+            body: FarmerLoadingScreen(),
           );
         }
 

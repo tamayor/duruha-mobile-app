@@ -28,16 +28,14 @@ class DuruhaDateInput extends StatelessWidget {
             label!,
             style: theme.textTheme.labelSmall?.copyWith(
               fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurfaceVariant,
+              color: theme.colorScheme.onPrimary.withAlpha(200),
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
         ],
         Material(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(
-            alpha: 0.3,
-          ),
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -47,9 +45,7 @@ class DuruhaDateInput extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
-                ),
+                border: Border.all(color: theme.colorScheme.secondary),
               ),
               child: Row(
                 children: [
@@ -58,7 +54,6 @@ class DuruhaDateInput extends StatelessWidget {
                     size: 18,
                     color: theme.colorScheme.onPrimary,
                   ),
-                  const SizedBox(height: 8),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

@@ -1,31 +1,28 @@
 import 'package:duruha/shared/produce/domain/produce_basic_info.dart';
-import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
 
 class SelectedProduceSummary extends StatelessWidget {
   final String userRole;
-  final Map<String, Map<String, dynamic>> consumerDemands;
-  final Map<String, List<String>> farmerPledges;
+  final List<String> consumerFavProduce;
+  final List<String> farmerFavProduce;
   final List<ProduceBasicInfo> availableProduce;
   final Function(String) onRemoveItem;
-  final Function(String, String) onRemoveVariety;
 
   const SelectedProduceSummary({
     super.key,
     required this.userRole,
-    required this.consumerDemands,
-    required this.farmerPledges,
+    required this.consumerFavProduce,
+    required this.farmerFavProduce,
     required this.availableProduce, // Add this parameter
     required this.onRemoveItem,
-    required this.onRemoveVariety,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final selectedIds = userRole == 'Consumer'
-        ? consumerDemands.keys.toList()
-        : farmerPledges.keys.toList();
+        ? consumerFavProduce
+        : farmerFavProduce;
 
     final selectedProduce = availableProduce
         .where((p) => selectedIds.contains(p.id))
@@ -178,96 +175,39 @@ class SelectedProduceSummary extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: theme.colorScheme.outline, width: .5),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  produce.imageUrl,
-                  width: 50,
-                  height: 50,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      Icon(Icons.eco, color: theme.colorScheme.onSurface),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      produce.englishName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.onSurface,
-                        fontSize: 15,
-                      ),
-                    ),
-                    Text(
-                      produce.scientificName,
-                      style: TextStyle(
-                        fontStyle: FontStyle.italic,
-                        color: theme.colorScheme.onSecondary.withValues(
-                          alpha: 0.7,
-                        ),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: () => onRemoveItem(produce.id),
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-              ),
-            ],
-          ),
-          if (userRole != 'Consumer' &&
-              (farmerPledges[produce.id]?.isNotEmpty ?? false)) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: (farmerPledges[produce.id] ?? []).map((variety) {
-                  return Container(
-                    padding: const EdgeInsets.only(left: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: Colors.red.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          variety,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 14),
-                          onPressed: () => onRemoveVariety(produce.id, variety),
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(8),
-                          color: Colors.red,
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              produce.imageUrl,
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) =>
+                  Icon(Icons.eco, color: theme.colorScheme.onSurface),
             ),
-          ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  produce.englishName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.onSurface,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => onRemoveItem(produce.id),
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+          ),
         ],
       ),
     );

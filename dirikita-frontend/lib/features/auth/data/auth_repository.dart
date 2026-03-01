@@ -1,147 +1,234 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:duruha/features/auth/domain/auth_models.dart';
+import 'package:duruha/features/auth/domain/auth_models.dart' as models;
 import 'package:duruha/shared/user/domain/user_models.dart';
 import 'package:duruha/core/services/session_service.dart';
+import 'package:duruha/supabase_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthRepository {
-  // Simulate API delay
-  final Duration _delay = const Duration(seconds: 2);
+  // Login directly against the 'users' table (Bypassing Supabase Auth)
+  // Native Supabase Login
+  Future<models.AuthResponse> login(models.LoginRequest request) async {
+    debugPrint("🚀 [AUTH API] Supabase Login Request: ${request.email}");
 
-  Future<AuthResponse> login(LoginRequest request) async {
-    debugPrint("🚀 [AUTH API] Login Request: ${request.toJson()}");
-    await Future.delayed(_delay);
+    try {
+      // 1. Sign in with Supabase Auth
+      final authRes = await supabase.auth.signInWithPassword(
+        email: request.email,
+        password: request.password,
+      );
 
-    // Mock Response
-    // Determine Mock User based on request credentials (simple simulation)
-    // Check email for role indicators
+      final user = authRes.user;
+      if (user == null) {
+        throw Exception("Auth failed: No user found in response.");
+      }
 
-    final bool isConsumer = request.email.toLowerCase().contains("consumer");
-    final UserRole userRole = isConsumer ? UserRole.consumer : UserRole.farmer;
+      // 2. Query public.users table for the full profile
+      final response = await supabase
+          .from('users')
+          .select('*, user_farmers(farmer_id), user_consumers(consumer_id)')
+          .eq('id', user.id)
+          .maybeSingle();
 
-    final UserProfile mockUser = UserProfile(
-      id: "user_${DateTime.now().millisecondsSinceEpoch}",
-      joinedAt: DateTime.now().toIso8601String(),
-      name: userRole == UserRole.farmer ? "Juan Farmer" : "Maria Consumer",
-      phone: request.email,
-      barangay: "San Isidro",
-      city: "Davao City",
-      province: "Davao del Sur",
-      postalCode: "8000",
-      landmark: "Near Chapel",
-      role: userRole,
-      dialect: ["Cebuano"],
-      // Farmer
-      farmAlias: userRole == UserRole.farmer ? "Happy Farm" : null,
-      landArea: userRole == UserRole.farmer ? 2.5 : null,
-      waterSources: userRole == UserRole.farmer ? ["River", "Rain"] : null,
-      // Consumer
-      consumerSegment: userRole == UserRole.consumer ? "Household" : null,
-      cookingFrequency: userRole == UserRole.consumer ? "Daily" : null,
-    );
+      if (response == null) {
+        throw Exception("User profile not found in database.");
+      }
 
-    debugPrint("✅ [AUTH API] Login Success. Token: mock_jwt_token_123");
+      final userData = Map<String, dynamic>.from(response);
 
-    // Save Session
-    await SessionService.saveUser(mockUser);
+      // Flatten joined IDs
+      if (response['user_farmers'] != null &&
+          (response['user_farmers'] as List).isNotEmpty) {
+        userData['farmer_id'] = response['user_farmers'][0]['farmer_id'];
+      }
+      if (response['user_consumers'] != null &&
+          (response['user_consumers'] as List).isNotEmpty) {
+        userData['consumer_id'] = response['user_consumers'][0]['consumer_id'];
+      }
 
-    return AuthResponse(token: "mock_jwt_token_123", user: mockUser);
+      final userProfile = UserProfile.fromJson(userData);
+
+      // Save Session Locally
+      await SessionService.saveUser(userProfile);
+
+      debugPrint("✅ [AUTH API] Login Success. User ID: ${userProfile.id}");
+
+      return models.AuthResponse(
+        token: authRes.session?.accessToken ?? "",
+        user: userProfile,
+      );
+    } catch (e) {
+      debugPrint("❌ [AUTH API] Login Error: $e");
+      throw Exception("Login failed: ${e.toString()}");
+    }
   }
 
-  Future<AuthResponse> signup(SignupRequest request) async {
-    debugPrint("🚀 [AUTH API] Signup Request: ${jsonEncode(request.toJson())}");
-    await Future.delayed(_delay);
+  // Signup directly into the 'users' table (Bypassing Supabase Auth)
+  // Native Supabase Signup
+  Future<void> sendOtp(String email) async {
+    debugPrint("🚀 [AUTH API] Send OTP Request: $email");
+    try {
+      await supabase.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: true, // Allow signup via OTP
+      );
+      debugPrint("✅ [AUTH API] OTP Sent to: $email");
+    } catch (e) {
+      debugPrint("❌ [AUTH API] Send OTP Error: $e");
+      throw Exception("Failed to send OTP: ${e.toString()}");
+    }
+  }
 
-    // Create User Object from Request
-    final UserProfile newUser = UserProfile(
-      id: "new_user_${DateTime.now().millisecondsSinceEpoch}",
-      joinedAt: DateTime.now().toIso8601String(),
-      name: request.fullName,
-      phone: request.email, // Using email as primary contact
-      barangay: "",
-      city: "",
-      province: "",
-      landmark: "",
-      postalCode: "",
-      role: request.email.toLowerCase().contains("consumer")
-          ? UserRole.consumer
-          : UserRole.farmer,
-      dialect: ["Cebuano"],
+  Future<models.AuthResponse> verifyOtp(
+    String email,
+    String token, {
+    OtpType type = OtpType.email,
+  }) async {
+    debugPrint("🚀 [AUTH API] Verify OTP Request ($type): $email");
+    try {
+      final authRes = await supabase.auth.verifyOTP(
+        email: email,
+        token: token,
+        type: type,
+      );
 
-      // Farmer
-      farmAlias: null,
-      landArea: null,
-      accessibilityType: null,
-      waterSources: null,
-      // Consumer
-      consumerSegment: null,
-      segmentSize: null,
-      cookingFrequency: null,
-      qualityPreferences: null,
-    );
+      final user = authRes.user;
+      if (user == null) {
+        throw Exception("Verification failed: No user found.");
+      }
 
-    debugPrint("✅ [AUTH API] Signup Success. User Created: ${newUser.id}");
+      // Query public.users table for the profile
+      final response = await supabase
+          .from('users')
+          .select('*, user_farmers(farmer_id), user_consumers(consumer_id)')
+          .eq('id', user.id)
+          .maybeSingle();
 
-    // Save Session
-    await SessionService.saveUser(newUser);
+      Map<String, dynamic> userData;
+      if (response == null) {
+        // Create initial profile if it doesn't exist
+        userData = {'id': user.id, 'email': email, 'name': email.split('@')[0]};
+        await supabase.from('users').upsert(userData);
+      } else {
+        userData = Map<String, dynamic>.from(response);
+      }
 
-    return AuthResponse(token: "mock_jwt_token_new_user", user: newUser);
+      // Flatten joined IDs if they exist
+      if (response != null) {
+        if (response['user_farmers'] != null &&
+            (response['user_farmers'] as List).isNotEmpty) {
+          userData['farmer_id'] = response['user_farmers'][0]['farmer_id'];
+        }
+        if (response['user_consumers'] != null &&
+            (response['user_consumers'] as List).isNotEmpty) {
+          userData['consumer_id'] =
+              response['user_consumers'][0]['consumer_id'];
+        }
+      }
+
+      final userProfile = UserProfile.fromJson(userData);
+      await SessionService.saveUser(userProfile);
+
+      debugPrint(
+        "✅ [AUTH API] Verification Success. User ID: ${userProfile.id}",
+      );
+
+      return models.AuthResponse(
+        token: authRes.session?.accessToken ?? "",
+        user: userProfile,
+      );
+    } catch (e) {
+      debugPrint("❌ [AUTH API] Verify OTP Error: $e");
+      throw Exception("Verification failed: ${e.toString()}");
+    }
+  }
+
+  Future<void> resetPassword(String email) async {
+    debugPrint("🚀 [AUTH API] Reset Password Request: $email");
+    try {
+      await supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: kIsWeb ? null : 'io.supabase.flutter://reset-callback/',
+      );
+      debugPrint("✅ [AUTH API] Password Reset Email Sent to: $email");
+    } catch (e) {
+      debugPrint("❌ [AUTH API] Reset Password Error: $e");
+      throw Exception("Failed to send reset email: ${e.toString()}");
+    }
   }
 
   Future<void> logout() async {
     debugPrint("🚀 [AUTH API] Logging out...");
+    // Clear Supabase session if it exists
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      debugPrint("⚠️ [AUTH API] Supabase Auth signOut failed: $e");
+    }
+    // Clear local session
     await SessionService.clearSession();
-    await Future.delayed(const Duration(milliseconds: 500));
     debugPrint("✅ [AUTH API] Logout Success");
+  }
+
+  Future<void> updatePassword(String newPassword) async {
+    debugPrint("🚀 [AUTH API] Update Password Request");
+    try {
+      await supabase.auth.updateUser(UserAttributes(password: newPassword));
+      debugPrint("✅ [AUTH API] Password Updated Successfully");
+    } catch (e) {
+      debugPrint("❌ [AUTH API] Update Password Error: $e");
+      throw Exception("Failed to update password: ${e.toString()}");
+    }
   }
 
   // --- Profile & Onboarding ---
 
-  /// Simulates updating the user profile (e.g., after onboarding steps)
   Future<UserProfile> updateProfile(
     String userId,
     Map<String, dynamic> data,
   ) async {
-    await Future.delayed(const Duration(milliseconds: 800)); // Sim network
+    debugPrint("🚀 [AUTH API] Update Profile: $userId");
 
-    // In a real app, we'd merge 'data' into the user record on the backend.
-    // Here, we'll fetch the stored user and locally update it to return a fresh object.
-    final currentUser = await SessionService.getSavedUser();
-    if (currentUser == null) {
-      throw Exception("No user session found to update.");
+    try {
+      final currentUser = await SessionService.getSavedUser();
+      if (currentUser == null) {
+        throw Exception("No user session found.");
+      }
+
+      final updatedFields = {
+        'name': data['basicInfo']?['name'] ?? currentUser.name,
+        'phone': data['basicInfo']?['phone'] ?? currentUser.phone,
+        'barangay': data['basicInfo']?['barangay'] ?? currentUser.barangay,
+        'city': data['basicInfo']?['city'] ?? currentUser.city,
+        'province': data['basicInfo']?['province'] ?? currentUser.province,
+        'postal_code':
+            data['basicInfo']?['postalCode'] ?? currentUser.postalCode,
+        'landmark': data['basicInfo']?['landmark'] ?? currentUser.landmark,
+        'dialect':
+            (data['basicInfo']?['dialects'] as List?)?.cast<String>() ??
+            currentUser.dialect,
+      };
+
+      // Update in Supabase users table
+      final response = await supabase
+          .from('users')
+          .update(updatedFields)
+          .eq('id', userId)
+          .select()
+          .single();
+
+      final updatedUser = UserProfile.fromJson(response);
+      await SessionService.saveUser(updatedUser);
+
+      return updatedUser;
+    } catch (e) {
+      debugPrint("❌ [AUTH API] Update Profile Error: $e");
+      throw Exception("Failed to update profile: ${e.toString()}");
     }
-
-    // Map the untyped data to the UserProfile model
-    // This is a simplified merge. In production, use meaningful specific DTOs.
-    final updatedUser = UserProfile(
-      id: userId,
-      name: data['basicInfo']?['name'] ?? currentUser.name,
-      phone: data['basicInfo']?['phone'] ?? currentUser.phone,
-      role: (data['role'] == 'Farmer') ? UserRole.farmer : UserRole.consumer,
-      barangay: data['basicInfo']?['barangay'] ?? currentUser.barangay,
-      city: data['basicInfo']?['city'] ?? currentUser.city,
-      province: data['basicInfo']?['province'] ?? currentUser.province,
-      postalCode: data['basicInfo']?['postalCode'] ?? currentUser.postalCode,
-      landmark: data['basicInfo']?['landmark'] ?? currentUser.landmark,
-      joinedAt: currentUser.joinedAt, // Keep original
-      dialect:
-          (data['basicInfo']?['dialects'] as List?)?.cast<String>() ??
-          currentUser.dialect,
-    );
-
-    // Persist the updated profile
-    await SessionService.saveUser(updatedUser);
-
-    debugPrint("✅ [AUTH API] Profile Updated: ${updatedUser.name}");
-    return updatedUser;
   }
 
-  /// Simulates submitting KYC or extra onboarding data
   Future<void> submitKyc(String userId, Map<String, dynamic> data) async {
-    await Future.delayed(const Duration(milliseconds: 1000));
-    if (userId.isEmpty) throw Exception("Invalid User ID");
-    debugPrint(
-      "✅ [AUTH API] KYC/Onboarding Data Received for $userId. Content: ${data.keys.toList()}",
-    );
+    await Future.delayed(const Duration(milliseconds: 500));
+    debugPrint("✅ [AUTH API] KYC Submitted (Mock/Direct DB placeholder)");
   }
 }

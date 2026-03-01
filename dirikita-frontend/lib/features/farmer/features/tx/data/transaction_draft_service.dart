@@ -51,6 +51,8 @@ class CropDraftData {
   final List<Map<String, dynamic>>? simulatedDemand;
   final List<HarvestEntry> perDatePledges;
   final Map<DateTime, DateDemandData> dateSpecificDemand;
+  final Map<String, DateTime?> varietyAvailableDates;
+  final Map<String, DateTime?> varietyDisposalDates;
 
   CropDraftData({
     this.selectedHarvestDates = const [],
@@ -61,6 +63,8 @@ class CropDraftData {
     this.simulatedDemand,
     this.perDatePledges = const [],
     this.dateSpecificDemand = const {},
+    this.varietyAvailableDates = const {},
+    this.varietyDisposalDates = const {},
   });
 
   Map<String, dynamic> toJson() {
@@ -77,6 +81,12 @@ class CropDraftData {
       'dateSpecificDemand': dateSpecificDemand.map(
         (key, value) => MapEntry(key.toIso8601String(), value.toJson()),
       ),
+      'varietyAvailableDates': varietyAvailableDates.map(
+        (key, value) => MapEntry(key, value?.toIso8601String()),
+      ),
+      'varietyDisposalDates': varietyDisposalDates.map(
+        (key, value) => MapEntry(key, value?.toIso8601String()),
+      ),
     };
   }
 
@@ -88,7 +98,6 @@ class CropDraftData {
             .map((e) => HarvestEntry.fromJson(e))
             .toList();
       } else if (json['perDatePledges'] is Map) {
-        // Migration from old Map<DateTime, Map<String, double>> structure
         (json['perDatePledges'] as Map<String, dynamic>).forEach((
           dateKey,
           value,
@@ -134,7 +143,6 @@ class CropDraftData {
               key,
               value,
             ) {
-              // Handling migration from old double values to new object
               if (value is num) {
                 return MapEntry(
                   DateTime.parse(key),
@@ -151,6 +159,18 @@ class CropDraftData {
               );
             })
           : {},
+      varietyAvailableDates: (json['varietyAvailableDates'] as Map? ?? {}).map(
+        (key, value) => MapEntry(
+          key.toString(),
+          value != null ? DateTime.parse(value.toString()) : null,
+        ),
+      ),
+      varietyDisposalDates: (json['varietyDisposalDates'] as Map? ?? {}).map(
+        (key, value) => MapEntry(
+          key.toString(),
+          value != null ? DateTime.parse(value.toString()) : null,
+        ),
+      ),
     );
   }
 }
@@ -179,6 +199,63 @@ class DateDemandData {
       varietyBreakdown: List<Map<String, dynamic>>.from(
         json['varietyBreakdown'] ?? [],
       ),
+    );
+  }
+}
+
+/// One offer entry: variety + produce form (listing) + quantity + dates.
+/// This is the canonical data unit for the Offer transaction flow.
+class OfferFormEntry {
+  final String varietyName;
+  final String listingId;
+  final String produceForm;
+  final double quantity;
+  final double pricePerUnit;
+  final DateTime? availableFrom;
+  final DateTime? availableTo;
+  final bool isPriceLock;
+  final String? fplsId;
+  final double? totalPriceLockCredit;
+
+  const OfferFormEntry({
+    required this.varietyName,
+    required this.listingId,
+    required this.produceForm,
+    required this.quantity,
+    required this.pricePerUnit,
+    this.availableFrom,
+    this.availableTo,
+    this.isPriceLock = false,
+    this.fplsId,
+    this.totalPriceLockCredit,
+  });
+
+  bool get hasDate => availableFrom != null && availableTo != null;
+  bool get isInfinite => availableTo != null && availableTo!.year > 2090;
+
+  OfferFormEntry copyWith({
+    String? varietyName,
+    String? listingId,
+    String? produceForm,
+    double? quantity,
+    double? pricePerUnit,
+    DateTime? availableFrom,
+    DateTime? availableTo,
+    bool? isPriceLock,
+    String? fplsId,
+    double? totalPriceLockCredit,
+  }) {
+    return OfferFormEntry(
+      varietyName: varietyName ?? this.varietyName,
+      listingId: listingId ?? this.listingId,
+      produceForm: produceForm ?? this.produceForm,
+      quantity: quantity ?? this.quantity,
+      pricePerUnit: pricePerUnit ?? this.pricePerUnit,
+      availableFrom: availableFrom ?? this.availableFrom,
+      availableTo: availableTo ?? this.availableTo,
+      isPriceLock: isPriceLock ?? this.isPriceLock,
+      fplsId: fplsId ?? this.fplsId,
+      totalPriceLockCredit: totalPriceLockCredit ?? this.totalPriceLockCredit,
     );
   }
 }

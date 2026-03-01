@@ -1,6 +1,6 @@
 // lib/src/features/farm/data/crop_recommendation_repository.dart
 
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:duruha/features/farmer/features/main/domain/recommendation_model.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 
@@ -41,7 +41,7 @@ class CropRecommendationRepository {
     await Future.delayed(const Duration(milliseconds: 1000));
 
     final allProduce = await ProduceRepository().getAllProduce();
-    final random = Random();
+    final random = math.Random();
 
     // Take the top 5 to keep the dashboard focused and "Elite"
     return allProduce.take(5).toList().asMap().entries.map((entry) {
@@ -71,8 +71,12 @@ class CropRecommendationRepository {
         currentPledgeKg: current,
         targetPledgeKg: target,
         imageUrl: produce.imageThumbnailUrl,
-        priceMin: produce.priceMinHistorical,
-        priceMax: produce.priceMaxHistorical,
+        priceMin: produce.varieties.isEmpty
+            ? 0.0
+            : produce.varieties.map((v) => v.price).reduce(math.min),
+        priceMax: produce.varieties.isEmpty
+            ? 0.0
+            : produce.varieties.map((v) => v.price).reduce(math.max),
       );
     }).toList();
   }

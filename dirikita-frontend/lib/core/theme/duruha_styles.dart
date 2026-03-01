@@ -9,6 +9,7 @@ class DuruhaStyles {
     String? suffix,
     String? hintText,
     String? errorText,
+    String? helperText,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -19,7 +20,7 @@ class DuruhaStyles {
       // Idle Label Color
       labelStyle: TextStyle(
         color: enabled
-            ? colorScheme.onSurface
+            ? colorScheme.onSecondaryContainer
             : colorScheme.onSurface.withValues(alpha: 0.5),
         fontWeight: FontWeight.w500,
       ),
@@ -48,11 +49,13 @@ class DuruhaStyles {
       hintText: hintText,
       errorText: errorText,
       errorStyle: TextStyle(color: colorScheme.error),
+      helperText: helperText,
+      helperStyle: TextStyle(color: colorScheme.onSurfaceVariant),
 
       filled: true,
       // Background is 30% Surface Container
       fillColor: enabled
-          ? colorScheme.primaryContainer.withValues(alpha: 0.1)
+          ? colorScheme.surface
           : colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
 
       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -94,11 +97,11 @@ class DuruhaStyles {
     );
   }
 
-  static InputDecoration? inputDecoration(
+  static InputDecoration inputDecoration(
     BuildContext context, {
     required String label,
     required IconData icon,
   }) {
-    return null;
+    return fieldDecoration(context, label: label, icon: icon);
   }
 }

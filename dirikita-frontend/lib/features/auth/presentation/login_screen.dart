@@ -1,7 +1,9 @@
+import 'package:duruha/shared/user/domain/user_models.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/auth/data/auth_repository.dart';
 import 'package:duruha/features/auth/domain/auth_models.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/features/auth/presentation/otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,16 +39,43 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final authRepo = AuthRepository();
       final response = await authRepo.login(request);
-
+      final user = response.user;
       if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
 
+      debugPrint("🚀 [AUTH API] User: ${user.toJson()}");
+      // Show success message with user details
+      DuruhaSnackBar.showSuccess(
+        context,
+        "Welcome back, ${response.user.name}!",
+      );
+
+      // Small delay to show the success message
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
+
+      // Check for Profile Completion (Phone is a required field in Onboarding)
+      // If phone is missing, they likely haven't finished onboarding.
+      // Admins are pre-assigned and do not need to onboard.
+      if (user.role != UserRole.admin &&
+          (user.phone == null || user.phone!.isEmpty || user.role == null)) {
+        Navigator.pushReplacementNamed(context, '/onboarding', arguments: user);
+        return;
+      }
+
       // Determine route based on user role
-      final targetRoute = response.user.isFarmer
-          ? '/farmer/farm'
-          : '/consumer/market';
+      final userRole = user.role;
+      String targetRoute;
+      if (userRole == UserRole.farmer) {
+        targetRoute = '/farmer/main';
+      } else if (userRole == UserRole.admin) {
+        targetRoute = '/admin/main';
+      } else {
+        targetRoute = '/consumer/shop';
+      }
 
       Navigator.pushReplacementNamed(
         context,
@@ -56,9 +85,53 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+
+      // Show specific error message from repository
       DuruhaSnackBar.showError(
         context,
-        "Login failed. Please check your credentials.",
+        e.toString().replaceAll('Exception: ', ''),
+      );
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    if (_emailController.text.isEmpty) {
+      DuruhaSnackBar.showError(
+        context,
+        "Please enter your email to reset password",
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authRepo = AuthRepository();
+      await authRepo.resetPassword(_emailController.text.trim());
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      DuruhaSnackBar.showSuccess(
+        context,
+        "Verification code sent to ${_emailController.text.trim()}",
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtpVerificationScreen(
+            email: _emailController.text.trim(),
+            isRecovery: true,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      DuruhaSnackBar.showError(
+        context,
+        e.toString().replaceAll('Exception: ', ''),
       );
     }
   }
@@ -137,6 +210,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   icon: Icons.lock_outline,
                   isPassword: true,
                   controller: _passwordController,
+                ),
+
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: _resetPassword,
+                    child: Text(
+                      "Forgot Password?",
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
                 ),
 
                 const SizedBox(height: 32),

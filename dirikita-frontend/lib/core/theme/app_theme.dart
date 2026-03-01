@@ -5,9 +5,9 @@ class DuruhaTheme {
   // Parchment (Beiges)
   static const Color parchment50 = Color.fromARGB(
     255,
+    252,
     251,
-    251,
-    234,
+    246,
   ); // Was 'parchment'
   static const Color parchment100 = Color.fromARGB(255, 250, 238, 203);
   static const Color parchment200 = Color.fromARGB(255, 244, 232, 194);
@@ -78,38 +78,80 @@ class DuruhaTheme {
 
       colorScheme: const ColorScheme(
         brightness: Brightness.light,
-        // Primary: Brand Identity
-        primary: parchment50,
-        onPrimary: parchment800, // Text on primary
-        primaryContainer: parchment200,
-        onPrimaryContainer: parchment800,
 
-        // Secondary: Accents
-        secondary: goblin50,
-        onSecondary: goblin950,
-        secondaryContainer: goblin200,
-        onSecondaryContainer: goblin800,
+        // ========================
+        // PRIMARY — Goblin
+        // ========================
+        primary: goblin50,
+        onPrimary: goblin600,
+        primaryContainer: goblin200,
+        onPrimaryContainer: goblin900,
 
-        // Surface: Paper background
-        surface: parchment50,
-        onSurface: goblin950, // Primary text color
-        // Surface Container: Layering (Search bars, cards)
-        surfaceContainer: parchment100,
-        surfaceContainerHigh: parchment200,
-        surfaceContainerHighest: parchment300,
-        onSurfaceVariant: parchment700, // Secondary text/icons
+        // ========================
+        // SECONDARY — Neutral Gray
+        // ========================
+        secondary: parchment100,
+        onSecondary: Color(0xFF6B7280),
+        secondaryContainer: Color(0xFFE5E7EB),
+        onSecondaryContainer: Color(0xFF1F2937),
+        // ========================
+        // TERTIARY — Parchment Accent
+        // ========================
+        tertiary: parchment200,
+        onTertiary: parchment900,
+        tertiaryContainer: parchment400,
+        onTertiaryContainer: parchment950,
 
-        outline: parchment500,
-        outlineVariant: goblin500,
+        // ========================
+        // SURFACES — Soft Warm Gray
+        // ========================
+        surface: Color(0xFFF6F6F4), // Very light warm gray
+        onSurface: goblin950,
+        onSurfaceVariant: Color(0xFF5F5F5A),
 
-        error: Color(0xFFBA1A1A),
-        onError: Colors.white,
+        surfaceContainerLow: Color(0xFFFAFAF9),
+        surfaceContainer: Color(0xFFF1F1EE),
+        surfaceContainerHigh: Color(0xFFE5E5E2),
+        surfaceContainerHighest: Color(0xFFDCDCD8),
+
+        // ========================
+        // OUTLINES
+        // ========================
+        outline: Color(0xFFB8B8B2),
+        outlineVariant: Color(0xFFDADAD6),
+
+        // ========================
+        // ERROR
+        // ========================
+        error: Colors.white,
+        onError: Color(0xFFBA1A1A),
+        errorContainer: Color(0xFFFFDAD6),
+        onErrorContainer: Color(0xFF410002),
+
+        // ========================
+        // INVERSE
+        // ========================
+        inverseSurface: goblin900,
+        onInverseSurface: Colors.white,
+        inversePrimary: goblin200,
+
+        shadow: Colors.black,
+        scrim: Colors.black,
       ),
+
       datePickerTheme: DatePickerThemeData(
         backgroundColor: parchment50,
         headerBackgroundColor: parchment200, // Top part of the calendar
         headerForegroundColor: goblin950, // Color of the date text in header
-        dayForegroundColor: WidgetStateProperty.all(goblin950),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return goblin950.withAlpha(80);
+          }
+          if (states.contains(WidgetState.selected)) {
+            return parchment950;
+          }
+          return goblin950;
+        }),
         todayBackgroundColor: WidgetStateProperty.all(parchment100),
         todayForegroundColor: WidgetStateProperty.all(parchment800),
         confirmButtonStyle: TextButton.styleFrom(
@@ -146,38 +188,81 @@ class DuruhaTheme {
 
       colorScheme: const ColorScheme(
         brightness: Brightness.dark,
-        // Primary: Brand Identity (Lighter for dark mode)
-        primary: goblin950,
-        onPrimary: goblin50, // Dark text on light primary
-        primaryContainer: goblin600,
-        onPrimaryContainer: goblin200,
 
-        // Secondary: Accents
-        secondary: parchment900,
-        onSecondary: parchment50,
-        secondaryContainer: parchment600,
-        onSecondaryContainer: parchment200,
+        // ========================
+        // PRIMARY — Parchment
+        // ========================
+        primary: parchment950,
+        onPrimary: parchment100,
+        primaryContainer: parchment800,
+        onPrimaryContainer: parchment300,
 
-        // Surface: Paper background
-        surface: goblin950,
-        onSurface: parchment50, // Primary text color
-        // Surface Container: Layering
-        surfaceContainer: goblin800,
-        surfaceContainerHigh: goblin700,
-        surfaceContainerHighest: goblin600,
-        onSurfaceVariant: goblin400, // Secondary text/icons
+        // ========================
+        // SECONDARY — Neutral Accent (Gray)
+        // ========================
+        secondary: Color(0xFF1A1A1A), // Soft neutral accent
+        onSecondary: Color(0xFFB8B8B2),
+        secondaryContainer: Color(0xFF2A2A2A),
+        onSecondaryContainer: Color(0xFFE8E8E5),
 
-        outline: goblin500,
-        outlineVariant: parchment500,
+        // ========================
+        // TERTIARY — Goblin Accent
+        // ========================
+        tertiary: goblin800,
+        onTertiary: goblin100,
+        tertiaryContainer: goblin700,
+        onTertiaryContainer: goblin200,
 
-        error: Color(0xFF690005),
-        onError: Color(0xFFFFB4AB),
+        // ========================
+        // SURFACES — Neutral Dark Foundation
+        // ========================
+        surface: Color(0xFF121212),
+        onSurface: parchment100,
+
+        onSurfaceVariant: Color(0xFFB5B5B0),
+
+        surfaceContainerLow: Color(0xFF151515),
+        surfaceContainer: Color(0xFF1A1A1A),
+        surfaceContainerHigh: Color(0xFF202020),
+        surfaceContainerHighest: Color(0xFF2A2A2A),
+
+        // ========================
+        // OUTLINES
+        // ========================
+        outline: Color(0xFF3A3A36),
+        outlineVariant: Color(0xFF2A2A28),
+
+        // ========================
+        // ERROR
+        // ========================
+        error: Color(0xFFFFB4AB),
+        onError: Color(0xFF690005),
+        errorContainer: Color(0xFF93000A),
+        onErrorContainer: Color(0xFFFFDAD6),
+
+        // ========================
+        // INVERSE (for bottom sheets, etc.)
+        // ========================
+        inverseSurface: parchment100,
+        onInverseSurface: parchment900,
+        inversePrimary: parchment600,
+
+        shadow: Colors.black,
+        scrim: Colors.black,
       ),
       datePickerTheme: DatePickerThemeData(
         backgroundColor: goblin950,
         headerBackgroundColor: goblin600, // Top part of the calendar
         headerForegroundColor: goblin100, // Color of the date text in header
-        dayForegroundColor: WidgetStateProperty.all(goblin100),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return goblin100.withAlpha(80);
+          }
+          if (states.contains(WidgetState.selected)) {
+            return goblin950;
+          }
+          return goblin100;
+        }),
         todayBackgroundColor: WidgetStateProperty.all(goblin600),
         todayForegroundColor: WidgetStateProperty.all(goblin100),
         confirmButtonStyle: TextButton.styleFrom(
@@ -188,6 +273,7 @@ class DuruhaTheme {
           foregroundColor: goblin100,
           backgroundColor: goblin950,
         ),
+
         dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return goblin600;

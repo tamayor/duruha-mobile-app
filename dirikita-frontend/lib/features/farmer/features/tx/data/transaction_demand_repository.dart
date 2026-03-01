@@ -39,8 +39,8 @@ class TransactionDemandRepository {
           double totalFulfilled = 0;
 
           final breakdown = produce.availableVarieties.map((variety) {
-            double basePrice = produce.pricingEconomics.duruhaFarmerPayout;
-            double varietyPrice = basePrice + variety.priceModifier;
+            double basePrice = variety.price;
+            double varietyPrice = basePrice;
             double finalPrice = varietyPrice * seasonMultiplier;
 
             double demand = (100 + dateRng.nextInt(4900)).toDouble();
@@ -91,16 +91,13 @@ class TransactionDemandRepository {
 
       final rng = math.Random(date.hashCode + cropId.hashCode);
 
-      // Seasonality
-      double seasonMultiplier = 1.0 + (rng.nextDouble() * 0.4) - 0.2;
-
       double totalDemand = 0;
       double totalFulfilled = 0;
 
       final breakdown = produce.availableVarieties.map((variety) {
-        double basePrice = produce.pricingEconomics.duruhaFarmerPayout;
-        double varietyPrice = basePrice + variety.priceModifier;
-        double finalPrice = varietyPrice * seasonMultiplier;
+        double basePrice = variety.price;
+        double varietyPrice = basePrice;
+        double finalPrice = varietyPrice;
 
         double demand = (100 + rng.nextInt(4900)).toDouble();
         double fulfilledPct = rng.nextDouble() > 0.8

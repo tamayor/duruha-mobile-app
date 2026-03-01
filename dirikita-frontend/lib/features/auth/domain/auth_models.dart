@@ -22,26 +22,36 @@ class LoginRequest {
 
   LoginRequest({required this.email, required this.password});
 
-  Map<String, dynamic> toJson() => {'identifier': email, 'password': password};
+  Map<String, dynamic> toJson() => {'email': email, 'password': password};
 }
 
 class SignupRequest {
-  final String fullName;
   final String email;
   final String password;
   final String confirmPassword;
 
   SignupRequest({
-    required this.fullName,
     required this.email,
     required this.password,
     required this.confirmPassword,
   });
 
   Map<String, dynamic> toJson() => {
-    'full_name': fullName,
     'email': email,
     'password': password,
     'confirm_password': confirmPassword,
   };
+}
+
+class OtpRequest {
+  final String email;
+  OtpRequest({required this.email});
+  Map<String, dynamic> toJson() => {'email': email};
+}
+
+class VerifyOtpRequest {
+  final String email;
+  final String token;
+  VerifyOtpRequest({required this.email, required this.token});
+  Map<String, dynamic> toJson() => {'email': email, 'token': token};
 }

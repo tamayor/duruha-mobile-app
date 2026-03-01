@@ -1,8 +1,9 @@
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/sales/data/farmer_produce_repository.dart';
 import 'package:duruha/features/farmer/features/sales/domain/farmer_selected_produce.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
-import 'package:duruha/features/farmer/shared/presentation/loading_screen.dart';
+import 'package:duruha/features/farmer/shared/presentation/farmer_loading_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,7 +23,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
 
   bool _isSearchVisible = false;
   bool _showFavoritesOnly = false;
-  bool _isPledgeMode = true; // true = Pledge, false = Offer
+  bool _isPledgeMode = false; // false = Offer (Pledge disabled for now)
   final Set<String> _selectedCropIds = {};
 
   List<FarmerSelectedProduce> _allCrops = [];
@@ -37,10 +38,11 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
 
   Future<void> _fetchCrops() async {
     try {
-      final crops = await _repository.fetchFarmerSelectedProduce("Bisaya");
+      final userId = await SessionService.getUserId() ?? '';
+      final result = await _repository.fetchFarmerProduce(userId);
       if (mounted) {
         setState(() {
-          _allCrops = crops;
+          _allCrops = result.data;
           _applyFilters();
           _isLoading = false;
         });
@@ -232,6 +234,10 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
     return DuruhaToggleButton(
       value: _isPledgeMode,
       onChanged: (val) {
+        if (val == true) {
+          DuruhaSnackBar.showInfo(context, "Pledge mode is coming soon!");
+          return;
+        }
         setState(() {
           _isPledgeMode = val;
         });

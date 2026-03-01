@@ -1,6 +1,8 @@
+import 'package:duruha/core/constants/quality_preferences.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/core/theme/duruha_styles.dart';
+import 'package:duruha/core/constants/consumer_options.dart';
 
 class ConsumerProfileStep extends StatefulWidget {
   final String initialSegment;
@@ -37,13 +39,26 @@ class _ConsumerProfileStepState extends State<ConsumerProfileStep> {
     _qualityPreferences = List.from(widget.initialQualityPrefs);
   }
 
+  // Valid combos (in order): ['Select'] → ['Select','Regular'] → ['Select','Regular','Saver']
+  // Selecting a tier includes all tiers before it.
+  // Deselecting a tier removes it and all tiers after it.
   void _toggleQuality(String value) {
+    const tiers =
+        QualityPreferences.qualityPreferences; // ['Select','Regular','Saver']
+    final tierIndex = tiers.indexOf(value);
+    if (tierIndex == -1) return;
+
     setState(() {
-      if (_qualityPreferences.contains(value)) {
-        _qualityPreferences.remove(value);
+      final isCurrentlySelected = _qualityPreferences.contains(value);
+
+      if (isCurrentlySelected) {
+        // Deselect this tier AND all tiers after it
+        _qualityPreferences = tiers.sublist(0, tierIndex).toList();
       } else {
-        _qualityPreferences.add(value);
+        // Select this tier AND all tiers before it
+        _qualityPreferences = tiers.sublist(0, tierIndex + 1).toList();
       }
+
       widget.onQualityChanged(_qualityPreferences);
     });
   }
@@ -62,11 +77,9 @@ class _ConsumerProfileStepState extends State<ConsumerProfileStep> {
               label: 'Segment Type',
               icon: Icons.category,
             ),
-            items: [
-              'Household',
-              'Restaurant',
-              'Carinderia',
-            ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+            items: ConsumerOptions.segments
+                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                .toList(),
             onChanged: (v) {
               if (v != null) {
                 setState(() => _segment = v);
@@ -79,11 +92,13 @@ class _ConsumerProfileStepState extends State<ConsumerProfileStep> {
             label: 'Cooking Frequency',
             value: _cookingFrequency,
             prefixIcon: Icons.restaurant_menu,
-            items: const ['Daily', 'Weekly', 'Monthly'],
+            items: ConsumerOptions.cookingFrequency,
             itemIcons: const {
               'Daily': Icons.soup_kitchen,
               'Weekly': Icons.calendar_view_week,
               'Monthly': Icons.calendar_month,
+              'Occasional': Icons.calendar_today,
+              'Few times a week': Icons.calendar_today,
             },
             onChanged: (v) {
               if (v != null) {
@@ -95,14 +110,10 @@ class _ConsumerProfileStepState extends State<ConsumerProfileStep> {
           const SizedBox(height: 24),
           DuruhaSelectionChipGroup(
             title: "Quality Preference",
-            subtitle: "Select all that apply to your preference",
-            options: [
-              'Class A (Premium)',
-              'Class B (Standard)',
-              'Class C (Imperfect)',
-            ],
+            subtitle: "Select your tier — each includes the one before it",
+            options: QualityPreferences.qualityPreferences,
             selectedValues: _qualityPreferences,
-            onToggle: (val) => _toggleQuality(val),
+            onToggle: _toggleQuality,
           ),
           const SizedBox(height: 100), // Spacing for Bottom Bar
         ],

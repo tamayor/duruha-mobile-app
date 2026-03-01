@@ -1,10 +1,12 @@
+import 'package:duruha/core/constants/payment_methods.dart';
+import 'package:duruha/features/onboarding/data/onboarding_repository.dart';
 import 'package:duruha/features/onboarding/presentation/components/consumer_profile_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/farmer_profile_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/produce_selection_step.dart';
-import 'package:duruha/features/auth/data/auth_repository.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 import 'package:duruha/shared/user/data/dialect_repository.dart';
+import 'package:duruha/shared/user/data/location_repository.dart';
 import 'package:duruha/features/onboarding/presentation/components/terms_and_conditions_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/role_selection_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/basic_info_step.dart';
@@ -12,7 +14,7 @@ import 'package:duruha/features/onboarding/presentation/components/onboarding_su
 
 import 'package:duruha/main.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 
@@ -43,7 +45,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // --- Controllers ---
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _telephoneController = TextEditingController();
   final _streetAddressController = TextEditingController();
@@ -88,18 +89,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     'Sat',
     'Sun',
   ];
+  double? _latitude;
+  double? _longitude;
+  bool _isLocating = false;
 
   // Produce Data
 
   // Produce Data
-  final Map<String, Map<String, dynamic>> _consumerDemands = {};
-  final Map<String, List<String>> _farmerPledges = {};
+  final List<String> _consumerFavProduce = [];
+  final List<String> _farmerFavProduce = [];
 
   @override
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
-    _emailController.dispose();
     _phoneController.dispose();
     _telephoneController.dispose();
     _searchController.dispose(); // Dispose search controller
@@ -128,11 +131,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         });
       }
     } catch (e) {
-      debugPrint('Error loading dialects: $e');
+      //debugPrint('Error loading dialects: $e');
     }
   }
 
-  // --- Persistence ---
+  Future<void> _clearSavedState() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Only clear onboarding specific keys
+    final keys = prefs.getKeys().where((k) => k.startsWith('onboarding_'));
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
+  }
 
   Future<void> _initPersistence() async {
     await _loadSavedState();
@@ -149,7 +159,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       }
       // Basic Info
       await prefs.setString('onboarding_name', _nameController.text);
-      await prefs.setString('onboarding_email', _emailController.text);
       await prefs.setString('onboarding_phone', _phoneController.text);
       await prefs.setString('onboarding_telephone', _telephoneController.text);
       await prefs.setString('onboarding_street', _streetAddressController.text);
@@ -165,24 +174,30 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       if (_deliveryWindow != null) {
         await prefs.setString('onboarding_window', _deliveryWindow!);
       }
+      if (_latitude != null) {
+        await prefs.setDouble('onboarding_lat', _latitude!);
+      }
+      if (_longitude != null) {
+        await prefs.setDouble('onboarding_lng', _longitude!);
+      }
 
       // Consumer
       await prefs.setString('onboarding_segment', _consumerSegment);
       await prefs.setString('onboarding_cooking', _cookingFrequency);
       await prefs.setStringList('onboarding_quality', _qualityPreferences);
-      await prefs.setString('onboarding_demands', jsonEncode(_consumerDemands));
+      await prefs.setStringList('onboarding_demands', _consumerFavProduce);
 
       // Farmer
       await prefs.setString('onboarding_alias', _farmAliasController.text);
       await prefs.setString('onboarding_land', _landAreaController.text);
       await prefs.setString('onboarding_access', _accessibilityType);
       await prefs.setStringList('onboarding_water', _waterSources);
-      await prefs.setString('onboarding_pledges', jsonEncode(_farmerPledges));
+      await prefs.setStringList('onboarding_pledges', _farmerFavProduce);
 
       // Terms
       await prefs.setBool('onboarding_terms', _acceptedTerms);
     } catch (e) {
-      debugPrint('Error saving state: $e');
+      //debugPrint('Error saving state: $e');
     }
   }
 
@@ -196,7 +211,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           _userRole = prefs.getString('onboarding_role');
 
           _nameController.text = prefs.getString('onboarding_name') ?? '';
-          _emailController.text = prefs.getString('onboarding_email') ?? '';
           _phoneController.text = prefs.getString('onboarding_phone') ?? '';
           _telephoneController.text =
               prefs.getString('onboarding_telephone') ?? '';
@@ -226,6 +240,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           _operatingDays.addAll(prefs.getStringList('onboarding_days') ?? []);
 
           _deliveryWindow = prefs.getString('onboarding_window');
+          _latitude = prefs.getDouble('onboarding_lat');
+          _longitude = prefs.getDouble('onboarding_lng');
 
           // Consumer
           _consumerSegment =
@@ -236,14 +252,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             prefs.getStringList('onboarding_quality') ?? ['Class A'],
           );
 
-          final demandsJson = prefs.getString('onboarding_demands');
-          if (demandsJson != null) {
-            final decoded = jsonDecode(demandsJson) as Map<String, dynamic>;
-            _consumerDemands.clear();
-            decoded.forEach((key, value) {
-              _consumerDemands[key] = Map<String, dynamic>.from(value as Map);
-            });
-          }
+          _consumerFavProduce.clear();
+          _consumerFavProduce.addAll(
+            prefs.getStringList('onboarding_demands') ?? [],
+          );
 
           // Farmer
           _farmAliasController.text = prefs.getString('onboarding_alias') ?? '';
@@ -253,14 +265,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           _waterSources.clear();
           _waterSources.addAll(prefs.getStringList('onboarding_water') ?? []);
 
-          final pledgesJson = prefs.getString('onboarding_pledges');
-          if (pledgesJson != null) {
-            final decoded = jsonDecode(pledgesJson) as Map<String, dynamic>;
-            _farmerPledges.clear();
-            decoded.forEach((key, value) {
-              _farmerPledges[key] = List<String>.from(value as List);
-            });
-          }
+          _farmerFavProduce.clear();
+          _farmerFavProduce.addAll(
+            prefs.getStringList('onboarding_pledges') ?? [],
+          );
 
           _acceptedTerms = prefs.getBool('onboarding_terms') ?? false;
         });
@@ -275,15 +283,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         }
       }
     } catch (e) {
-      debugPrint('Error loading state: $e');
-    }
-  }
-
-  Future<void> _clearSavedState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith('onboarding_'));
-    for (final key in keys) {
-      await prefs.remove(key);
+      //debugPrint('Error loading state: $e');
     }
   }
 
@@ -294,7 +294,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       'role': _userRole,
       'basicInfo': {
         'name': _nameController.text,
-        'email': _emailController.text,
         'phone': _phoneController.text,
         'telephone': _telephoneController.text,
         'streetAddress': _streetAddressController.text,
@@ -307,13 +306,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         'paymentMethods': _paymentMethods,
         'operatingDays': _operatingDays,
         'deliveryWindow': _deliveryWindow,
+        'latitude': _latitude,
+        'longitude': _longitude,
       },
       if (_userRole == 'Consumer')
         'consumerProfile': {
           'segment': _consumerSegment,
           'cookingFreq': _cookingFrequency,
           'qualityPrefs': _qualityPreferences,
-          'demands': _consumerDemands,
+          'demands': _consumerFavProduce,
         },
       if (_userRole == 'Farmer')
         'farmerProfile': {
@@ -321,7 +322,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           'landArea': _landAreaController.text,
           'accessibility': _accessibilityType,
           'waterSources': _waterSources,
-          'pledges': _farmerPledges,
+          'pledges': _farmerFavProduce,
         },
     };
   }
@@ -367,8 +368,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     // Produce Validation
     if (_currentPage == 3) {
       bool hasSelection = _userRole == 'Consumer'
-          ? _consumerDemands.isNotEmpty
-          : _farmerPledges.isNotEmpty;
+          ? _consumerFavProduce.isNotEmpty
+          : _farmerFavProduce.isNotEmpty;
 
       if (!hasSelection) {
         _showError(
@@ -427,6 +428,29 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     Future.delayed(const Duration(milliseconds: 200), _nextPage);
   }
 
+  Future<void> _captureLocation() async {
+    setState(() => _isLocating = true);
+    try {
+      final position = await determinePosition();
+      if (mounted && position != null) {
+        setState(() {
+          _latitude = position.latitude;
+          _longitude = position.longitude;
+        });
+        _saveState();
+        DuruhaSnackBar.showSuccess(context, "Location captured!");
+      }
+    } catch (e) {
+      if (mounted) {
+        DuruhaSnackBar.showError(context, "Location Error: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLocating = false);
+      }
+    }
+  }
+
   void _showError(String message) {
     DuruhaSnackBar.showError(context, message, title: "Action Required");
   }
@@ -436,23 +460,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     try {
       final submissionData = _buildSubmissionData();
-      debugPrint('🚀 [ONBOARDING] Submitting Data: $submissionData');
+      //debugPrint('🚀 [ONBOARDING] Submitting Data: $submissionData');
 
-      final authRepo = AuthRepository();
+      final onboardingRepo = OnboardingRepository();
 
-      // 1. Get current User ID (from session or args if we had them)
-      // For now, let's assume we are updating the current session user
-      // or creating a new profile if it's a fresh flow.
+      // 1. Get current User ID
       final currentUser = await SessionService.getSavedUser();
-      final userId =
-          currentUser?.id ??
-          'temp_new_user_${DateTime.now().millisecondsSinceEpoch}';
+      final userId = currentUser?.id;
 
-      // 2. Update Profile & Persist Session
-      await authRepo.updateProfile(userId, submissionData);
+      if (userId == null) {
+        throw Exception("User session not found. Please sign in.");
+      }
 
-      // 3. Submit any extra KYC docs (simulated)
-      await authRepo.submitKyc(userId, {'termsAccepted': true});
+      // 2. Submit Full Onboarding Data
+      await onboardingRepo.onboarding(userId, submissionData);
 
       if (!mounted) return;
 
@@ -463,7 +484,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         _generatedId = userId; // Show actuall User ID or a generated reference
       });
     } catch (e) {
-      debugPrint("❌ [ONBOARDING] Error: $e");
+      //debugPrint("❌ [ONBOARDING] Error: $e");
       if (mounted) {
         setState(() => _isSubmitting = false);
         _showError("Failed to submit onboarding data. Please try again.");
@@ -540,7 +561,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildBasicInfo() {
     return BasicInfoStep(
       nameController: _nameController,
-      emailController: _emailController,
       phoneController: _phoneController,
       telephoneController: _telephoneController,
       streetAddressController: _streetAddressController,
@@ -561,7 +581,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           _saveState();
         });
       },
-      paymentMethodOptions: const ['GCash', 'Bank Transfer', 'Cash'],
+      paymentMethodOptions: PaymentMethods.all,
       selectedPaymentMethods: _paymentMethods,
       onPaymentMethodToggle: (val) {
         setState(() {
@@ -591,6 +611,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         setState(() => _deliveryWindow = v);
         _saveState();
       },
+      latitude: _latitude,
+      longitude: _longitude,
+      isLocating: _isLocating,
+      onCaptureLocation: _captureLocation,
     );
   }
 
@@ -645,28 +669,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           child: ProduceSelectionStep(
             dialects: _selectedDialects,
             userRole: _userRole ?? 'Consumer',
-            consumerDemands: _consumerDemands,
-            farmerPledges: _farmerPledges,
+            consumerFavProduce: _consumerFavProduce,
+            farmerFavProduce: _farmerFavProduce,
             searchQuery: _produceSearchQuery,
             onItemToggled: (id, isSelected) {
               setState(() {
                 if (_userRole == 'Consumer') {
                   isSelected
-                      ? _consumerDemands[id] = {}
-                      : _consumerDemands.remove(id);
+                      ? _consumerFavProduce.add(id)
+                      : _consumerFavProduce.remove(id);
                 } else {
                   isSelected
-                      ? _farmerPledges[id] = []
-                      : _farmerPledges.remove(id);
+                      ? _farmerFavProduce.add(id)
+                      : _farmerFavProduce.remove(id);
                 }
-                _saveState();
-              });
-            },
-            onFarmerPledgeChanged: (id, variety, isSelected) {
-              setState(() {
-                final list = _farmerPledges[id] ?? [];
-                isSelected ? list.add(variety) : list.remove(variety);
-                _farmerPledges[id] = list;
                 _saveState();
               });
             },
@@ -700,7 +716,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         final user = await SessionService.getSavedUser();
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(
-          (user?.role == UserRole.farmer) ? '/farmer/main' : '/consumer/main',
+          (user?.role == UserRole.farmer) ? '/farmer/main' : '/consumer/shop',
           (r) => false,
           arguments: user,
         );
@@ -813,18 +829,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 width: double.infinity,
                 height: 80,
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surface.withValues(alpha: 0.95),
-                  border: Border(
-                    top: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outline.withValues(alpha: 0.1),
-                    ),
-                  ),
-                ),
+
                 child: DuruhaButton(
                   text: _currentPage == 4 ? "FINISH REGISTRATION" : "CONTINUE",
                   isLoading: _isSubmitting,

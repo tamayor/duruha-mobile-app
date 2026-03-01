@@ -1,7 +1,10 @@
+import 'package:duruha/core/constants/quality_preferences.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/core/constants/consumer_options.dart';
 import 'package:duruha/shared/user/data/dialect_repository.dart';
 import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
+import 'package:duruha/shared/user/data/location_repository.dart';
 import 'package:flutter/material.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -32,6 +35,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late String _consumerSegment;
   late String _cookingFrequency;
   late List<String> _qualityPreferences;
+  double? _latitude;
+  double? _longitude;
+  bool _isLocating = false;
 
   bool _isLoading = false;
   List<String> _dialectOptions = [
@@ -42,27 +48,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'Ilocano',
   ]; // Default mock
 
-  final List<String> _consumerSegmentOptions = [
-    'Household',
-    'Restaurant',
-    'Catering',
-    'Small Business',
-  ];
-
-  final List<String> _cookingFrequencyOptions = [
-    'Daily',
-    'Few times a week',
-    'Weekly',
-    'Occasional',
-  ];
-
-  final List<String> _qualityPreferenceOptions = [
-    'Freshness',
-    'Organic',
-    'Local Source',
-    'Lowest Price',
-    'Premium Grade',
-  ];
+  final List<String> _consumerSegmentOptions = ConsumerOptions.segments;
+  final List<String> _cookingFrequencyOptions =
+      ConsumerOptions.cookingFrequency;
+  final List<String> _qualityPreferenceOptions =
+      QualityPreferences.qualityPreferences;
 
   @override
   void initState() {
@@ -102,10 +92,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _initializeState() {
-    _selectedDialect = widget.profile.dialect ?? [];
+    _selectedDialect = List.from(widget.profile.dialect);
     _consumerSegment = widget.profile.consumerSegment ?? 'Household';
     _cookingFrequency = widget.profile.cookingFrequency ?? 'Daily';
-    _qualityPreferences = List.from(widget.profile.qualityPreferences ?? []);
+    _qualityPreferences = List.from(widget.profile.qualityPreferences);
+    _latitude = widget.profile.latitude;
+    _longitude = widget.profile.longitude;
   }
 
   @override
@@ -122,14 +114,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  void _toggleSelection(List<String> list, String item) {
-    setState(() {
-      if (list.contains(item)) {
-        list.remove(item);
-      } else {
-        list.add(item);
+  void _toggleSelection(
+    List<String> list,
+    String item,
+    Function(List<String>) onUpdate,
+  ) {
+    final newList = List<String>.from(list);
+    if (newList.contains(item)) {
+      newList.remove(item);
+    } else {
+      newList.add(item);
+    }
+    onUpdate(newList);
+  }
+
+  Future<void> _captureLocation() async {
+    setState(() => _isLocating = true);
+    try {
+      final position = await determinePosition();
+      if (mounted && position != null) {
+        setState(() {
+          _latitude = position.latitude;
+          _longitude = position.longitude;
+        });
+        DuruhaSnackBar.showSuccess(context, "Location captured!");
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        DuruhaSnackBar.showError(context, "Location Error: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLocating = false);
+      }
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -152,6 +170,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         segmentSize: int.tryParse(_segmentSizeController.text),
         cookingFrequency: _cookingFrequency,
         qualityPreferences: _qualityPreferences,
+        latitude: _latitude,
+        longitude: _longitude,
       );
 
       await ConsumerProfileRepositoryImpl().updateProfile(updatedProfile);
@@ -209,8 +229,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   DuruhaSelectionChipGroup(
                     title: 'Preferred Dialect',
                     options: _dialectOptions,
+                    isNumbered: true,
                     selectedValues: _selectedDialect,
-                    onToggle: (val) => _toggleSelection(_selectedDialect, val),
+                    onToggle: (val) => _toggleSelection(
+                      _selectedDialect,
+                      val,
+                      (newList) => setState(() => _selectedDialect = newList),
+                    ),
                   ),
                 ],
               ),
@@ -220,6 +245,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               DuruhaSectionContainer(
                 title: "Consumer Details",
                 children: [
+                  const SizedBox(height: 16),
                   DuruhaDropdown(
                     label: 'Consumer TYPE',
                     value: _consumerSegment,
@@ -236,6 +262,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       }
                     },
                   ),
+                  const SizedBox(height: 16),
                   DuruhaTextField(
                     controller: _segmentSizeController,
                     label: "Household / Group Size",
@@ -258,8 +285,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     subtitle: "What matters most to you?",
                     options: _qualityPreferenceOptions,
                     selectedValues: _qualityPreferences,
-                    onToggle: (val) =>
-                        _toggleSelection(_qualityPreferences, val),
+                    onToggle: (val) => _toggleSelection(
+                      _qualityPreferences,
+                      val,
+                      (newList) =>
+                          setState(() => _qualityPreferences = newList),
+                    ),
                   ),
                 ],
               ),
@@ -269,6 +300,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               DuruhaSectionContainer(
                 title: "Address",
                 children: [
+                  const SizedBox(height: 16),
                   DuruhaTextField(
                     controller: _provinceController,
                     label: "Province",
@@ -304,6 +336,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     keyboardType: TextInputType.number,
                     validator: (val) =>
                         val?.isEmpty == true ? "Required" : null,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "GPS Coordinates",
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            Text(
+                              _latitude != null && _longitude != null
+                                  ? "${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}"
+                                  : "Not set",
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_isLocating)
+                        const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        TextButton.icon(
+                          onPressed: _captureLocation,
+                          icon: Icon(
+                            Icons.my_location,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                          label: Text(
+                            _latitude != null ? "Update" : "Capture",
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),

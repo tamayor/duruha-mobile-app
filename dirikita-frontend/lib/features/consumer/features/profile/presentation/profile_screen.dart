@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
 import 'package:flutter/material.dart';
+import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
 import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/features/consumer/features/profile/presentation/edit_profile_screen.dart';
 
 class ConsumerProfileScreen extends StatefulWidget {
@@ -28,25 +30,25 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
   }
 
   Future<ConsumerProfile> _loadProfile() async {
-    return ConsumerProfileRepositoryImpl().getConsumerProfile('consumer-001');
+    final userId = await SessionService.getUserId();
+    if (userId == null) {
+      throw Exception('User is not logged in');
+    }
+    return ConsumerProfileRepositoryImpl().getConsumerProfile(userId);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final initialName = widget.userData['name'] ?? 'Consumer';
 
     return DuruhaScaffold(
       appBarTitle: 'My Profile',
-      bottomNavigationBar: ConsumerNavigation(
-        name: initialName,
-        currentRoute: '/profile',
-      ),
+      bottomNavigationBar: ConsumerNavigation(currentRoute: '/profile'),
       body: FutureBuilder<ConsumerProfile>(
         future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const ConsumerLoadingScreen();
           } else if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
           } else if (!snapshot.hasData) {
@@ -172,7 +174,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            displayLandmark,
+                            displayLandmark ?? '',
                             textAlign: TextAlign.start,
                             style: TextStyle(
                               color: theme.colorScheme.onSurface.withValues(
@@ -217,10 +219,18 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                     ),
                     _buildMenuOption(
                       context,
+                      icon: Icons.payments_outlined,
+                      title: "Subscriptions",
+                      onTap: () {
+                        Navigator.pushNamed(context, '/consumer/subscriptions');
+                      },
+                    ),
+                    _buildMenuOption(
+                      context,
                       icon: Icons.shopping_bag_outlined,
                       title: "My Orders",
                       onTap: () {
-                        Navigator.pushNamed(context, '/consumer/orders');
+                        Navigator.pushNamed(context, '/consumer/manage');
                       },
                     ),
                     _buildMenuOption(
@@ -228,7 +238,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                       icon: Icons.favorite_border,
                       title: "My Favorites",
                       onTap: () {
-                        Navigator.pushNamed(context, '/consumer/market');
+                        Navigator.pushNamed(context, '/consumer/shop');
                       },
                     ),
                     _buildMenuOption(
@@ -271,7 +281,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
         DateFormat('MMM d yyyy').format(DateTime.now()),
         Icons.history,
       ),
-      _DetailItem('Dialect', profile.dialect.join(', '), Icons.language),
+      _DetailItem('Dialect', profile.dialect[0], Icons.language),
       _DetailItem(
         'Segment',
         profile.consumerSegment ?? 'Household',
@@ -284,12 +294,12 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
       ),
       _DetailItem(
         'Preferences',
-        '${profile.qualityPreferences?.length ?? 0} Saved',
+        '${profile.qualityPreferences.length} Saved',
         Icons.verified_outlined,
       ),
       _DetailItem(
         'Interests',
-        '${profile.demandCrops?.length ?? 0} Crops',
+        '${profile.consumerFavProduce.length} Crops',
         Icons.eco_outlined,
       ),
     ];
@@ -320,10 +330,10 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
               color: theme.colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 16),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
+            padding: EdgeInsets.zero,
             physics: const NeverScrollableScrollPhysics(),
             childAspectRatio: 2.5,
             mainAxisSpacing: 12,
@@ -347,7 +357,11 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
             color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(item.icon, size: 20, color: theme.colorScheme.primary),
+          child: Icon(
+            item.icon,
+            size: 20,
+            color: theme.colorScheme.onSecondary,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -452,6 +466,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
       );
 
       if (image != null) {
+        if (!mounted) return;
         DuruhaSnackBar.showInfo(context, "Uploading image...");
 
         final newImageUrl = await ConsumerProfileRepositoryImpl()

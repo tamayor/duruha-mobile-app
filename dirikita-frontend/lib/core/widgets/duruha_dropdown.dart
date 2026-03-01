@@ -56,7 +56,7 @@ class DuruhaDropdown<T> extends StatelessWidget {
           ).copyWith(
             filled: true,
             fillColor: colorScheme
-                .primary, // The background is now the Primary brand color
+                .surface, // The background is now the Primary brand color
             // Label text needs to be visible on Primary
             labelStyle: TextStyle(color: contentColor.withValues(alpha: 0.8)),
             floatingLabelStyle: TextStyle(color: contentColor),
@@ -87,7 +87,7 @@ class DuruhaDropdown<T> extends StatelessWidget {
                   itemIcons![item],
                   size: 20,
                   color: colorScheme
-                      .onSecondary, // Use primary inside the white menu
+                      .onPrimary, // Use primary inside the white menu
                 ),
                 const SizedBox(width: 12),
               ],

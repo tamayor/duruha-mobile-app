@@ -16,35 +16,86 @@ class FarmerProfile extends UserProfile {
     required super.province,
     required super.postalCode,
     super.imageUrl,
-    required super.dialect,
-    required String farmAlias,
-    required double landArea,
-    required String accessibilityType,
-    required List<String> waterSources,
-    required List<String> paymentMethods,
-    required List<String> operatingDays,
-    required String deliveryWindow,
-    List<Produce> pledgedCrops = const [],
+    super.latitude,
+    super.longitude,
+    super.dialect,
+    required this.farmerId,
+    required this.farmerAlias,
+    required this.landArea,
+    required this.accessibilityType,
+    required this.waterSources,
+    required this.paymentMethods,
+    required this.operatingDays,
+    required this.deliveryWindow,
+    this.farmerFavProduce = const [],
     this.trustScore = 0,
     this.cropPoints = 0,
     this.unlockedBadgeIds = const [],
-  }) : super(
-         role: UserRole.farmer,
-         farmAlias: farmAlias,
-         landArea: landArea,
-         accessibilityType: accessibilityType,
-         waterSources: waterSources,
-         paymentMethods: paymentMethods,
-         operatingDays: operatingDays,
-         deliveryWindow: deliveryWindow,
-         pledgedCrops: pledgedCrops,
-       );
+  }) : super(role: UserRole.farmer);
 
+  final String farmerId;
+  final String farmerAlias;
+  final double landArea;
+  final String accessibilityType;
+  final List<String> waterSources;
+  final List<Produce> farmerFavProduce;
+  final List<String> paymentMethods;
+  final List<String> operatingDays;
+  final String deliveryWindow;
   final int trustScore;
   final int cropPoints;
   final List<String> unlockedBadgeIds;
 
+  factory FarmerProfile.fromJson(Map<String, dynamic> json) {
+    final user = UserProfile.fromJson(json);
+    return FarmerProfile(
+      id: user.id,
+      joinedAt: user.joinedAt,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      barangay: user.barangay,
+      city: user.city,
+      province: user.province,
+      postalCode: user.postalCode,
+      landmark: user.landmark,
+      imageUrl: user.imageUrl,
+      latitude: user.latitude,
+      longitude: user.longitude,
+      dialect: user.dialect,
+      farmerId: json['farmer_id'] as String? ?? '',
+      farmerAlias: json['farmer_alias'] as String? ?? '',
+      landArea: json['land_area'] != null
+          ? (json['land_area'] as num).toDouble()
+          : 0.0,
+      accessibilityType: json['accessibility_type'] as String? ?? '',
+      waterSources: json['water_sources'] != null
+          ? List<String>.from(json['water_sources'] as List)
+          : [],
+      paymentMethods: json['payment_methods'] != null
+          ? List<String>.from(json['payment_methods'] as List)
+          : [],
+      operatingDays: json['operating_days'] != null
+          ? List<String>.from(json['operating_days'] as List)
+          : [],
+      deliveryWindow: json['delivery_window'] as String? ?? '',
+      farmerFavProduce: json['fav_produce'] != null
+          ? (json['fav_produce'] as List)
+                .map(
+                  (id) => Produce(
+                    id: id.toString(),
+                    englishName: '',
+                    baseUnit: 'kg',
+                    category: '',
+                  ),
+                )
+                .toList()
+          : [],
+    );
+  }
+
   factory FarmerProfile.fromUserProfile(UserProfile user) {
+    if (user is FarmerProfile) return user;
     if (user.role != UserRole.farmer) {
       throw Exception('User is not a farmer'); // Or handle appropriately
     }
@@ -60,17 +111,37 @@ class FarmerProfile extends UserProfile {
       postalCode: user.postalCode,
       landmark: user.landmark,
       imageUrl: user.imageUrl,
+      latitude: user.latitude,
+      longitude: user.longitude,
 
       dialect: user.dialect,
-      farmAlias: user.farmAlias ?? '',
-      landArea: user.landArea ?? 0.0,
-      accessibilityType: user.accessibilityType ?? '',
-      waterSources: user.waterSources ?? [],
-      paymentMethods: user.paymentMethods ?? [],
-      operatingDays: user.operatingDays ?? [],
-      deliveryWindow: user.deliveryWindow ?? '',
-      pledgedCrops: user.pledgedCrops ?? [],
+      farmerId: '', // Needs to be populated
+      farmerAlias: '', // Needs to be populated from somewhere
+      landArea: 0.0,
+      accessibilityType: '',
+      waterSources: [],
+      paymentMethods: [],
+      operatingDays: [],
+      deliveryWindow: '',
+      farmerFavProduce: [],
     );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json.addAll({
+      'farmer_id': farmerId,
+      'farmer_alias': farmerAlias,
+      'land_area': landArea,
+      'accessibility_type': accessibilityType,
+      'water_sources': waterSources,
+      'payment_methods': paymentMethods,
+      'operating_days': operatingDays,
+      'delivery_window': deliveryWindow,
+      'fav_produce': farmerFavProduce.map((p) => p.id).toList(),
+    });
+    return json;
   }
 
   FarmerProfile copyWith({
@@ -85,15 +156,18 @@ class FarmerProfile extends UserProfile {
     String? landmark,
     String? postalCode,
     String? imageUrl,
+    double? latitude,
+    double? longitude,
     List<String>? dialect,
-    String? farmAlias,
+    String? farmerId,
+    String? farmerAlias,
     double? landArea,
     String? accessibilityType,
     List<String>? waterSources,
     List<String>? paymentMethods,
     List<String>? operatingDays,
     String? deliveryWindow,
-    List<Produce>? pledgedCrops,
+    List<Produce>? farmerFavProduce,
     int? trustScore,
     int? cropPoints,
     List<String>? unlockedBadgeIds,
@@ -110,15 +184,18 @@ class FarmerProfile extends UserProfile {
       landmark: landmark ?? this.landmark,
       postalCode: postalCode ?? this.postalCode,
       imageUrl: imageUrl ?? this.imageUrl,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       dialect: dialect ?? this.dialect,
-      farmAlias: farmAlias ?? this.farmAlias ?? '',
-      landArea: landArea ?? this.landArea ?? 0.0,
-      accessibilityType: accessibilityType ?? this.accessibilityType ?? '',
-      waterSources: waterSources ?? this.waterSources ?? [],
-      paymentMethods: paymentMethods ?? this.paymentMethods ?? [],
-      operatingDays: operatingDays ?? this.operatingDays ?? [],
-      deliveryWindow: deliveryWindow ?? this.deliveryWindow ?? '',
-      pledgedCrops: pledgedCrops ?? this.pledgedCrops ?? [],
+      farmerId: farmerId ?? this.farmerId,
+      farmerAlias: farmerAlias ?? this.farmerAlias,
+      landArea: landArea ?? this.landArea,
+      accessibilityType: accessibilityType ?? this.accessibilityType,
+      waterSources: waterSources ?? this.waterSources,
+      paymentMethods: paymentMethods ?? this.paymentMethods,
+      operatingDays: operatingDays ?? this.operatingDays,
+      deliveryWindow: deliveryWindow ?? this.deliveryWindow,
+      farmerFavProduce: farmerFavProduce ?? this.farmerFavProduce,
       trustScore: trustScore ?? this.trustScore,
       cropPoints: cropPoints ?? this.cropPoints,
       unlockedBadgeIds: unlockedBadgeIds ?? this.unlockedBadgeIds,
