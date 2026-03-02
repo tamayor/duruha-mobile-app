@@ -31,10 +31,26 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
   List<FarmerSelectedProduce> _filteredCrops = [];
   bool _isLoading = true;
 
+  // Pagination State
+  final _scrollController = ScrollController();
+  bool _isFetchingMore = false;
+  bool _hasMore = false;
+  int? _nextOffset;
+
   @override
   void initState() {
     super.initState();
     _loadPersistenceSettings();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_isFetchingMore &&
+        _hasMore) {
+      _fetchMoreCrops();
+    }
   }
 
   Future<void> _loadPersistenceSettings() async {
@@ -49,30 +65,50 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
     }
   }
 
-  Future<void> _fetchCrops() async {
+  Future<void> _fetchCrops({bool reset = true}) async {
+    if (reset) {
+      if (mounted) setState(() => _isLoading = true);
+      _nextOffset = 0;
+      _hasMore = true;
+    }
+
+    if (!_hasMore) return;
+
     try {
-      final userId = await SessionService.getUserId() ?? '';
-      // The original call did not have a 'dialect' argument.
-      // The instruction implies removing it, but it was not present.
-      // The 'favoritesOnly' argument is retained as it was in the original code.
       final result = await _repository.fetchFarmerProduce(
-        userId,
         favoritesOnly: _showFavoritesOnly,
         searchQuery: _searchController.text,
+        offset: _nextOffset ?? 0,
       );
 
       if (mounted) {
         setState(() {
-          _allCrops = result.data;
+          if (reset) {
+            _allCrops = result.data;
+          } else {
+            _allCrops.addAll(result.data);
+          }
+          _hasMore = result.hasMore;
+          _nextOffset = result.nextOffset;
           _applyFilters();
           _isLoading = false;
+          _isFetchingMore = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _isFetchingMore = false;
+        });
       }
     }
+  }
+
+  Future<void> _fetchMoreCrops() async {
+    if (_isFetchingMore || !_hasMore) return;
+    setState(() => _isFetchingMore = true);
+    await _fetchCrops(reset: false);
   }
 
   void _applyFilters() {
@@ -156,6 +192,7 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -235,12 +272,21 @@ class _FarmerSalesScreenState extends State<FarmerSalesScreen> {
                     ),
                   )
                 : ListView.separated(
-                    // Added top padding back for the floating toggle
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(20, 80, 20, 100),
-                    itemCount: _filteredCrops.length,
+                    itemCount:
+                        _filteredCrops.length + (_isFetchingMore ? 1 : 0),
                     separatorBuilder: (context, index) =>
                         const SizedBox(height: 16),
                     itemBuilder: (context, index) {
+                      if (index == _filteredCrops.length) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
                       final crop = _filteredCrops[index];
                       final isSelected = _selectedCropIds.contains(crop.id);
                       return _buildCropCard(context, crop, isSelected);

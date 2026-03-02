@@ -61,6 +61,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   Map<String, dynamic>? _summaryData;
   final Map<String, String> _originalStatuses = {};
   bool _isLoadingOrders = false;
+  bool _hasChanges = false; // Tracks if parent needs to refresh
 
   // ── Short offer ID helper ─────────────────────────────────────────────────
   String get _shortId {
@@ -109,6 +110,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     if (mounted && updatedOffer != null) {
       setState(() {
         _offer = updatedOffer;
+        _hasChanges = true; // Mark as changed
       });
     }
   }
@@ -161,11 +163,15 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
               title: Text("From: ${DuruhaFormatter.formatDate(fromDate)}"),
               trailing: const Icon(Icons.calendar_today_outlined, size: 20),
               onTap: () async {
+                final now = DateTime.now();
+                final bool isFar = fromDate.difference(now).inDays > 365;
                 final picked = await showDatePicker(
                   context: context,
-                  initialDate: fromDate,
+                  initialDate: isFar
+                      ? now.add(const Duration(days: 30))
+                      : fromDate,
                   firstDate: DateTime(2020),
-                  lastDate: DateTime(2030),
+                  lastDate: DateTime(2100),
                 );
                 if (picked != null) {
                   setDialogState(() => fromDate = picked);
@@ -177,11 +183,15 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
               title: Text("To: ${DuruhaFormatter.formatDate(toDate)}"),
               trailing: const Icon(Icons.calendar_today_outlined, size: 20),
               onTap: () async {
+                final now = DateTime.now();
+                final bool isFar = toDate.difference(now).inDays > 365;
                 final picked = await showDatePicker(
                   context: context,
-                  initialDate: toDate,
+                  initialDate: isFar
+                      ? now.add(const Duration(days: 30))
+                      : toDate,
                   firstDate: DateTime(2020),
-                  lastDate: DateTime(2030),
+                  lastDate: DateTime(2100),
                 );
                 if (picked != null) {
                   setDialogState(() => toDate = picked);
@@ -308,94 +318,101 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         )
         .toList();
 
-    return DefaultTabController(
-      length: 2,
-      initialIndex: 1,
-      child: DuruhaScaffold(
-        // ── Cleaner title: short ID clearly separated from the label
-        appBarTitle: "Offer · $_shortId",
-        appBarActions: [
-          if (_offer.isActive)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: DuruhaPopupMenu<String>(
-                items: [
-                  'edit',
-                  if (editableOrders.isNotEmpty) 'update_all_status',
-                  if (_orders.isNotEmpty) 'set_dispatch_all',
-                  if (_offer.isActive)
-                    'deactivate'
-                  else if (_offer.remainingQuantity > 0 &&
-                      (_offer.isPriceLocked == false ||
-                          _summaryData?['fpls_status'] == 'ACTIVE'))
-                    'reactivate',
-                ],
-                tooltip: 'Actions',
-                icon: const Icon(Icons.more_vert),
-                showLabel: false,
-                showBackground: false,
-                selectedValue: 'edit',
-                onSelected: (value) {
-                  switch (value) {
-                    case 'edit':
-                      _showUpdateOfferDialog();
-                      break;
-                    case 'update_all_status':
-                      _showBulkUpdateDialog(context, editableOrders);
-                      break;
-                    case 'set_dispatch_all':
-                      _showSetDispatchDateDialog(context, _orders);
-                      break;
-                    case 'deactivate':
-                      _handleOfferStatusChange('delete');
-                      break;
-                    case 'reactivate':
-                      _handleOfferStatusChange('activate');
-                      break;
-                  }
-                },
-                labelBuilder: (value) => switch (value) {
-                  'edit' => 'Edit Offer',
-                  'update_all_status' => 'Update All Orders',
-                  'set_dispatch_all' => 'Set Dispatch Date (All)',
-                  'deactivate' => '$actionText Offer',
-                  'reactivate' => 'Reactivate Offer',
-                  _ => value,
-                },
-                itemIcons: {
-                  'edit': Icons.edit_outlined,
-                  'update_all_status': Icons.edit_note_rounded,
-                  'set_dispatch_all': Icons.calendar_today_rounded,
-                  'deactivate': isDeletable
-                      ? Icons.delete_forever
-                      : Icons.warning_amber_rounded,
-                  'reactivate': Icons.play_circle_outline,
-                },
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pop(context, _hasChanges);
+      },
+      child: DefaultTabController(
+        length: 2,
+        initialIndex: 1,
+        child: DuruhaScaffold(
+          onBackPressed: () => Navigator.pop(context, _hasChanges),
+          // ── Cleaner title: short ID clearly separated from the label
+          appBarTitle: "Offer · $_shortId",
+          appBarActions: [
+            if (_offer.isActive)
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: DuruhaPopupMenu<String>(
+                  items: [
+                    'edit',
+                    if (editableOrders.isNotEmpty) 'update_all_status',
+                    if (_orders.isNotEmpty) 'set_dispatch_all',
+                    if (_offer.isActive)
+                      'deactivate'
+                    else if (_offer.remainingQuantity > 0 &&
+                        (_offer.isPriceLocked == false ||
+                            _summaryData?['fpls_status'] == 'ACTIVE'))
+                      'reactivate',
+                  ],
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.more_vert),
+                  showLabel: false,
+                  showBackground: false,
+                  selectedValue: 'edit',
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'edit':
+                        _showUpdateOfferDialog();
+                        break;
+                      case 'update_all_status':
+                        _showBulkUpdateDialog(context, editableOrders);
+                        break;
+                      case 'set_dispatch_all':
+                        _showSetDispatchDateDialog(context, _orders);
+                        break;
+                      case 'deactivate':
+                        _handleOfferStatusChange('delete');
+                        break;
+                      case 'reactivate':
+                        _handleOfferStatusChange('activate');
+                        break;
+                    }
+                  },
+                  labelBuilder: (value) => switch (value) {
+                    'edit' => 'Edit Offer',
+                    'update_all_status' => 'Update All Orders',
+                    'set_dispatch_all' => 'Set Dispatch Date (All)',
+                    'deactivate' => '$actionText Offer',
+                    'reactivate' => 'Reactivate Offer',
+                    _ => value,
+                  },
+                  itemIcons: {
+                    'edit': Icons.edit_outlined,
+                    'update_all_status': Icons.edit_note_rounded,
+                    'set_dispatch_all': Icons.calendar_today_rounded,
+                    'deactivate': isDeletable
+                        ? Icons.delete_forever
+                        : Icons.warning_amber_rounded,
+                    'reactivate': Icons.play_circle_outline,
+                  },
+                ),
               ),
-            ),
-          if (!_offer.isActive &&
-              _offer.remainingQuantity > 0 &&
-              (_offer.isPriceLocked == false ||
-                  _summaryData?['fpls_status'] == 'ACTIVE'))
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: IconButton(
-                icon: const Icon(Icons.play_circle_fill, color: Colors.green),
-                tooltip: 'Reactivate Offer',
-                onPressed: () => _handleOfferStatusChange('activate'),
+            if (!_offer.isActive &&
+                _offer.remainingQuantity > 0 &&
+                (_offer.isPriceLocked == false ||
+                    _summaryData?['fpls_status'] == 'ACTIVE'))
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: IconButton(
+                  icon: const Icon(Icons.play_circle_fill, color: Colors.green),
+                  tooltip: 'Reactivate Offer',
+                  onPressed: () => _handleOfferStatusChange('activate'),
+                ),
               ),
+          ],
+          body: DuruhaScrollHideWrapper(
+            bar: DuruhaTabBar(
+              tabs: const [
+                Tab(text: "OVERVIEW"),
+                Tab(text: "ORDERS"),
+              ],
             ),
-        ],
-        body: DuruhaScrollHideWrapper(
-          bar: DuruhaTabBar(
-            indicatorColor: theme.colorScheme.primary,
-            tabs: const [
-              Tab(text: "OVERVIEW"),
-              Tab(text: "ORDERS"),
-            ],
-          ),
-          body: TabBarView(
-            children: [_buildOverviewTab(theme), _buildOrdersTab(theme)],
+            body: TabBarView(
+              children: [_buildOverviewTab(theme), _buildOrdersTab(theme)],
+            ),
           ),
         ),
       ),

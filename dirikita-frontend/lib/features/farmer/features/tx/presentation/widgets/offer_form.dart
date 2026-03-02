@@ -225,7 +225,9 @@ class _OfferFormState extends State<OfferForm> {
             icon: Icons.scale_rounded,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             suffix: widget.state.selectedUnit,
-            onChanged: (_) => widget.onStateChanged(),
+            onChanged: (_) {
+              _syncEntriesToState();
+            },
           ),
           // Date range picker
           DuruhaDateRangePicker(

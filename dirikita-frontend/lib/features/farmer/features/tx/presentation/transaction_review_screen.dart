@@ -82,6 +82,47 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   }
 
   Future<void> _submitAll() async {
+    if (_activeSubscription != null) {
+      // Gather all price locked offers to show in the confirmation
+      final List<String> lockedNames = [];
+      for (var produce in widget.selectedProduce) {
+        final state = widget.cropStates[produce.id]!;
+        for (var entry in state.offerEntries) {
+          if (entry.isPriceLock) {
+            lockedNames.add(
+              "${produce.nameEnglish} - ${entry.varietyName} (${entry.produceForm})",
+            );
+          }
+        }
+      }
+
+      // If they selected a subscription but checked NOTHING, warn them
+      if (lockedNames.isEmpty) {
+        DuruhaSnackBar.showError(
+          context,
+          "You didn't price lock any offer. Removing price lock selection.",
+        );
+        setState(() {
+          _activeSubscription = null;
+          _recomputePriceLockStates();
+        });
+        return;
+      }
+
+      // If they DID check items, show the confirmation dialog
+      final confirm = await DuruhaDialog.show(
+        context: context,
+        title: "Confirm Price Lock",
+        message:
+            "You are locking the price for the following items:\n\n• ${lockedNames.join('\n• ')}\n\nDo you want to proceed with this offer?",
+        confirmText: "PROCEED",
+        cancelText: "CANCEL",
+        icon: Icons.lock_rounded,
+      );
+
+      if (confirm != true) return;
+    }
+
     setState(() => _isSubmitting = true);
     HapticFeedback.heavyImpact();
     String successMessage = widget.mode == 'pledge'
@@ -922,7 +963,8 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                                       width: 24,
                                       height: 24,
                                       child: Checkbox(
-                                        checkColor: theme.colorScheme.onTertiary,
+                                        checkColor:
+                                            theme.colorScheme.onTertiary,
                                         fillColor:
                                             WidgetStateProperty.resolveWith((
                                               states,
@@ -970,7 +1012,9 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                                                 ? FontWeight.bold
                                                 : FontWeight.normal,
                                             color: e.isPriceLock
-                                                ? theme.colorScheme.tertiary
+                                                ? theme
+                                                      .colorScheme
+                                                      .onTertiaryContainer
                                                 : theme
                                                       .colorScheme
                                                       .onSurfaceVariant,

@@ -38,8 +38,7 @@ class _FarmerCropsScreenState extends State<FarmerCropsScreen> {
 
   Future<void> _fetchCrops() async {
     try {
-      final userId = await SessionService.getUserId() ?? '';
-      final result = await _repository.fetchFarmerProduce(userId);
+      final result = await _repository.fetchFarmerProduce();
       if (mounted) {
         setState(() {
           _allCrops = result.data;

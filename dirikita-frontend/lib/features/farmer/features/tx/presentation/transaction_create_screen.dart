@@ -37,6 +37,9 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
   // Per-crop form state
   final Map<String, CropSelectionState> _cropStates = {};
 
+  // Keys for scrolling to errors
+  final Map<String, GlobalKey> _cropKeys = {};
+
   @override
   void initState() {
     super.initState();
@@ -163,6 +166,7 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
           }
 
           _cropStates[produce.id] = state;
+          _cropKeys[produce.id] = GlobalKey();
         }
 
         setState(() {
@@ -251,6 +255,17 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
   // _fetchAggregateDemand removed as we now use per-date DateDemandData logic
   // embedded in the repository and state.
 
+  void _scrollToCrop(String cropId) {
+    final key = _cropKeys[cropId];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 300),
+        alignment: 0.1, // Near the top
+      );
+    }
+  }
+
   void _goToReview() {
     // Basic validation
     for (var produce in _selectedProduce) {
@@ -284,6 +299,7 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
             context,
             "Please select harvest dates and enter pledge quantities for ${produce.nameEnglish}",
           );
+          _scrollToCrop(produce.id);
           return;
         }
       } else {
@@ -296,15 +312,29 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
             context,
             'Please select at least one form and enter a quantity for ${produce.nameEnglish}',
           );
+          _scrollToCrop(produce.id);
           return;
         }
 
-        final missingDate = entries.any((e) => e.quantity > 0 && !e.hasDate);
-        if (missingDate) {
+        // Check for missing dates when quantity is set
+        final qtyMissingDate = entries.any((e) => e.quantity > 0 && !e.hasDate);
+        if (qtyMissingDate) {
           DuruhaSnackBar.showWarning(
             context,
-            'Please set availability dates for all forms with quantities in ${produce.nameEnglish}',
+            'You entered a quantity but missing dates for ${produce.nameEnglish}. Please set them.',
           );
+          _scrollToCrop(produce.id);
+          return;
+        }
+
+        // Check for missing quantity when date is set
+        final dateMissingQty = entries.any((e) => e.quantity == 0 && e.hasDate);
+        if (dateMissingQty) {
+          DuruhaSnackBar.showWarning(
+            context,
+            'You set dates but no quantity for a variety in ${produce.nameEnglish}.',
+          );
+          _scrollToCrop(produce.id);
           return;
         }
       }
@@ -411,6 +441,7 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
           ),
         ),
         SliverToBoxAdapter(
+          key: _cropKeys[produce.id],
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             child: DuruhaSectionContainer(

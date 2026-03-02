@@ -30,6 +30,9 @@ class _OfferDetailLoaderScreenState extends State<OfferDetailLoaderScreen> {
         .from('farmer_offers')
         .select('''
           *,
+          farmer_price_lock_subscriptions(
+            status
+          ),
           produce_varieties(
             variety_name,
             produce:produce_id(
@@ -54,8 +57,11 @@ class _OfferDetailLoaderScreenState extends State<OfferDetailLoaderScreen> {
     final String availableFromStr =
         response['available_from'] ?? response['created_at'];
 
+    final fplsStatus =
+        response['farmer_price_lock_subscriptions']?['status'] ?? '';
+
     final harvestOffer = HarvestOffer(
-      fplsStatus: response['fpls_status'] ?? '',
+      fplsStatus: fplsStatus,
       offerId: response['offer_id'],
       varietyName: variety['variety_name'] ?? 'Unknown',
       quantity: (response['quantity'] as num? ?? 0.0).toDouble(),

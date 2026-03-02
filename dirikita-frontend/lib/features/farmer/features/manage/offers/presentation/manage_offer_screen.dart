@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/core/faq/faq.dart';
+import 'package:duruha/core/faq/faq_farmer_manage_offer.dart';
 import 'package:duruha/features/farmer/features/manage/offers/data/manage_offer_repository.dart';
 import 'package:duruha/features/farmer/features/manage/offers/domain/offer_model.dart';
 import 'package:duruha/features/farmer/features/manage/offers/presentation/widgets/offer_card.dart';
@@ -75,14 +77,20 @@ class _ManageOfferContentState extends State<_ManageOfferContent> {
     final ctrl = _tabController;
     if (ctrl == null || ctrl.indexIsChanging) return;
     final idx = ctrl.index;
-    // Lazy-load history tab the first time it's tapped
-    if (_loading[idx] && _groups[idx].isEmpty) _load(idx);
+
+    // Always refresh the tab when it's tapped/selected
+    _refresh(idx);
   }
 
   Future<void> _load(int tabIdx) async {
-    setState(() => _loading[tabIdx] = true);
+    // Only show full-screen loader if we have no existing data
+    if (_groups[tabIdx].isEmpty) {
+      setState(() => _loading[tabIdx] = true);
+    }
+
     final result = await _repo.fetchOffers(active: tabIdx == 0);
     if (!mounted) return;
+
     setState(() {
       _groups[tabIdx] = result.groups;
       _hasMore[tabIdx] = result.hasMore;
@@ -129,11 +137,6 @@ class _ManageOfferContentState extends State<_ManageOfferContent> {
   }
 
   Future<void> _refresh(int tabIdx) async {
-    setState(() {
-      _cursors[tabIdx] = null;
-      _hasMore[tabIdx] = false;
-      _groups[tabIdx].clear();
-    });
     await _load(tabIdx);
   }
 
@@ -144,18 +147,29 @@ class _ManageOfferContentState extends State<_ManageOfferContent> {
     return DuruhaScrollHideWrapper(
       bar: DuruhaTabBar(
         tabs: const [
-          Tab(text: 'Active Offers'),
-          Tab(text: 'Offer History'),
+          Tab(text: 'Active'),
+          Tab(text: 'History'),
         ],
-        trailing: IconButton(
-          icon: Icon(
-            _isAllCollapsed
-                ? Icons.unfold_more_rounded
-                : Icons.unfold_less_rounded,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          tooltip: _isAllCollapsed ? 'Expand All' : 'Collapse All',
-          onPressed: () => setState(() => _isAllCollapsed = !_isAllCollapsed),
+        prefix: IconButton(
+          icon: const Icon(Icons.info_outline),
+          tooltip: 'Manage Offer Rules',
+          onPressed: () => DuruhaFaqModal.show(context, faqFarmerManageOffer),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(
+                _isAllCollapsed
+                    ? Icons.unfold_more_rounded
+                    : Icons.unfold_less_rounded,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              tooltip: _isAllCollapsed ? 'Expand All' : 'Collapse All',
+              onPressed: () =>
+                  setState(() => _isAllCollapsed = !_isAllCollapsed),
+            ),
+          ],
         ),
       ),
       body: TabBarView(children: [_buildTab(0, theme), _buildTab(1, theme)]),

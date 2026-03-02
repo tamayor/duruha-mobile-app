@@ -5,6 +5,7 @@ import 'package:duruha/shared/user/data/dialect_repository.dart';
 import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
 import 'package:duruha/shared/user/data/location_repository.dart';
+import 'package:duruha/core/services/session_service.dart';
 import 'package:flutter/material.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -175,6 +176,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       await ConsumerProfileRepositoryImpl().updateProfile(updatedProfile);
+
+      final userId = await SessionService.getUserId();
+      if (userId != null) {
+        await SessionService.syncProfile(userId);
+      }
 
       if (mounted) {
         DuruhaSnackBar.showSuccess(context, "Profile updated successfully!");

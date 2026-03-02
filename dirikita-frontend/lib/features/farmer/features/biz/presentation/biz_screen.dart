@@ -64,9 +64,8 @@ class _FarmerBizScreenState extends State<FarmerBizScreen> {
   Future<void> _fetchAllData() async {
     setState(() => _isLoading = true);
     try {
-      final userId = await SessionService.getUserId() ?? '';
       final pledgesFuture = _bizRepository.fetchSalesRecords();
-      final cropsFuture = _cropsRepository.fetchFarmerProduce(userId);
+      final cropsFuture = _cropsRepository.fetchFarmerProduce();
 
       final results = await Future.wait([pledgesFuture, cropsFuture]);
       final pledges = results[0] as List<HarvestPledge>;

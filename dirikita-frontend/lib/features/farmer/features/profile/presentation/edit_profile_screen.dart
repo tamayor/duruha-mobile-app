@@ -205,6 +205,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       await _repo.updateProfile(updated);
 
+      final userId = await SessionService.getUserId();
+      if (userId != null) {
+        await SessionService.syncProfile(userId);
+      }
+
       if (mounted) {
         DuruhaSnackBar.showSuccess(context, 'Profile updated successfully!');
         Navigator.pop(context, updated);

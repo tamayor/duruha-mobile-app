@@ -151,6 +151,9 @@ class ManageOfferRepository {
           .from('farmer_offers')
           .select('''
             *,
+            farmer_price_lock_subscriptions(
+              status
+            ),
             produce_varieties (
               variety_name
             )
@@ -162,6 +165,12 @@ class ManageOfferRepository {
       final Map<String, dynamic> offerData = Map<String, dynamic>.from(
         response,
       );
+
+      // Flatten the fpls_status from the joined table
+      if (offerData['farmer_price_lock_subscriptions'] != null) {
+        offerData['fpls_status'] =
+            offerData['farmer_price_lock_subscriptions']['status'];
+      }
 
       // Flatten the variety_name from the joined table
       if (offerData['produce_varieties'] != null) {

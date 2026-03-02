@@ -7,6 +7,7 @@ class DuruhaTabBar extends StatelessWidget implements PreferredSizeWidget {
   final Color? labelColor;
   final Color? unselectedLabelColor;
   final bool isGlass;
+  final Widget? prefix;
   final Widget? trailing;
 
   const DuruhaTabBar({
@@ -17,6 +18,7 @@ class DuruhaTabBar extends StatelessWidget implements PreferredSizeWidget {
     this.labelColor,
     this.unselectedLabelColor,
     this.isGlass = false,
+    this.prefix,
     this.trailing,
   });
 
@@ -43,6 +45,7 @@ class DuruhaTabBar extends StatelessWidget implements PreferredSizeWidget {
           : null,
       child: Row(
         children: [
+          if (prefix != null) ...[const SizedBox(width: 8), prefix!],
           Expanded(
             child: TabBar(
               controller: controller,
