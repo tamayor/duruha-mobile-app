@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:duruha/core/widgets/badge/duruha_delivery_status_badge.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/core/widgets/text/duruha_text_waiting.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/orders_repository.dart';
 import '../domain/order_details_model.dart';
 import '../../../../../core/constants/delivery_statuses.dart';
@@ -12,8 +14,15 @@ class OrderDetailsScreen extends StatefulWidget {
   final ConsumerOrderMatch? match;
   final String? orderId;
   final String? action;
+  final PlaceOrderResult? placeOrderResult;
 
-  const OrderDetailsScreen({super.key, this.match, this.orderId, this.action});
+  const OrderDetailsScreen({
+    super.key,
+    this.match,
+    this.orderId,
+    this.action,
+    this.placeOrderResult,
+  });
 
   @override
   State<OrderDetailsScreen> createState() => _OrderDetailsScreenState();
@@ -67,6 +76,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   // ─── helpers ──────────────────────────────────────────────────────────────
 
   double _selectionSubtotal(VarietySelection vg, bool isPriceLock) {
+    if (vg.deliveryStatus == 'CANCELLED') return 0.0;
     double unitPrice = vg.variablePrice ?? 0.0;
     if (vg.finalPrice != null && vg.finalPrice! > 0) {
       unitPrice = vg.finalPrice!;
@@ -143,7 +153,22 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             color: Colors.redAccent,
             onPressed: () => _handleDelete(context),
           ),
-        const SizedBox(width: 16),
+        // ── Cancel Order popup ──
+        if (_match.isActive && _match.isCancellable)
+          DuruhaPopupMenu<String>(
+            items: const ['Cancel Order'],
+            labelBuilder: (item) => item,
+            itemIcons: const {'Cancel Order': Icons.cancel_outlined},
+            tooltip: 'Order Actions',
+            showLabel: false,
+            showBackground: false,
+            icon: Icon(Icons.more_vert, color: cs.error),
+            iconColor: cs.error,
+            onSelected: (item) {
+              if (item == 'Cancel Order') _handleCancelOrder(context);
+            },
+          ),
+        const SizedBox(width: 8),
       ],
       onBackPressed: () {
         if (widget.action == 'new') {
@@ -154,11 +179,27 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           Navigator.pop(context);
         }
       },
+      floatingActionButton: widget.action == 'new'
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                // TODO: Navigate to payment/checkout flow
+              },
+              icon: const Icon(Icons.payment),
+              label: const Text("Pay Now"),
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary,
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Order Fulfillment Details (shown only for new orders) ──────────
+            if (widget.placeOrderResult != null) ...[
+              _fulfillmentBanner(theme, cs, widget.placeOrderResult!),
+              const SizedBox(height: 24),
+            ],
             _sectionHeader(theme, "Information", cs.onPrimary),
             _infoCard(theme, cs),
             const SizedBox(height: 24),
@@ -173,7 +214,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             }),
             const SizedBox(height: 24),
             _grandTotal(theme, cs),
-            const SizedBox(height: 48),
+            const SizedBox(height: 80), // Extra space for FAB
           ],
         ),
       ),
@@ -230,6 +271,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             "Note",
             Text(_match.note!),
             icon: Icons.note_outlined,
+            small: true,
+          ),
+        if (_match.paymentMethod.isNotEmpty)
+          _row(
+            t,
+            "Payment",
+            Text(_match.paymentMethod),
+            icon: Icons.account_balance_wallet_outlined,
             small: true,
           ),
       ],
@@ -367,13 +416,20 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                                     spacing: 6,
                                     runSpacing: 6,
                                     children: [
-                                      _tag(
-                                        t,
-                                        v.isPaid ? 'PAID' : 'UNPAID',
-                                        v.isPaid ? Colors.green : Colors.red,
-                                        Colors.white,
-                                        small: true,
-                                        bold: true,
+                                      Opacity(
+                                        opacity:
+                                            (v.deliveryStatus == 'CANCELLED' &&
+                                                !v.isPaid)
+                                            ? 0.4
+                                            : 1.0,
+                                        child: _tag(
+                                          t,
+                                          v.isPaid ? 'PAID' : 'UNPAID',
+                                          v.isPaid ? Colors.green : Colors.red,
+                                          Colors.white,
+                                          small: true,
+                                          bold: true,
+                                        ),
                                       ),
                                       if (v.deliveryStatus != null)
                                         _tag(
@@ -434,10 +490,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final double delivery = item.varieties.fold(
       0.0,
       (s, v) =>
-          s + v.varietyGroups.fold(0.0, (gs, vg) => gs + (vg.deliveryFee ?? 0)),
+          s +
+          v.varietyGroups.fold(0.0, (gs, vg) {
+            if (vg.deliveryStatus == 'CANCELLED') return gs;
+            return gs + (vg.deliveryFee ?? 0);
+          }),
     );
-    final double subtotal = total + item.qualityFee + delivery;
-    final bool tentative = item.varieties.any((v) => !v.isFinalized);
+    final double subtotal = total + item.effectiveQualityFee + delivery;
+    final bool tentative = !item.isPriceFinalized;
 
     return Card(
       key: _produceKeys[idx],
@@ -464,7 +524,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         ),
                       ),
                     ),
-                    _qualityBadge(t, cs, item.quality),
+                    DuruhaStatusBadge(
+                      label: item.quality,
+                      strikethrough: item.isCancelled,
+                      color: cs.secondary,
+                    ),
                   ],
                 ),
                 if (item.qualityFee > 0) ...[
@@ -473,10 +537,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     t,
                     "Quality Fee",
                     Text(
-                      DuruhaFormatter.formatCurrency(item.qualityFee),
+                      DuruhaFormatter.formatCurrency(item.effectiveQualityFee),
                       style: t.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: cs.onTertiary,
+                        decoration: item.isCancelled
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
                     small: true,
@@ -514,7 +581,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "(${DuruhaFormatter.formatCurrency(total)} variety) + (${DuruhaFormatter.formatCurrency(delivery)} shipping) + (${DuruhaFormatter.formatCurrency(item.qualityFee)} quality)",
+                        "(${DuruhaFormatter.formatCurrency(total)} variety) + (${DuruhaFormatter.formatCurrency(delivery)} shipping) + (${DuruhaFormatter.formatCurrency(item.effectiveQualityFee)} quality)",
                         style: t.textTheme.labelSmall?.copyWith(
                           color: cs.onSecondary,
                           fontSize: 10,
@@ -679,28 +746,40 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final bool hasDelivery = v.deliveryStatus != null;
     final bool finalized = v.finalPrice != null;
 
-    return Opacity(
-      // dim unchosen varieties to 30%
-      opacity: unchosen ? 0.30 : 1.0,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
+    final bool cancelled = v.deliveryStatus == 'CANCELLED';
+    final bool cancellable =
+        !cancelled &&
+        !unchosen &&
+        v.oomId != null &&
+        v.deliveryStatus != null &&
+        _cancellableStatuses.contains(v.deliveryStatus);
+
+    final cardContent = Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(
+        top: cancellable ? 20 : 10,
+        left: 10,
+        right: 10,
+        bottom: 10,
+      ),
+      decoration: BoxDecoration(
+        color: unchosen
+            ? cs.surfaceContainerHighest.withValues(alpha: 0.3)
+            : cs.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
           color: unchosen
-              ? cs.surfaceContainerHighest.withValues(alpha: 0.3)
-              : cs.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: unchosen
-                ? cs.outlineVariant.withValues(alpha: 0.2)
-                : cs.outlineVariant.withValues(alpha: 0.5),
-          ),
+              ? cs.outlineVariant.withValues(alpha: 0.2)
+              : cs.outlineVariant.withValues(alpha: 0.5),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // name + subtotal
-            Row(
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // name + subtotal
+          Opacity(
+            opacity: cancelled ? 0.5 : 1.0,
+            child: Row(
               children: [
                 Expanded(
                   child: Row(
@@ -735,134 +814,80 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     style: t.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: cs.onTertiary,
+                      decoration: cancelled ? TextDecoration.lineThrough : null,
                     ),
                   ),
               ],
             ),
+          ),
 
-            if (!unchosen) ...[
-              const SizedBox(height: 6),
+          if (!unchosen) ...[
+            const SizedBox(height: 6),
 
-              // qty + payment
-              _row(
+            // qty
+            Opacity(
+              opacity: cancelled ? 0.5 : 1.0,
+              child: _row(
                 t,
                 "Allocated Qty",
-                Text("${v.quantity.toStringAsFixed(0)} kg"),
+                Text(
+                  "${v.quantity.toStringAsFixed(0)} kg",
+                  style: TextStyle(
+                    decoration: cancelled ? TextDecoration.lineThrough : null,
+                  ),
+                ),
                 small: true,
               ),
-              const SizedBox(height: 6),
-              // ── pricing block ──
-              if (isPriceLock) ...[
-                _priceLockBlock(ctx, t, cs, group, v),
-              ] else if (finalized) ...[
-                _statusNote(
-                  t,
-                  Icons.check_circle_outline,
-                  "Final: ${DuruhaFormatter.formatCurrency(v.finalPrice!)}",
-                  Colors.green,
-                ),
-                if (v.priceLock != null && v.finalPrice! > v.priceLock!) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: cs.primary.withValues(alpha: 0.2),
+            ),
+            const SizedBox(height: 6),
+            // ── pricing block ──
+            Opacity(
+              opacity: cancelled ? 0.5 : 1.0,
+              child: isPriceLock
+                  ? _priceLockBlock(ctx, t, cs, group, v)
+                  : finalized
+                  ? _statusNote(
+                      t,
+                      Icons.check_circle_outline,
+                      "Final: ${DuruhaFormatter.formatCurrency(v.finalPrice!)}",
+                      Colors.green,
+                      style: TextStyle(
+                        decoration: cancelled
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    )
+                  : _statusNote(
+                      t,
+                      Icons.help_outline,
+                      "Tentative: ${DuruhaFormatter.formatCurrency(v.variablePrice ?? 0)}",
+                      Colors.orange,
+                      style: TextStyle(
+                        decoration: cancelled
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.lightbulb_outline,
-                          size: 14,
-                          color: cs.primary,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            "You could have saved \n${DuruhaFormatter.formatCurrency(v.finalPrice! - v.priceLock!)} / unit with a Price Lock!",
-                            style: t.textTheme.labelSmall?.copyWith(
-                              color: cs.onPrimary,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ] else ...[
-                _statusNote(
-                  t,
-                  Icons.help_outline,
-                  "Tentative: ${DuruhaFormatter.formatCurrency(v.variablePrice ?? 0)}",
-                  Colors.orange,
-                ),
-                if (v.priceLock != null &&
-                    (v.variablePrice ?? 0) > v.priceLock!) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: cs.primary.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.lightbulb_outline,
-                          size: 14,
-                          color: cs.primary,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            "You could be saving\n ${DuruhaFormatter.formatCurrency((v.variablePrice ?? 0) - v.priceLock!)} / unit around this time with a Price Lock!",
-                            style: t.textTheme.labelSmall?.copyWith(
-                              color: cs.onPrimary,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
+            ),
 
-              // ── delivery block ──
-              if (hasDelivery) ...[
-                const SizedBox(height: 8),
-                _deliveryBlock(t, cs, v),
-              ] else ...[
-                const SizedBox(height: 6),
-                _statusNote(
-                  t,
-                  Icons.search,
-                  "Searching for match...",
-                  Colors.orange,
-                ),
-              ],
+            // ── delivery block ──
+            if (hasDelivery) ...[
+              const SizedBox(height: 8),
+              _deliveryBlock(ctx, t, cs, v),
+            ] else ...[
               const SizedBox(height: 6),
-              _row(
+              _statusNote(
                 t,
-                "Payment",
-                Text(v.paymentMethod),
-                icon: Icons.account_balance_wallet_outlined,
-                small: true,
+                Icons.search,
+                "Searching for match...",
+                Colors.orange,
               ),
-              _row(
+            ],
+
+            const SizedBox(height: 6),
+            Opacity(
+              opacity: cancelled ? 0.5 : 1.0,
+              child: _row(
                 t,
                 "Paid?",
                 v.isPaid
@@ -871,6 +896,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         style: t.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Colors.green,
+                          decoration: cancelled
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       )
                     : Text(
@@ -878,6 +906,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         style: t.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Colors.red,
+                          decoration: cancelled
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                 icon: v.isPaid
@@ -885,12 +916,52 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     : Icons.pending_outlined,
                 small: true,
               ),
+            ),
 
-              const SizedBox(height: 6),
-            ],
+            const SizedBox(height: 6),
           ],
-        ),
+        ],
       ),
+    );
+
+    return Opacity(
+      opacity: unchosen ? 0.30 : 1.0,
+      child: cancellable
+          ? Stack(
+              clipBehavior: Clip.none,
+              children: [
+                cardContent,
+                // ── macOS-style red close dot ──
+                Positioned(
+                  top: 4,
+                  left: 4,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _handleCancelItem(ctx, v.oomId!),
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF5F57),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.close, size: 10, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : cardContent,
     );
   }
 
@@ -996,7 +1067,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   // ─── delivery block ───────────────────────────────────────────────────────
 
-  Widget _deliveryBlock(ThemeData t, ColorScheme cs, VarietySelection v) {
+  Widget _deliveryBlock(
+    BuildContext ctx,
+    ThemeData t,
+    ColorScheme cs,
+    VarietySelection v,
+  ) {
     final color = _statusColor(v.deliveryStatus, t);
     return Container(
       padding: const EdgeInsets.all(10),
@@ -1021,20 +1097,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 ),
               ),
               // status pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  v.deliveryStatus ?? '',
-                  style: t.textTheme.labelSmall?.copyWith(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
+              DuruhaStatusBadge(
+                status: v.deliveryStatus,
+                size: BadgeSize.small,
               ),
             ],
           ),
@@ -1043,7 +1108,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             _row(
               t,
               "Dispatch",
-              _formatDate(v.dispatchDate),
+              v.deliveryStatus == 'CANCELLED'
+                  ? const Text('x')
+                  : _formatDate(v.dispatchDate),
               icon: Icons.schedule,
               small: true,
             ),
@@ -1052,7 +1119,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             _row(
               t,
               "Delivery Fee",
-              Text(DuruhaFormatter.formatCurrency(v.deliveryFee!)),
+              Text(
+                v.deliveryStatus == 'CANCELLED'
+                    ? DuruhaFormatter.formatCurrency(0.0)
+                    : DuruhaFormatter.formatCurrency(v.deliveryFee!),
+                style: TextStyle(
+                  decoration: v.deliveryStatus == 'CANCELLED'
+                      ? TextDecoration.lineThrough
+                      : null,
+                ),
+              ),
               small: true,
             ),
         ],
@@ -1063,9 +1139,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   // ─── grand total ──────────────────────────────────────────────────────────
 
   Widget _grandTotal(ThemeData t, ColorScheme cs) {
-    final bool tentative = _match.produceItems.any(
-      (item) => item.varieties.any((v) => !v.isFinalized),
-    );
+    final bool tentative = !_match.isPriceFinalized;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1110,31 +1184,18 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   Widget _sectionHeader(ThemeData t, String title, Color color) => Padding(
     padding: const EdgeInsets.only(bottom: 12, left: 4),
-    child: Text(
-      title.toUpperCase(),
-      style: t.textTheme.labelMedium?.copyWith(
-        color: color,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 1.1,
+    child: Align(
+      alignment: Alignment.center,
+      child: Text(
+        title.toUpperCase(),
+        style: t.textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.1,
+        ),
       ),
     ),
   );
-
-  Widget _qualityBadge(ThemeData t, ColorScheme cs, String quality) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-        decoration: BoxDecoration(
-          color: cs.secondaryContainer.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          quality,
-          style: t.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: cs.onSecondary,
-          ),
-        ),
-      );
 
   Widget _tag(
     ThemeData t,
@@ -1162,31 +1223,38 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     ),
   );
 
-  Widget _statusNote(ThemeData t, IconData icon, String text, Color color) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 12, color: color),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                text,
-                style: t.textTheme.labelSmall?.copyWith(
+  Widget _statusNote(
+    ThemeData t,
+    IconData icon,
+    String text,
+    Color color, {
+    TextStyle? style,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: color.withValues(alpha: 0.2)),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: t.textTheme.labelSmall
+                ?.copyWith(
                   color: color,
                   fontWeight: FontWeight.bold,
                   fontSize: 10,
-                ),
-              ),
-            ),
-          ],
+                )
+                .merge(style),
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _row(
     ThemeData t,
@@ -1218,7 +1286,311 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
+  // ─── fulfillment banner (shown for new orders) ────────────────────────────
+
+  Widget _fulfillmentBanner(
+    ThemeData t,
+    ColorScheme cs,
+    PlaceOrderResult result,
+  ) {
+    final bool fullSuccess = result.success && result.failed == 0;
+    final bool partial = result.matched > 0 && result.failed > 0;
+    final Color bannerColor = fullSuccess
+        ? Colors.green
+        : (partial ? Colors.orange : cs.error);
+    final IconData bannerIcon = fullSuccess
+        ? Icons.check_circle_rounded
+        : (partial ? Icons.warning_amber_rounded : Icons.cancel_rounded);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Status header ──────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: bannerColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: bannerColor.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            children: [
+              Icon(bannerIcon, size: 36, color: bannerColor),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.message,
+                      style: t.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: bannerColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _miniStat(
+                          t,
+                          "${result.matched}",
+                          "Matched",
+                          Colors.green,
+                        ),
+                        const SizedBox(width: 16),
+                        _miniStat(
+                          t,
+                          "${result.failed}",
+                          "Failed",
+                          result.failed > 0 ? Colors.orange : cs.onSecondary,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Fulfillment Details ────────────────────────────────────────────
+        if (result.selections.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            "FULFILLMENT DETAILS",
+            style: t.textTheme.labelMedium?.copyWith(
+              color: cs.onSecondary,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...result.selections.map((s) => _selectionTile(t, cs, s)),
+        ],
+
+        // ── Unfulfilled Items ───────────────────────────────────────────────
+        if (result.errors.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            "UNFULFILLED ITEMS",
+            style: t.textTheme.labelMedium?.copyWith(
+              color: cs.error,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...result.errors.map((e) => _errorTile(t, cs, e)),
+        ],
+      ],
+    );
+  }
+
+  Widget _miniStat(ThemeData t, String value, String label, Color color) => Row(
+    children: [
+      Text(
+        value,
+        style: t.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+      const SizedBox(width: 4),
+      Text(label, style: t.textTheme.labelSmall?.copyWith(color: color)),
+    ],
+  );
+
+  Widget _selectionTile(
+    ThemeData t,
+    ColorScheme cs,
+    OrderSelection s,
+  ) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: s.chosen
+          ? cs.primaryContainer.withValues(alpha: 0.2)
+          : cs.surfaceContainerHighest.withValues(alpha: 0.2),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: s.chosen ? cs.primary.withValues(alpha: 0.4) : cs.outlineVariant,
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                s.varietyName,
+                style: t.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: cs.onPrimary,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: s.chosen
+                    ? cs.primary.withValues(alpha: 0.15)
+                    : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                s.chosen ? "Selected" : "Skipped",
+                style: t.textTheme.labelSmall?.copyWith(
+                  color: s.chosen ? cs.primary : cs.onSecondary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          s.reason,
+          style: t.textTheme.bodySmall?.copyWith(color: cs.onSecondary),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(Icons.inventory_2_outlined, size: 12, color: cs.onSecondary),
+            const SizedBox(width: 4),
+            Text(
+              "${s.allocatedQty.toStringAsFixed(0)} kg",
+              style: t.textTheme.labelSmall?.copyWith(color: cs.onSecondary),
+            ),
+            const SizedBox(width: 12),
+            Icon(Icons.location_on_outlined, size: 12, color: cs.onSecondary),
+            const SizedBox(width: 4),
+            Text(
+              "${s.distanceKm} km",
+              style: t.textTheme.labelSmall?.copyWith(color: cs.onSecondary),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _errorTile(
+    ThemeData t,
+    ColorScheme cs,
+    PlaceOrderError e,
+  ) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: cs.errorContainer.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: cs.error.withValues(alpha: 0.3)),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.warning_amber_outlined, size: 18, color: cs.error),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "${e.form} — ${e.unfulfilledQty.toStringAsFixed(0)} kg unfulfilled",
+                style: t.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: cs.error,
+                ),
+              ),
+              Text(
+                e.reason,
+                style: t.textTheme.labelSmall?.copyWith(color: cs.onSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  // ─── status pill (tappable for cancellable items) ───────────────────────
+
+  static const _cancellableStatuses = [
+    'PENDING',
+    'ACCEPTED',
+    'PREPARING',
+    'READY_FOR_QC',
+  ];
+
+  // ─── actions ──────────────────────────────────────────────────────────────
+
+  Future<void> _handleCancelOrder(BuildContext context) async {
+    final confirmed = await DuruhaDialog.show(
+      context: context,
+      title: "Cancel Order",
+      message:
+          "Are you sure you want to cancel this entire order? All active items will be cancelled. This action cannot be undone.",
+      confirmText: "Cancel Order",
+      isDanger: true,
+    );
+    if (confirmed == true && context.mounted) {
+      try {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const ConsumerLoadingScreen(),
+        );
+        await _repo.cancelOrderMatch(_match.orderId);
+        if (context.mounted) {
+          Navigator.of(context).pop(); // pop loading screen
+          DuruhaSnackBar.showSuccess(context, "Order cancelled successfully!");
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/consumer/manage', (r) => true);
+        }
+      } catch (e) {
+        if (context.mounted) {
+          Navigator.of(context).pop();
+          final msg = e is PostgrestException ? e.message : e.toString();
+          DuruhaSnackBar.showError(context, "Failed to cancel order: $msg");
+        }
+      }
+    }
+  }
+
   // ─── delete ───────────────────────────────────────────────────────────────
+
+  Future<void> _handleCancelItem(BuildContext context, String oomId) async {
+    final confirmed = await DuruhaDialog.show(
+      context: context,
+      title: "Cancel Item",
+      message:
+          "Are you sure you want to cancel this specific item? This action will refund your stock and credits if applicable. This action cannot be undone.",
+      confirmText: "Cancel Item",
+      isDanger: true,
+    );
+    if (confirmed == true && context.mounted) {
+      try {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const ConsumerLoadingScreen(),
+        );
+        await _repo.cancelSingleOrderMatchItem(_match.orderId, oomId);
+        if (context.mounted) {
+          Navigator.of(context).pop(); // pop loading screen
+          DuruhaSnackBar.showSuccess(context, "Item cancelled successfully!");
+          _fetchFullDetails(_match.orderId); // refresh data
+        }
+      } catch (e) {
+        if (context.mounted) {
+          Navigator.of(context).pop();
+          final msg = e is PostgrestException ? e.message : e.toString();
+          DuruhaSnackBar.showError(context, "Failed to cancel item: $msg");
+        }
+      }
+    }
+  }
 
   Future<void> _handleDelete(BuildContext context) async {
     final confirmed = await DuruhaDialog.show(
@@ -1236,10 +1608,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           barrierDismissible: false,
           builder: (_) => const ConsumerLoadingScreen(),
         );
-        await _repo.cancelOrderMatch(_match.offerOrderMatchId);
+        await _repo.deleteOrderMatch(_match.offerOrderMatchId);
         if (context.mounted) {
           Navigator.of(context).pop();
-          DuruhaSnackBar.showSuccess(context, "Order cancelled successfully!");
+          DuruhaSnackBar.showSuccess(context, "Order deleted successfully!");
           Navigator.of(
             context,
           ).pushNamedAndRemoveUntil('/consumer/manage', (r) => true);
@@ -1247,7 +1619,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       } catch (e) {
         if (context.mounted) {
           Navigator.of(context).pop();
-          DuruhaSnackBar.showError(context, "Failed to cancel: $e");
+          final msg = e is PostgrestException ? e.message : e.toString();
+          DuruhaSnackBar.showError(context, "Failed to delete: $msg");
         }
       }
     }

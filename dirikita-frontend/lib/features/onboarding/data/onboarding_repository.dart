@@ -31,7 +31,6 @@ class OnboardingRepository {
         'postal_code': data['basicInfo']?['postalCode'],
         'landmark': data['basicInfo']?['landmark'],
         'dialect': data['basicInfo']?['dialects'],
-        'payment_methods': data['basicInfo']?['paymentMethods'],
         'operating_days': data['basicInfo']?['operatingDays'],
         'delivery_window': data['basicInfo']?['deliveryWindow'],
         'location':
@@ -107,19 +106,19 @@ class OnboardingRepository {
           .limit(1)
           .maybeSingle();
 
-      if (response == null) return 'farmer_000001';
+      if (response == null) return 'far_000001';
 
       final lastId = response['farmer_id'] as String;
       // Format: farmer_000001
       final parts = lastId.split('_');
-      if (parts.length < 2) return 'farmer_000001';
+      if (parts.length < 2) return 'far_000001';
 
       final lastNum = int.tryParse(parts[1]) ?? 0;
       final nextNum = lastNum + 1;
-      return 'farmer_${nextNum.toString().padLeft(6, '0')}';
+      return 'far_${nextNum.toString().padLeft(6, '0')}';
     } catch (e) {
       //debugPrint("⚠️ [ONBOARDING REPO] Error generating farmer_id: $e");
-      return 'farmer_000001'; // Fallback
+      return 'far_000001'; // Fallback
     }
   }
 
@@ -132,19 +131,19 @@ class OnboardingRepository {
           .limit(1)
           .maybeSingle();
 
-      if (response == null) return 'consumer_000001';
+      if (response == null) return 'con_000001';
 
       final lastId = response['consumer_id'] as String;
-      // Format: consumer_000001
+      // Format: con_000001
       final parts = lastId.split('_');
-      if (parts.length < 2) return 'consumer_000001';
+      if (parts.length < 2) return 'con_000001';
 
       final lastNum = int.tryParse(parts[1]) ?? 0;
       final nextNum = lastNum + 1;
-      return 'consumer_${nextNum.toString().padLeft(6, '0')}';
+      return 'con_${nextNum.toString().padLeft(6, '0')}';
     } catch (e) {
       //debugPrint("⚠️ [ONBOARDING REPO] Error generating consumer_id: $e");
-      return 'consumer_000001'; // Fallback
+      return 'con_000001'; // Fallback
     }
   }
 }

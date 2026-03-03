@@ -544,7 +544,15 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
         isLoading: _isLoading,
         body: _selectedProduce.isEmpty && !_isLoading
             ? const Center(child: Text("No crops selected"))
-            : CustomScrollView(slivers: slivers),
+            : Column(
+                children: [
+                  _buildTopNote(),
+                  Expanded(
+                    // This tells the ScrollView to take the remaining space
+                    child: CustomScrollView(slivers: slivers),
+                  ),
+                ],
+              ),
         floatingActionButton: _selectedProduce.isNotEmpty && !_isLoading
             ? FloatingActionButton.extended(
                 onPressed: _goToReview,
@@ -620,6 +628,37 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
             onAvailableDatePicked: (date) => _saveDraft(produce.id),
             onDisposalDatePicked: (date) => _saveDraft(produce.id),
             onStateChanged: () => _saveDraft(produce.id),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopNote() {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 20,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "📅 Note: Orders must be scheduled (Date Needed)\nwithin 30 days of today to ensure stock availability.",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ],
       ),

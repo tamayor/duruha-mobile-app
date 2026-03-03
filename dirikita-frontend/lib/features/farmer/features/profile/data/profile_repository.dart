@@ -41,7 +41,6 @@ class FarmerProfileRepositoryImpl implements FarmerProfileRepository {
         'landmark': profile.landmark,
         'image_url': profile.imageUrl,
         'dialect': profile.dialect,
-        'payment_methods': profile.paymentMethods,
         'operating_days': profile.operatingDays,
         'delivery_window': profile.deliveryWindow,
         if (profile.latitude != null) 'latitude': profile.latitude,

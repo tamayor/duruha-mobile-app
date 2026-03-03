@@ -1,3 +1,5 @@
+import 'package:duruha/core/widgets/badge/duruha_delivery_status_badge.dart';
+import 'package:duruha/core/constants/delivery_statuses.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_inkwell.dart';
 import 'package:flutter/material.dart';
@@ -140,6 +142,56 @@ class OrderCard extends StatelessWidget {
                   );
                 }).toList(),
               ),
+              if (match.stats != null) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // Payment stats
+                    if (match.stats!.paidCount > 0)
+                      DuruhaStatusBadge(
+                        size: BadgeSize.tiny,
+                        color: Colors.green,
+                        label: "PAID: ${match.stats!.paidCount}",
+                        isOutlined: true,
+                      ),
+                    if (match.stats!.unpaidCount > 0)
+                      DuruhaStatusBadge(
+                        size: BadgeSize.tiny,
+                        color: colorScheme.error,
+                        label: "UNPAID: ${match.stats!.unpaidCount}",
+                        isOutlined: true,
+                      ),
+
+                    if ((match.stats!.paidCount > 0 ||
+                            match.stats!.unpaidCount > 0) &&
+                        match.stats!.statusCounts.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text(
+                          "•",
+                          style: TextStyle(
+                            color: colorScheme.outlineVariant,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+
+                    // Status stats
+                    ...match.stats!.statusCounts.entries.map((e) {
+                      return DuruhaStatusBadge(
+                        size: BadgeSize.tiny,
+                        status: e.key,
+                        label:
+                            "${DeliveryStatus.getDisplayLabel(e.key)}: ${e.value}",
+                        isOutlined: true,
+                      );
+                    }),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

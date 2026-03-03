@@ -50,8 +50,8 @@ class ManageOfferRepository {
         params: {'p_offer_id': offerId},
       );
 
-      debugPrint("RPC raw response type: ${response.runtimeType}");
-      debugPrint("RPC raw response: $response");
+      // debugPrint("RPC raw response type: ${response.runtimeType}");
+      // debugPrint("RPC raw response: $response");
 
       Map<String, dynamic>? data;
       if (response is String) {

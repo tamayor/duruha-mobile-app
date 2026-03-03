@@ -46,18 +46,66 @@ class OrdersRepository {
     }
   }
 
-  Future<void> cancelOrderMatch(String matchId) async {
+  Future<void> deleteOrderMatch(String matchId) async {
     try {
       final roleId = await SessionService.getRoleId();
       if (roleId == null) throw Exception("User is not authenticated");
 
-      await supabase.rpc(
-        'cancel_consumer_order',
-        params: {'p_offer_order_match_id': matchId, 'p_consumer_id': roleId},
+      final response = await supabase.rpc(
+        'update_consumer_order',
+        params: {'p_order_id': matchId, 'p_mode': 'delete'},
       );
-      debugPrint('✅ [CANCEL ORDER SUCCESS]: $matchId');
+      final data = response as Map<String, dynamic>?;
+      if (data != null && data['success'] == false) {
+        throw Exception(data['message'] ?? 'Failed to delete order');
+      }
+      debugPrint('✅ [DELETE ORDER SUCCESS]: $matchId');
+    } catch (e) {
+      debugPrint('❌ [DELETE ORDER ERROR]: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> cancelOrderMatch(String orderId) async {
+    try {
+      final roleId = await SessionService.getRoleId();
+      if (roleId == null) throw Exception("User is not authenticated");
+
+      final response = await supabase.rpc(
+        'update_consumer_order',
+        params: {'p_order_id': orderId, 'p_mode': 'cancel'},
+      );
+      final data = response as Map<String, dynamic>?;
+      if (data != null && data['success'] == false) {
+        throw Exception(data['message'] ?? 'Failed to cancel order');
+      }
+      debugPrint('✅ [CANCEL ORDER SUCCESS]: $orderId');
     } catch (e) {
       debugPrint('❌ [CANCEL ORDER ERROR]: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> cancelSingleOrderMatchItem(String orderId, String oomId) async {
+    try {
+      final roleId = await SessionService.getRoleId();
+      if (roleId == null) throw Exception("User is not authenticated");
+
+      final response = await supabase.rpc(
+        'update_consumer_order',
+        params: {
+          'p_order_id': orderId,
+          'p_mode': 'cancel',
+          'p_specific_oom_id': oomId,
+        },
+      );
+      final data = response as Map<String, dynamic>?;
+      if (data != null && data['success'] == false) {
+        throw Exception(data['message'] ?? 'Failed to cancel item');
+      }
+      debugPrint('✅ [CANCEL OOM SUCCESS]: $oomId in order $orderId');
+    } catch (e) {
+      debugPrint('❌ [CANCEL OOM ERROR]: $e');
       rethrow;
     }
   }

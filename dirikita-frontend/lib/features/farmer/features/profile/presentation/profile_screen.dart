@@ -592,13 +592,6 @@ class _FarmOverview extends StatelessWidget {
         'Access',
         null,
       ),
-      if (profile.paymentMethods.isNotEmpty)
-        _Item(
-          Icons.payments_outlined,
-          '${profile.paymentMethods.length} method${profile.paymentMethods.length > 1 ? 's' : ''}',
-          'Payment',
-          null,
-        ),
       if (profile.deliveryWindow.isNotEmpty)
         _Item(Icons.schedule_rounded, profile.deliveryWindow, 'Delivery', null),
     ];

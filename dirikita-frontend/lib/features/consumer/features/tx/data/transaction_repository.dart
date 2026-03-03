@@ -15,6 +15,8 @@ class TransactionRepository {
     Map<String, Map<String, String?>>? varietySelectedFormId,
     Map<String, Map<String, bool>>? varietyPriceLock,
     String? note,
+    String paymentMethod = 'Cash',
+    String? cplsId,
   }) async {
     try {
       final List<Map<String, dynamic>> orderEntries = [];
@@ -26,7 +28,6 @@ class TransactionRepository {
         final dates = varietyDateNeeded[cropId] ?? {};
         final groups = varietyGroups[cropId] ?? [];
         final formIds = varietySelectedFormId?[cropId] ?? {};
-        final priceLocks = varietyPriceLock?[cropId] ?? {};
 
         // Track which varieties have been processed via grouping
         final Set<String> processedVarieties = {};
@@ -66,10 +67,10 @@ class TransactionRepository {
               cropId: cropId,
               dateStr: dateStr,
               varietyIds: groupVarietyIds,
-              formName: groupFormName, // now single string
+              formName: groupFormName,
               quantity: groupTotalQty,
               quality: cropQualities[cropId] ?? 'Saver',
-              priceLock: priceLocks[group.first] ?? false,
+              cplsId: cplsId,
             );
           }
         }
@@ -105,10 +106,10 @@ class TransactionRepository {
             cropId: cropId,
             dateStr: dateStr,
             varietyIds: varietyIdsList,
-            formName: formName, // single string
+            formName: formName,
             quantity: qty,
             quality: cropQualities[cropId] ?? 'Saver',
-            priceLock: priceLocks[variantName] ?? false,
+            cplsId: cplsId,
           );
         }
       }
@@ -124,7 +125,18 @@ class TransactionRepository {
         '🚀 [TX CREATE ORDER] Preparing ${orderEntries.length} produce entries',
       );
 
-      final payload = {'p_payload': orderEntries, 'p_note': note};
+      // New payload shape:
+      // {
+      //   "payment_method": "Cash",
+      //   "p_orders": [ { produce_id, order_items: [...] } ]
+      // }
+      final payload = {
+        'p_payload': {
+          'payment_method': paymentMethod,
+          'p_orders': orderEntries,
+        },
+        'p_note': note,
+      };
       // debugPrint('📦 [TX PAYLOAD]: ${jsonEncode(payload)}');
 
       final match = await supabase.rpc(
@@ -191,7 +203,7 @@ class TransactionRepository {
     required String? formName,
     required double quantity,
     required String quality,
-    required bool priceLock,
+    required String? cplsId,
   }) {
     final produceKey = cropId; // Group only by cropId
 
@@ -225,8 +237,8 @@ class TransactionRepository {
         'variety_ids': varietyIds,
         'form': formName,
         'quantity': quantity,
-        'date_needed': dateStr, // Moved date_needed into individual item
-        'price_lock': priceLock,
+        'date_needed': dateStr,
+        if (cplsId != null) 'cpls_id': cplsId,
       });
     }
   }

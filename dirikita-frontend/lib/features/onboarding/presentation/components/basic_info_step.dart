@@ -16,10 +16,6 @@ class BasicInfoStep extends StatelessWidget {
   final List<String> selectedDialects;
   final Function(String) onDialectToggle;
 
-  final List<String> paymentMethodOptions;
-  final List<String> selectedPaymentMethods;
-  final Function(String) onPaymentMethodToggle;
-
   final List<String> operatingDaysOptions;
   final List<String> selectedOperatingDays;
   final Function(String) onOperatingDayToggle;
@@ -46,9 +42,6 @@ class BasicInfoStep extends StatelessWidget {
     required this.dialectOptions,
     required this.selectedDialects,
     required this.onDialectToggle,
-    required this.paymentMethodOptions,
-    required this.selectedPaymentMethods,
-    required this.onPaymentMethodToggle,
     required this.operatingDaysOptions,
     required this.selectedOperatingDays,
     required this.onOperatingDayToggle,
@@ -187,15 +180,6 @@ class BasicInfoStep extends StatelessWidget {
                       options: dialectOptions,
                       selectedValues: selectedDialects,
                       onToggle: onDialectToggle,
-                    ),
-                    const SizedBox(height: 24),
-                    DuruhaSelectionChipGroup(
-                      title: "Payment Method",
-                      subtitle: "Select all that apply",
-                      isRequired: true,
-                      options: paymentMethodOptions,
-                      selectedValues: selectedPaymentMethods,
-                      onToggle: onPaymentMethodToggle,
                     ),
                     const SizedBox(height: 24),
                     DuruhaSelectionChipGroup(

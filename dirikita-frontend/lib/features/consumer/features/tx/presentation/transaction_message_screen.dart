@@ -110,6 +110,20 @@ class _TransactionMessageScreenState extends State<TransactionMessageScreen> {
             const SizedBox(height: 32),
             _buildSummaryCard(theme, result),
             const SizedBox(height: 32),
+            if (result.selections.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Order Fulfillment Details",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...result.selections.map((s) => _buildSelectionItem(theme, s)),
+              const SizedBox(height: 32),
+            ],
             if (result.errors.isNotEmpty) ...[
               Align(
                 alignment: Alignment.centerLeft,
@@ -316,6 +330,107 @@ class _TransactionMessageScreenState extends State<TransactionMessageScreen> {
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionItem(ThemeData theme, OrderSelection selection) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: selection.chosen
+            ? theme.colorScheme.primaryContainer.withAlpha((0.3 * 255).round())
+            : theme.colorScheme.surfaceContainerHighest.withAlpha(
+                (0.3 * 255).round(),
+              ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selection.chosen
+              ? theme.colorScheme.primary.withAlpha((0.5 * 255).round())
+              : theme.colorScheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                selection.varietyName,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (selection.chosen)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "Selected",
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  "Skipped",
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            selection.reason,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: selection.chosen
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                "Allocated: ${selection.allocatedQty}",
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Icon(
+                Icons.location_on_outlined,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                "${selection.distanceKm} km",
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ],
       ),

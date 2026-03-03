@@ -74,7 +74,7 @@ class ProduceVariety {
       optimalStorageTempC: (json['optimal_storage_temp_c'] ?? 0.0).toDouble(),
       packagingRequirement: json['packaging_requirement']?.toString(),
       appearanceDesc: json['appearance_desc']?.toString(),
-      total30DaysQuantity: (json['total_30_days_qty'] ?? 0.0).toDouble(),
+      total30DaysQuantity: (json['30_days_qty'] ?? 0.0).toDouble(),
       listings:
           (json['listings'] as List?)
               ?.map((l) => MarketListing.fromJson(l))

@@ -299,9 +299,6 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
     // Ensuring no entry is price locked if it exceeds the remaining credits
     if (_activeSubscription == null) return;
 
-    double currentTotal = _calculateTotalLockedCredits();
-    final remainingMax = _activeSubscription!.remainingCredits;
-
     // A simple guard: if over limit, optionally auto-disable the last one,
     // but typically we block checking it in the UI before it happens.
     // For now, it's just a passive check, we rely on the UI toggle to prevent overflow.
@@ -869,9 +866,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      // Each form entry
                       ...ve.value.asMap().entries.map((entryPair) {
-                        final i = entryPair.key;
                         final e = entryPair.value;
                         final priceSum = e.quantity * e.pricePerUnit;
 

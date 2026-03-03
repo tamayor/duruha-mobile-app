@@ -27,11 +27,9 @@ class ConsumerProduceRepository {
       final response = await supabase.rpc(
         'get_user_produce',
         params: {
-          'p_user_id': userId,
           'p_is_favorite': favoritesOnly,
           'p_search': search,
-          'p_limit': offset,
-          'p_mode': 'consumer',
+          'p_offset': offset,
         },
       );
 

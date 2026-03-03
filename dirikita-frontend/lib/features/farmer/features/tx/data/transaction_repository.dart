@@ -110,8 +110,6 @@ class TransactionRepository {
           .order('status', ascending: true) // we'll sort more precisely in dart
           .order('remaining_credits', ascending: false);
 
-      if (response == null) return [];
-
       return (response as List)
           .map((data) => FarmerPriceLockSubscription.fromJson(data))
           .toList();

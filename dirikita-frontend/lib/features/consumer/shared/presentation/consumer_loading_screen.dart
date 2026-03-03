@@ -111,7 +111,7 @@ class _ConsumerLoadingScreenState extends State<ConsumerLoadingScreen>
         : const Color(0xFFFF5722);
     final tagColor = isDark
         ? Colors.white.withValues(alpha: 0.07)
-        : theme.colorScheme.primary.withValues(alpha: 0.08);
+        : theme.colorScheme.onPrimary.withValues(alpha: 0.08);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -187,7 +187,7 @@ class _ConsumerLoadingScreenState extends State<ConsumerLoadingScreen>
                               child: Icon(
                                 _icons[_index],
                                 size: 68,
-                                color: theme.colorScheme.primary,
+                                color: theme.colorScheme.onPrimary,
                               ),
                             ),
                           ),
@@ -249,7 +249,7 @@ class _ConsumerLoadingScreenState extends State<ConsumerLoadingScreen>
               child: LinearProgressIndicator(
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  theme.colorScheme.primary.withValues(alpha: 0.8),
+                  theme.colorScheme.onPrimary.withValues(alpha: 0.8),
                 ),
                 borderRadius: BorderRadius.circular(4),
                 minHeight: 4,

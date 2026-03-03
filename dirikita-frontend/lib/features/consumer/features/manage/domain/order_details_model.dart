@@ -75,14 +75,18 @@ class ConsumerOrderMatch {
   final String? note;
   final String dateCreated;
   final bool isActive;
+  final String paymentMethod;
   final List<ProduceItem> produceItems;
+  final OrderStats? stats;
 
   ConsumerOrderMatch({
     required this.orderId,
     this.note,
     required this.dateCreated,
     required this.isActive,
+    this.paymentMethod = 'Cash',
     required this.produceItems,
+    this.stats,
   });
 
   factory ConsumerOrderMatch.fromJson(Map<String, dynamic> json) {
@@ -94,6 +98,7 @@ class ConsumerOrderMatch {
           json['created_at']?.toString() ??
           '',
       isActive: json['is_active'] == true,
+      paymentMethod: json['payment_method']?.toString() ?? 'Cash',
       produceItems:
           (json['produce'] as List<dynamic>? ??
                   json['produce_items'] as List<dynamic>? ??
@@ -104,6 +109,7 @@ class ConsumerOrderMatch {
                     : ProduceItem.fromName(v.toString()),
               )
               .toList(),
+      stats: json['stats'] != null ? OrderStats.fromJson(json['stats']) : null,
     );
   }
 
@@ -112,7 +118,9 @@ class ConsumerOrderMatch {
     'note': note,
     'date_created': dateCreated,
     'is_active': isActive,
+    'payment_method': paymentMethod,
     'produce': produceItems.map((v) => v.toJson()).toList(),
+    'stats': stats?.toJson(),
   };
 
   double get totalAmount => produceItems.fold(0.0, (sum, item) {
@@ -124,28 +132,50 @@ class ConsumerOrderMatch {
       0.0,
       (dSum, v) =>
           dSum +
-          v.varietyGroups.fold(
-            0.0,
-            (gSum, vg) => gSum + (vg.deliveryFee ?? 0.0),
-          ),
+          v.varietyGroups.fold(0.0, (gSum, vg) {
+            if (vg.deliveryStatus == 'CANCELLED') return gSum;
+            return gSum + (vg.deliveryFee ?? 0.0);
+          }),
     );
-    return sum + varietyTotal + item.qualityFee + deliveryTotal;
+    return sum + varietyTotal + item.effectiveQualityFee + deliveryTotal;
   });
 
   // Compatibility getters
   String get createdAt => dateCreated;
-  String get paymentMethod =>
-      produceItems.isNotEmpty &&
-          produceItems.first.varieties.isNotEmpty &&
-          produceItems.first.varieties.first.varietyGroups.isNotEmpty
-      ? produceItems.first.varieties.first.varietyGroups.first.paymentMethod
-      : '';
+
+  bool get isCancellable {
+    // If any item/variety is beyond these statuses, the whole order is no longer cancellable
+    const nonCancellable = [
+      'QC_PASSED',
+      'DISPATCHED',
+      'IN_TRANSIT_TO_HUB',
+      'ARRIVED_AT_HUB',
+      'SORTING',
+      'OUT_FOR_DELIVERY',
+      'ARRIVED',
+      'DELIVERED',
+    ];
+
+    for (final item in produceItems) {
+      for (final variety in item.varieties) {
+        for (final group in variety.varietyGroups) {
+          if (nonCancellable.contains(group.deliveryStatus)) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
   bool get isPaid => produceItems.any(
     (item) => item.varieties.any((v) => v.varietyGroups.any((vg) => vg.isPaid)),
   );
   String get offerOrderMatchId => orderId;
   List<ProduceItem> get orderItems => produceItems;
   bool get isSummary => produceItems.every((item) => item.varieties.isEmpty);
+  bool get isPriceFinalized =>
+      produceItems.every((item) => item.isPriceFinalized);
 
   // Dummy order structure to avoid breaking UI expecting nested order
   OrderSummary get order => OrderSummary(
@@ -155,6 +185,7 @@ class ConsumerOrderMatch {
     isActive: isActive,
     createdAt: dateCreated,
     updatedAt: dateCreated,
+    stats: stats,
   );
 
   // Dummy orderTotals structure to avoid breaking UI expecting nested totals
@@ -172,6 +203,7 @@ class OrderSummary {
   final bool isActive;
   final String createdAt;
   final String updatedAt;
+  final OrderStats? stats;
 
   OrderSummary({
     required this.orderId,
@@ -180,6 +212,7 @@ class OrderSummary {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.stats,
   });
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
@@ -190,6 +223,7 @@ class OrderSummary {
       isActive: json['is_active'] as bool? ?? false,
       createdAt: json['created_at']?.toString() ?? '',
       updatedAt: json['updated_at']?.toString() ?? '',
+      stats: json['stats'] != null ? OrderStats.fromJson(json['stats']) : null,
     );
   }
 
@@ -200,6 +234,37 @@ class OrderSummary {
     'is_active': isActive,
     'created_at': createdAt,
     'updated_at': updatedAt,
+    'stats': stats?.toJson(),
+  };
+}
+
+class OrderStats {
+  final Map<String, int> statusCounts;
+  final int paidCount;
+  final int unpaidCount;
+
+  OrderStats({
+    required this.statusCounts,
+    required this.paidCount,
+    required this.unpaidCount,
+  });
+
+  factory OrderStats.fromJson(Map<String, dynamic> json) {
+    final statusJson = json['status'] as Map<String, dynamic>? ?? {};
+    final statusCounts = statusJson.map(
+      (key, value) => MapEntry(key, (value as num).toInt()),
+    );
+    return OrderStats(
+      statusCounts: statusCounts,
+      paidCount: (json['paid'] as num?)?.toInt() ?? 0,
+      unpaidCount: (json['unpaid'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'status': statusCounts,
+    'paid': paidCount,
+    'unpaid': unpaidCount,
   };
 }
 
@@ -319,6 +384,10 @@ class ProduceItem {
   // Compatibility getters
   String get produceDialectName => produceLocalName ?? produceEnglishName;
   String get produceImageUrl => '';
+
+  bool get isCancelled => varieties.every((v) => v.isCancelled);
+  double get effectiveQualityFee => isCancelled ? 0.0 : qualityFee;
+
   double get deliveryFee =>
       varieties.isNotEmpty && varieties.first.varietyGroups.isNotEmpty
       ? (varieties.first.varietyGroups.first.deliveryFee ?? 0.0)
@@ -341,6 +410,7 @@ class ProduceItem {
   List<ProduceVarietyGroup> get varietyGroups => [
     ProduceVarietyGroup(varieties, isPriceLock),
   ];
+  bool get isPriceFinalized => varieties.every((v) => v.isPriceFinalized);
 }
 
 class ProduceVarietyGroup {
@@ -410,8 +480,6 @@ class ProduceVariety {
       (isItemPriceLocked || isPriceLock) ? 'price_lock' : 'market';
 
   // Expose these fields from the first selection for backward compat where UI only shows one generic row
-  String get paymentMethod =>
-      varietyGroups.isNotEmpty ? varietyGroups.first.paymentMethod : 'Cash';
   bool get isPaid => varietyGroups.isNotEmpty && varietyGroups.first.isPaid;
   double? get variableConsumerPrice =>
       varietyGroups.isNotEmpty ? varietyGroups.first.variablePrice : null;
@@ -423,6 +491,7 @@ class ProduceVariety {
   /// Returns the total price for this variety sum(quantity * unitPrice).
   double varietySubtotal(bool isItemPriceLocked) =>
       varietyGroups.fold(0.0, (sum, vg) {
+        if (vg.deliveryStatus == 'CANCELLED') return sum;
         double unitPrice = vg.variablePrice ?? 0.0;
         if (vg.finalPrice != null && vg.finalPrice! > 0) {
           unitPrice = vg.finalPrice!;
@@ -439,11 +508,15 @@ class ProduceVariety {
             vg.deliveryStatus == 'DISPATCHED' ||
             vg.deliveryStatus == 'QC_PASSED',
       );
+  bool get isPriceFinalized => varietyGroups.every((vg) => vg.isPriceFinalized);
 
   MatchCompat? get match =>
       varietyGroups.isNotEmpty && varietyGroups.first.deliveryStatus != null
       ? MatchCompat(this)
       : null;
+
+  bool get isCancelled =>
+      varietyGroups.every((vg) => vg.deliveryStatus == 'CANCELLED');
 }
 
 class VarietySelection {
@@ -454,12 +527,12 @@ class VarietySelection {
   final String? carrierId;
   final String? deliveryStatus;
   final double? deliveryFee;
-  final String paymentMethod;
   final double? priceLock;
   final double? finalPrice;
   final double? variablePrice;
   final bool isPaid;
   final String? listingId;
+  final String? oomId;
 
   VarietySelection({
     required this.name,
@@ -469,12 +542,12 @@ class VarietySelection {
     this.carrierId,
     this.deliveryStatus,
     this.deliveryFee,
-    required this.paymentMethod,
     this.priceLock,
     this.finalPrice,
     this.variablePrice,
     required this.isPaid,
     this.listingId,
+    this.oomId,
   });
 
   factory VarietySelection.fromJson(Map<String, dynamic> json) {
@@ -490,12 +563,12 @@ class VarietySelection {
       carrierId: json['carrier_id']?.toString(),
       deliveryStatus: json['delivery_status']?.toString(),
       deliveryFee: (json['delivery_fee'] as num?)?.toDouble(),
-      paymentMethod: json['payment_method']?.toString() ?? 'Cash',
       priceLock: (json['price_lock'] as num?)?.toDouble(),
       finalPrice: (json['final_price'] as num?)?.toDouble(),
       variablePrice: (json['variable_price'] as num?)?.toDouble(),
       isPaid: json['is_paid'] == true,
       listingId: json['listing_id']?.toString(),
+      oomId: json['oom_id']?.toString(),
     );
   }
 
@@ -507,18 +580,20 @@ class VarietySelection {
     'carrier_id': carrierId,
     'delivery_status': deliveryStatus,
     'delivery_fee': deliveryFee,
-    'payment_method': paymentMethod,
     'price_lock': priceLock,
     'final_price': finalPrice,
     'variable_price': variablePrice,
     'is_paid': isPaid,
     'listing_id': listingId,
+    'oom_id': oomId,
   };
 
   // Compat fields mapping to previous shape
   String get varietyName => name;
   double get allocatedQuantity => quantity;
   bool get isSelected => true; // Assuming these are only fulfilled ones
+  bool get isPriceFinalized =>
+      deliveryStatus == 'CANCELLED' || (finalPrice != null && finalPrice! > 0);
 }
 
 class MatchCompat {
@@ -553,6 +628,7 @@ class PlaceOrderResult {
   final int matched;
   final int failed;
   final List<PlaceOrderError> errors;
+  final List<OrderSelection> selections;
 
   PlaceOrderResult({
     required this.orderId,
@@ -561,6 +637,7 @@ class PlaceOrderResult {
     required this.matched,
     required this.failed,
     required this.errors,
+    this.selections = const [],
   });
 
   factory PlaceOrderResult.fromJson(Map<String, dynamic> json) {
@@ -575,6 +652,11 @@ class PlaceOrderResult {
               ?.map((e) => PlaceOrderError.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      selections:
+          (json['selections'] as List<dynamic>?)
+              ?.map((s) => OrderSelection.fromJson(s as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -585,6 +667,7 @@ class PlaceOrderResult {
     'matched': matched,
     'failed': failed,
     'errors': errors.map((e) => e.toJson()).toList(),
+    'selections': selections.map((s) => s.toJson()).toList(),
   };
 }
 
@@ -622,6 +705,60 @@ class PlaceOrderError {
     'form': form,
     'requested_qty': requestedQty,
     'unfulfilled_qty': unfulfilledQty,
+    'reason': reason,
+  };
+}
+
+class OrderSelection {
+  final String covId;
+  final String varietyId;
+  final String varietyName;
+  final double allocatedQty;
+  final String farmerId;
+  final double distanceKm;
+  final String availableFrom;
+  final String availableTo;
+  final bool chosen;
+  final String reason;
+
+  OrderSelection({
+    required this.covId,
+    required this.varietyId,
+    required this.varietyName,
+    required this.allocatedQty,
+    required this.farmerId,
+    required this.distanceKm,
+    required this.availableFrom,
+    required this.availableTo,
+    required this.chosen,
+    required this.reason,
+  });
+
+  factory OrderSelection.fromJson(Map<String, dynamic> json) {
+    return OrderSelection(
+      covId: json['cov_id']?.toString() ?? '',
+      varietyId: json['variety_id']?.toString() ?? '',
+      varietyName: json['variety_name']?.toString() ?? '',
+      allocatedQty: (json['allocated_qty'] as num?)?.toDouble() ?? 0.0,
+      farmerId: json['farmer_id']?.toString() ?? '',
+      distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0.0,
+      availableFrom: json['available_from']?.toString() ?? '',
+      availableTo: json['available_to']?.toString() ?? '',
+      chosen: json['chosen'] == true,
+      reason: json['reason']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'cov_id': covId,
+    'variety_id': varietyId,
+    'variety_name': varietyName,
+    'allocated_qty': allocatedQty,
+    'farmer_id': farmerId,
+    'distance_km': distanceKm,
+    'available_from': availableFrom,
+    'available_to': availableTo,
+    'chosen': chosen,
     'reason': reason,
   };
 }

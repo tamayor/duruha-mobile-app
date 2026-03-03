@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class FarmerPriceLockSubscription {
   final String fplsId;
   final String fplId;
@@ -34,9 +32,15 @@ class FarmerPriceLockSubscription {
       endsAt: DateTime.parse(json['ends_at']),
       remainingCredits: (json['remaining_credits'] as num).toDouble(),
       farmerId: json['farmer_id'],
-      planName: json['farmer_price_lock_configs']?['plan_name'] ?? 'Unknown Plan',
-      monthlyCreditLimit: (json['farmer_price_lock_configs']?['monthly_credit_limit'] as num?)?.toDouble() ?? 0.0,
-      fee: (json['farmer_price_lock_configs']?['fee'] as num?)?.toDouble() ?? 0.0,
+      planName:
+          json['farmer_price_lock_configs']?['plan_name'] ?? 'Unknown Plan',
+      monthlyCreditLimit:
+          (json['farmer_price_lock_configs']?['monthly_credit_limit'] as num?)
+              ?.toDouble() ??
+          0.0,
+      fee:
+          (json['farmer_price_lock_configs']?['fee'] as num?)?.toDouble() ??
+          0.0,
     );
   }
 }

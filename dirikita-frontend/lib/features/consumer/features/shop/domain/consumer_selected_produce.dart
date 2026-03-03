@@ -40,9 +40,7 @@ class ConsumerSelectedProduce {
           (json['image_url'] ?? json['imageUrl'] ?? json['produce_img_url'])
               ?.toString(),
       // get_user_produce consumer mode field names
-      total30DaysOffer:
-          ((json['avg_30d_offer_qty'] ?? json['total_30_days_offer'] ?? 0))
-              .toDouble(),
+      total30DaysOffer: (json['30d_offer_qty'] ?? 0).toDouble(),
       varietyCountWithOffers:
           (json['variety_count_available'] ??
                   json['variety_count_with_offers'] ??

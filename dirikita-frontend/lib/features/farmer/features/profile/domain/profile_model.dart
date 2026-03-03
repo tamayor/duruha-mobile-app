@@ -24,7 +24,6 @@ class FarmerProfile extends UserProfile {
     required this.landArea,
     required this.accessibilityType,
     required this.waterSources,
-    required this.paymentMethods,
     required this.operatingDays,
     required this.deliveryWindow,
     this.farmerFavProduce = const [],
@@ -39,7 +38,6 @@ class FarmerProfile extends UserProfile {
   final String accessibilityType;
   final List<String> waterSources;
   final List<Produce> farmerFavProduce;
-  final List<String> paymentMethods;
   final List<String> operatingDays;
   final String deliveryWindow;
   final int trustScore;
@@ -71,9 +69,6 @@ class FarmerProfile extends UserProfile {
       accessibilityType: json['accessibility_type'] as String? ?? '',
       waterSources: json['water_sources'] != null
           ? List<String>.from(json['water_sources'] as List)
-          : [],
-      paymentMethods: json['payment_methods'] != null
-          ? List<String>.from(json['payment_methods'] as List)
           : [],
       operatingDays: json['operating_days'] != null
           ? List<String>.from(json['operating_days'] as List)
@@ -120,7 +115,6 @@ class FarmerProfile extends UserProfile {
       landArea: 0.0,
       accessibilityType: '',
       waterSources: [],
-      paymentMethods: [],
       operatingDays: [],
       deliveryWindow: '',
       farmerFavProduce: [],
@@ -136,7 +130,6 @@ class FarmerProfile extends UserProfile {
       'land_area': landArea,
       'accessibility_type': accessibilityType,
       'water_sources': waterSources,
-      'payment_methods': paymentMethods,
       'operating_days': operatingDays,
       'delivery_window': deliveryWindow,
       'fav_produce': farmerFavProduce.map((p) => p.id).toList(),
@@ -164,7 +157,6 @@ class FarmerProfile extends UserProfile {
     double? landArea,
     String? accessibilityType,
     List<String>? waterSources,
-    List<String>? paymentMethods,
     List<String>? operatingDays,
     String? deliveryWindow,
     List<Produce>? farmerFavProduce,
@@ -192,7 +184,6 @@ class FarmerProfile extends UserProfile {
       landArea: landArea ?? this.landArea,
       accessibilityType: accessibilityType ?? this.accessibilityType,
       waterSources: waterSources ?? this.waterSources,
-      paymentMethods: paymentMethods ?? this.paymentMethods,
       operatingDays: operatingDays ?? this.operatingDays,
       deliveryWindow: deliveryWindow ?? this.deliveryWindow,
       farmerFavProduce: farmerFavProduce ?? this.farmerFavProduce,

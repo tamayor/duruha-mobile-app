@@ -425,7 +425,7 @@ class _OrderFormState extends State<OrderForm> {
     final Map<String, String> optionSubtitles = {
       for (var v in sortedVarieties)
         v.name: v.total30DaysQuantity > 0
-            ? "${v.total30DaysQuantity.toInt()} ${widget.produce.baseUnit} available in 30 days"
+            ? "${v.total30DaysQuantity.toInt()} ${widget.produce.baseUnit} available "
             : "No offers yet",
     };
 

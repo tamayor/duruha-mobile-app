@@ -11,7 +11,10 @@ import 'package:intl/intl.dart';
 import 'crop_selection_state.dart';
 import '../data/transaction_draft_service.dart';
 import '../data/transaction_repository.dart';
-import 'transaction_message_screen.dart';
+import '../../subscription/pricelock/domain/price_lock_subscription_model.dart';
+import '../../subscription/pricelock/data/subscription_repository.dart';
+import '../../../shared/presentation/consumer_loading_screen.dart';
+import '../../manage/presentation/order_details_screen.dart';
 
 class TransactionReviewScreen extends StatefulWidget {
   final String mode;
@@ -35,6 +38,61 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   final _noteController = TextEditingController();
   bool _isSubmitting = false;
   PlaceOrderResult? _matchResult;
+
+  String _selectedPaymentMethod = 'Cash';
+  final List<String> _paymentMethods = [
+    'Cash',
+    'E-wallet',
+    'Bank Transfers',
+    'Card Payments',
+  ];
+
+  final _subRepository = SubscriptionRepository();
+  List<PriceLockSubscription> _subscriptions = [];
+  PriceLockSubscription? _activeSubscription;
+  bool _isLoadingSubscription = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSubscriptions();
+  }
+
+  Future<void> _fetchSubscriptions() async {
+    final consumerId = await SessionService.getRoleId();
+    if (consumerId != null && !_isPlan) {
+      final subs = await _subRepository.getConsumerPriceLockSubscriptions();
+
+      // Sort logic: active first, then most remaining credits, then latest end date
+      subs.sort((a, b) {
+        if (a.status == 'active' && b.status != 'active') return -1;
+        if (a.status != 'active' && b.status == 'active') return 1;
+
+        if (a.remainingCredits != b.remainingCredits) {
+          return b.remainingCredits.compareTo(a.remainingCredits);
+        }
+
+        return b.endsAt.compareTo(a.endsAt);
+      });
+
+      if (mounted) {
+        setState(() {
+          _subscriptions = subs;
+          // default to the best one if it's active and has credits
+          if (subs.isNotEmpty &&
+              subs.first.status == 'active' &&
+              subs.first.remainingCredits > 0) {
+            _activeSubscription = subs.first;
+          }
+          _isLoadingSubscription = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() => _isLoadingSubscription = false);
+      }
+    }
+  }
 
   bool get _isPlan => widget.mode == 'plan';
 
@@ -83,6 +141,19 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   }
 
   Future<void> _submitAll() async {
+    if (!_isPlan &&
+        _selectedPaymentMethod == 'Cash' &&
+        _activeSubscription != null) {
+      final totalLocked = _calculateTotalLockedCredits();
+      if (totalLocked > _activeSubscription!.remainingCredits) {
+        DuruhaSnackBar.showError(
+          context,
+          "You have exceeded your price lock credit limit. Please uncheck some items.",
+        );
+        return;
+      }
+    }
+
     setState(() => _isSubmitting = true);
     HapticFeedback.heavyImpact();
 
@@ -156,7 +227,10 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
             }
           }
           cropFormSelections[produce.id] = formNames;
-          cropPriceLocks[produce.id] = state.varietyPriceLock;
+          cropPriceLocks[produce.id] =
+              (_selectedPaymentMethod == 'Cash' && _activeSubscription != null)
+              ? state.varietyPriceLock
+              : {};
         }
 
         if (_isPlan) {
@@ -214,6 +288,18 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
       }
 
       if (!_isPlan) {
+        if (_activeSubscription != null && _selectedPaymentMethod == 'Cash') {
+          if (_calculateTotalLockedCredits() <= 0) {
+            _activeSubscription = null;
+            if (mounted) {
+              DuruhaSnackBar.showInfo(
+                context,
+                "Price lock selection removed because no items were locked.",
+              );
+            }
+          }
+        }
+
         final Map<String, List<Set<String>>> varietyGroups = {};
         for (var produce in widget.selectedProduce) {
           varietyGroups[produce.id] =
@@ -243,6 +329,10 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
           note: _noteController.text.trim().isNotEmpty
               ? _noteController.text.trim()
               : null,
+          paymentMethod: _selectedPaymentMethod,
+          cplsId: (_selectedPaymentMethod == 'Cash')
+              ? _activeSubscription?.cplsId
+              : null,
         );
 
         if (_matchResult == null) {
@@ -260,11 +350,15 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
             context,
           ).pushNamedAndRemoveUntil('/consumer/manage/order', (route) => true);
         } else if (_matchResult != null) {
-          DuruhaSnackBar.showSuccess(context, _matchResult!.message);
+          final result = _matchResult!;
+          // Navigate directly to OrderDetailsScreen skipping TransactionMessageScreen
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) =>
-                  TransactionMessageScreen(result: _matchResult!),
+              builder: (context) => OrderDetailsScreen(
+                orderId: result.orderId,
+                action: 'new',
+                placeOrderResult: result,
+              ),
             ),
           );
         }
@@ -278,82 +372,545 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
     }
   }
 
+  double _calculateTotalLockedCredits() {
+    if (_activeSubscription == null) return 0;
+    double total = 0;
+    for (var produce in widget.selectedProduce) {
+      final state = widget.cropStates[produce.id];
+      if (state == null) continue;
+      for (var variant in state.varietyQuantityControllers.keys) {
+        if (state.varietyPriceLock[variant] == true) {
+          final qty =
+              double.tryParse(
+                state.varietyQuantityControllers[variant]!.text,
+              ) ??
+              0;
+          // We need to approximation the price without quality fee for the lock,
+          // but for simplicity here we just use the selected form's price
+          final variety = produce.varieties.firstWhere(
+            (v) => v.name == variant,
+            orElse: () => produce.varieties.first,
+          );
+          final lid = state.varietySelectedFormId[variant];
+          final listing = variety.listings.firstWhere(
+            (l) => l.listingId == lid,
+            orElse: () => variety.listings.first,
+          );
+          total += (qty * listing.duruhaToConsumerPrice);
+        }
+      }
+    }
+    return total;
+  }
+
+  double _calculateTotalUnlockedCredits() {
+    double total = 0;
+    for (var produce in widget.selectedProduce) {
+      final state = widget.cropStates[produce.id];
+      if (state == null) continue;
+      for (var variant in state.varietyQuantityControllers.keys) {
+        if (state.varietyPriceLock[variant] != true) {
+          final qty =
+              double.tryParse(
+                state.varietyQuantityControllers[variant]!.text,
+              ) ??
+              0;
+          final variety = produce.varieties.firstWhere(
+            (v) => v.name == variant,
+            orElse: () => produce.varieties.first,
+          );
+          final lid = state.varietySelectedFormId[variant];
+          final listing = variety.listings.firstWhere(
+            (l) => l.listingId == lid,
+            orElse: () => variety.listings.first,
+          );
+          total += (qty * listing.duruhaToConsumerPrice);
+        }
+      }
+    }
+    return total;
+  }
+
+  void _recomputePriceLockStates() {
+    if (_activeSubscription == null) return;
+    setState(() {}); // trigger rebuild to update FPLS banner
+  }
+
+  Widget _buildPriceLockSummaryBanner(ThemeData theme) {
+    if (_activeSubscription == null ||
+        _isPlan ||
+        _selectedPaymentMethod != 'Cash') {
+      return const SizedBox.shrink();
+    }
+
+    final sub = _activeSubscription!;
+    final totalLocked = _calculateTotalLockedCredits();
+    final totalUnlocked = _calculateTotalUnlockedCredits();
+    final newRemaining = sub.remainingCredits - totalLocked;
+
+    final isOverLimit = newRemaining < 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isOverLimit
+            ? theme.colorScheme.errorContainer
+            : theme.colorScheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isOverLimit
+              ? theme.colorScheme.error
+              : theme.colorScheme.tertiary,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.security_rounded,
+                color: isOverLimit
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onTertiaryContainer,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Price Lock Active",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: isOverLimit
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onTertiaryContainer,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _showPriceLockPicker(context, theme),
+                icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
+                label: const Text("Change"),
+                style: TextButton.styleFrom(
+                  foregroundColor: isOverLimit
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onTertiaryContainer,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 0,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Secured payment for all items until maxed out. CPLS ID: ${sub.cplsId.substring(0, 8)}...",
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: isOverLimit
+                  ? theme.colorScheme.error.withValues(alpha: 0.8)
+                  : theme.colorScheme.onTertiaryContainer.withValues(
+                      alpha: 0.8,
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Divider(
+            color: isOverLimit
+                ? theme.colorScheme.error.withValues(alpha: 0.3)
+                : theme.colorScheme.onTertiaryContainer.withValues(alpha: 0.1),
+            height: 1,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Locked Total:",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isOverLimit
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onTertiaryContainer,
+                ),
+              ),
+              Text(
+                DuruhaFormatter.formatCurrency(totalLocked),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isOverLimit
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onTertiaryContainer,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Remaining Credits:",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isOverLimit
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onTertiaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                DuruhaFormatter.formatCurrency(newRemaining),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isOverLimit
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onTertiaryContainer,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(
+            color: isOverLimit
+                ? theme.colorScheme.error.withValues(alpha: 0.3)
+                : theme.colorScheme.onTertiaryContainer.withValues(alpha: 0.1),
+            height: 1,
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Unlocked Total:",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isOverLimit
+                      ? theme.colorScheme.error.withValues(alpha: 0.8)
+                      : theme.colorScheme.onTertiaryContainer.withValues(
+                          alpha: 0.8,
+                        ),
+                ),
+              ),
+              Text(
+                DuruhaFormatter.formatCurrency(totalUnlocked),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: isOverLimit
+                      ? theme.colorScheme.error.withValues(alpha: 0.8)
+                      : theme.colorScheme.onTertiaryContainer.withValues(
+                          alpha: 0.8,
+                        ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+          if (isOverLimit) ...[
+            const SizedBox(height: 8),
+            Text(
+              "You have exceeded your price lock credit limit. Please uncheck some items.",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showPriceLockPicker(BuildContext context, ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Select Price Lock",
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(ctx),
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _subscriptions.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      // Option to remove price lock
+                      final isSelected = _activeSubscription == null;
+                      return ListTile(
+                        leading: const Icon(Icons.cancel_outlined),
+                        title: const Text("No Price Lock"),
+                        trailing: isSelected
+                            ? Icon(
+                                Icons.check_circle_rounded,
+                                color: theme.colorScheme.primary,
+                              )
+                            : null,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        tileColor: isSelected
+                            ? theme.colorScheme.primaryContainer.withValues(
+                                alpha: 0.3,
+                              )
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _activeSubscription = null;
+                            _recomputePriceLockStates();
+                          });
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    }
+
+                    final sub = _subscriptions[index - 1];
+                    final isSelected =
+                        _activeSubscription?.cplsId == sub.cplsId;
+                    final isActive = sub.status == 'active';
+
+                    return Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.security_rounded,
+                          color: isActive
+                              ? theme.colorScheme.tertiary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                "CPLS: ${sub.cplsId.substring(0, 8)}...",
+                              ),
+                            ),
+                            if (isActive)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.tertiaryContainer,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  "ACTIVE",
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color:
+                                        theme.colorScheme.onTertiaryContainer,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Text(
+                              "Remaining: ${DuruhaFormatter.formatCurrency(sub.remainingCredits.toDouble())}",
+                              style: TextStyle(
+                                color: isActive
+                                    ? theme.colorScheme.tertiary
+                                    : null,
+                                fontWeight: isActive ? FontWeight.bold : null,
+                              ),
+                            ),
+                            Text(
+                              "Expires: ${DateFormat('MMM dd, yyyy').format(sub.endsAt)}",
+                            ),
+                          ],
+                        ),
+                        trailing: isSelected
+                            ? Icon(
+                                Icons.check_circle_rounded,
+                                color: theme.colorScheme.tertiary,
+                              )
+                            : null,
+                        enabled: isActive && sub.remainingCredits > 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isSelected
+                                ? theme.colorScheme.tertiary
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        tileColor: isSelected
+                            ? theme.colorScheme.tertiaryContainer.withValues(
+                                alpha: 0.3,
+                              )
+                            : null,
+                        onTap: () {
+                          if (!isActive || sub.remainingCredits <= 0) return;
+                          setState(() {
+                            _activeSubscription = sub;
+                            _recomputePriceLockStates();
+                          });
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DuruhaScaffold(
       appBarTitle: _isPlan ? 'Review Plan' : 'Review Order',
+      appBarActions: [
+        if (!_isPlan &&
+            _selectedPaymentMethod == 'Cash' &&
+            _subscriptions.isNotEmpty) ...[
+          IconButton(
+            icon: const Icon(Icons.security_rounded),
+            tooltip: 'Select Price Lock',
+            onPressed: () => _showPriceLockPicker(context, theme),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ],
       body: Stack(
         children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-            child: Column(
-              children: [
-                if (!_isPlan) ...[
-                  // Grand Total Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          theme.colorScheme.tertiary,
-                          theme.colorScheme.tertiary.withValues(alpha: 0.8),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: theme.colorScheme.tertiary.withValues(
-                            alpha: 0.3,
-                          ),
-                          blurRadius: 15,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          "Order Grand Total",
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.onTertiary.withValues(
-                              alpha: 0.8,
+          _isLoadingSubscription
+              ? const ConsumerLoadingScreen()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                  child: Column(
+                    children: [
+                      _buildPriceLockSummaryBanner(theme),
+                      const SizedBox(height: 16),
+                      if (!_isPlan) ...[
+                        // Grand Total Card
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                theme.colorScheme.tertiary,
+                                theme.colorScheme.tertiary.withValues(
+                                  alpha: 0.8,
+                                ),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.tertiary.withValues(
+                                  alpha: 0.3,
+                                ),
+                                blurRadius: 15,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                "Order Grand Total",
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: theme.colorScheme.onTertiary
+                                      .withValues(alpha: 0.8),
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                DuruhaFormatter.formatCurrency(_grandTotal),
+                                style: theme.textTheme.headlineMedium?.copyWith(
+                                  color: theme.colorScheme.onTertiary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          DuruhaFormatter.formatCurrency(_grandTotal),
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            color: theme.colorScheme.onTertiary,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        const SizedBox(height: 20),
+                        DuruhaDropdown<String>(
+                          value: _selectedPaymentMethod,
+                          label: "Payment Method",
+                          items: _paymentMethods,
+                          prefixIcon: Icons.account_balance_wallet_rounded,
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _selectedPaymentMethod = val;
+                                if (val != 'Cash') {
+                                  for (var p in widget.selectedProduce) {
+                                    widget.cropStates[p.id]?.varietyPriceLock
+                                        .clear();
+                                  }
+                                }
+                              });
+                            }
+                          },
                         ),
+                        const SizedBox(height: 16),
+                        DuruhaTextField(
+                          label: "Order Notes",
+                          icon: Icons.notes_rounded,
+                          controller: _noteController,
+                          maxLines: 2,
+                          isRequired: false,
+                        ),
+                        const SizedBox(height: 16),
                       ],
-                    ),
+                      ...widget.selectedProduce.map((produce) {
+                        final state = widget.cropStates[produce.id]!;
+                        return _buildReviewCard(theme, produce, state);
+                      }),
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                  DuruhaTextField(
-                    label: "Order Notes",
-                    icon: Icons.notes_rounded,
-                    controller: _noteController,
-                    maxLines: 2,
-                    isRequired: false,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                ...widget.selectedProduce.map((produce) {
-                  final state = widget.cropStates[produce.id]!;
-                  return _buildReviewCard(theme, produce, state);
-                }),
-              ],
-            ),
-          ),
+                ),
           _buildSubmitBar(theme),
         ],
       ),
@@ -363,6 +920,15 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   // ─── Bottom Submit Bar ───────────────────────────────────────────────────────
 
   Widget _buildSubmitBar(ThemeData theme) {
+    bool isOverLimit = false;
+    if (!_isPlan &&
+        _selectedPaymentMethod == 'Cash' &&
+        _activeSubscription != null) {
+      isOverLimit =
+          _calculateTotalLockedCredits() >
+          _activeSubscription!.remainingCredits;
+    }
+
     return Positioned(
       bottom: 0,
       left: 0,
@@ -370,15 +936,15 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
         child: DuruhaButton(
-          icon: _isSubmitting ? null : Icon(Icons.check_outlined),
+          icon: _isSubmitting ? null : const Icon(Icons.check_outlined),
           isLoading: _isSubmitting,
-          backgroundColor: _isSubmitting
+          backgroundColor: (_isSubmitting || isOverLimit)
               ? theme.colorScheme.secondary
               : theme.colorScheme.tertiaryContainer,
           text: _isSubmitting
               ? 'Submitting...'
               : (_isPlan ? 'Confirm Plan' : 'Confirm Order'),
-          onPressed: _submitAll,
+          onPressed: isOverLimit ? null : _submitAll,
         ),
       ),
     );
@@ -822,12 +1388,16 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                         priceLock:
                             state.varietyPriceLock[selectedInGroup.first] ??
                             false,
-                        onPriceLockChanged: (val) {
-                          setState(() {
-                            state.varietyPriceLock[selectedInGroup.first] = val;
-                          });
-                          _saveDraft(produce.id);
-                        },
+                        onPriceLockChanged: _selectedPaymentMethod == 'Cash'
+                            ? (val) {
+                                setState(() {
+                                  state.varietyPriceLock[selectedInGroup
+                                          .first] =
+                                      val;
+                                });
+                                _saveDraft(produce.id);
+                              }
+                            : null,
                       );
                     }),
                   if (!_isPlan)
@@ -865,12 +1435,14 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                             formName: formName,
                             priceLock:
                                 state.varietyPriceLock[varietyKey] ?? false,
-                            onPriceLockChanged: (val) {
-                              setState(() {
-                                state.varietyPriceLock[varietyKey] = val;
-                              });
-                              _saveDraft(produce.id);
-                            },
+                            onPriceLockChanged: _selectedPaymentMethod == 'Cash'
+                                ? (val) {
+                                    setState(() {
+                                      state.varietyPriceLock[varietyKey] = val;
+                                    });
+                                    _saveDraft(produce.id);
+                                  }
+                                : null,
                           );
                         }),
                   if (_isPlan)
@@ -902,12 +1474,14 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                         pricePerUnit: vPrice,
                         formName: formName,
                         priceLock: state.varietyPriceLock[varietyKey] ?? false,
-                        onPriceLockChanged: (val) {
-                          setState(() {
-                            state.varietyPriceLock[varietyKey] = val;
-                          });
-                          _saveDraft(produce.id);
-                        },
+                        onPriceLockChanged: _selectedPaymentMethod == 'Cash'
+                            ? (val) {
+                                setState(() {
+                                  state.varietyPriceLock[varietyKey] = val;
+                                });
+                                _saveDraft(produce.id);
+                              }
+                            : null,
                       );
                     }),
                 ],

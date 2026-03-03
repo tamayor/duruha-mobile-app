@@ -1,4 +1,3 @@
-import 'package:duruha/core/constants/payment_methods.dart';
 import 'package:duruha/features/onboarding/data/onboarding_repository.dart';
 import 'package:duruha/features/onboarding/presentation/components/consumer_profile_step.dart';
 import 'package:duruha/features/onboarding/presentation/components/farmer_profile_step.dart';
@@ -76,8 +75,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // Define category icons mapping
 
-  // Logistics & Payment
-  final List<String> _paymentMethods = [];
+  // Logistics
   String? _deliveryWindow;
   final List<String> _operatingDays = [];
   final List<String> _daysOptions = [
@@ -169,7 +167,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       await prefs.setString('onboarding_landmark', _landmarkController.text);
 
       await prefs.setStringList('onboarding_dialects', _selectedDialects);
-      await prefs.setStringList('onboarding_payment', _paymentMethods);
       await prefs.setStringList('onboarding_days', _operatingDays);
       if (_deliveryWindow != null) {
         await prefs.setString('onboarding_window', _deliveryWindow!);
@@ -229,11 +226,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           _selectedDialects.clear();
           _selectedDialects.addAll(
             prefs.getStringList('onboarding_dialects') ?? [],
-          );
-
-          _paymentMethods.clear();
-          _paymentMethods.addAll(
-            prefs.getStringList('onboarding_payment') ?? [],
           );
 
           _operatingDays.clear();
@@ -303,7 +295,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         'postalCode': _postalCodeController.text,
         'landmark': _landmarkController.text,
         'dialects': _selectedDialects,
-        'paymentMethods': _paymentMethods,
         'operatingDays': _operatingDays,
         'deliveryWindow': _deliveryWindow,
         'latitude': _latitude,
@@ -336,10 +327,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       // Language Validation
       if (_selectedDialects.isEmpty) {
         _showError("Please select at least one language/dialect");
-        return;
-      }
-      if (_paymentMethods.isEmpty) {
-        _showError("Please select at least one preferred payment method");
         return;
       }
       if (_operatingDays.isEmpty) {
@@ -577,18 +564,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             _selectedDialects.remove(dialect);
           } else {
             _selectedDialects.add(dialect);
-          }
-          _saveState();
-        });
-      },
-      paymentMethodOptions: PaymentMethods.all,
-      selectedPaymentMethods: _paymentMethods,
-      onPaymentMethodToggle: (val) {
-        setState(() {
-          if (_paymentMethods.contains(val)) {
-            _paymentMethods.remove(val);
-          } else {
-            _paymentMethods.add(val);
           }
           _saveState();
         });

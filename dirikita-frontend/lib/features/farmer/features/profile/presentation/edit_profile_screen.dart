@@ -1,4 +1,3 @@
-import 'package:duruha/core/constants/payment_methods.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/shared/user/data/dialect_repository.dart';
@@ -56,7 +55,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late List<String> _selectedDialect;
   late String _accessibility;
   late List<String> _waterSources;
-  late List<String> _paymentMethods;
   late List<String> _operatingDays;
   late String _deliveryWindow;
   double? _latitude;
@@ -105,7 +103,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ? widget.profile.accessibilityType
         : _accessibilityOptions.first;
     _waterSources = List.from(widget.profile.waterSources);
-    _paymentMethods = List.from(widget.profile.paymentMethods);
     _operatingDays = List.from(widget.profile.operatingDays);
     _deliveryWindow = widget.profile.deliveryWindow.isNotEmpty
         ? widget.profile.deliveryWindow
@@ -196,7 +193,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         dialect: _selectedDialect,
         accessibilityType: _accessibility,
         waterSources: _waterSources,
-        paymentMethods: _paymentMethods,
         operatingDays: _operatingDays,
         deliveryWindow: _deliveryWindow,
         latitude: _latitude,
@@ -328,17 +324,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               DuruhaSectionContainer(
                 title: 'Operations',
                 children: [
-                  DuruhaSelectionChipGroup(
-                    title: 'Payment Methods',
-                    options: PaymentMethods.all,
-                    selectedValues: _paymentMethods,
-                    onToggle: (val) {
-                      setState(() {
-                        _paymentMethods = _toggled(_paymentMethods, val);
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
                   DuruhaSelectionChipGroup(
                     title: 'Operating Days',
                     options: _operatingDaysOptions,

@@ -1,37 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/features/consumer/features/manage/data/orders_repository.dart';
 import '../domain/order_details_model.dart';
 import 'widgets/order_card.dart';
 
 class ConsumerOrdersScreen extends StatefulWidget {
-  final List<ConsumerOrderMatch> activeMatches;
-  final List<ConsumerOrderMatch> historyMatches;
-  final VoidCallback onLoadMoreActive;
-  final VoidCallback onLoadMoreHistory;
-  final bool hasMoreActive;
-  final bool hasMoreHistory;
-  final bool isFetchingMoreActive;
-  final bool isFetchingMoreHistory;
-
-  const ConsumerOrdersScreen({
-    super.key,
-    required this.activeMatches,
-    required this.historyMatches,
-    required this.onLoadMoreActive,
-    required this.onLoadMoreHistory,
-    required this.hasMoreActive,
-    required this.hasMoreHistory,
-    required this.isFetchingMoreActive,
-    required this.isFetchingMoreHistory,
-  });
+  const ConsumerOrdersScreen({super.key});
 
   @override
   State<ConsumerOrdersScreen> createState() => _ConsumerOrdersScreenState();
 }
 
-class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen> {
+class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen>
+    with SingleTickerProviderStateMixin {
+  final _ordersRepository = OrdersRepository();
+
+  List<ConsumerOrderMatch> _activeMatches = [];
+  String? _activeCursor;
+  bool _hasMoreActive = false;
+  bool _isFetchingMoreActive = false;
+  bool _isLoadingActive = false;
+
+  List<ConsumerOrderMatch> _historyMatches = [];
+  String? _historyCursor;
+  bool _hasMoreHistory = false;
+  bool _isFetchingMoreHistory = false;
+  bool _isLoadingHistory = false;
+
   late ScrollController _activeScrollController;
   late ScrollController _historyScrollController;
+  late TabController _tabController;
 
   @override
   void initState() {
@@ -39,12 +38,129 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen> {
     _activeScrollController = ScrollController()..addListener(_onActiveScroll);
     _historyScrollController = ScrollController()
       ..addListener(_onHistoryScroll);
+
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChange);
+
+    // Initial fetch
+    _fetchData(isActive: true);
+  }
+
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) {
+      if (_tabController.index == 1 &&
+          _historyMatches.isEmpty &&
+          !_isLoadingHistory) {
+        _fetchData(isActive: false);
+      }
+    }
+  }
+
+  Future<void> _fetchData({required bool isActive}) async {
+    if (!mounted) return;
+    setState(() {
+      if (isActive) {
+        _isLoadingActive = true;
+      } else {
+        _isLoadingHistory = true;
+      }
+    });
+
+    try {
+      final consumerId = await SessionService.getRoleId();
+      if (consumerId == null) return;
+
+      final response = await _ordersRepository.fetchOrderMatches(
+        isActive: isActive,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (isActive) {
+            _activeMatches = response.orders;
+            _activeCursor = response.nextCursor;
+            _hasMoreActive = response.pagination?.hasMore ?? false;
+            _isLoadingActive = false;
+          } else {
+            _historyMatches = response.orders;
+            _historyCursor = response.nextCursor;
+            _hasMoreHistory = response.pagination?.hasMore ?? false;
+            _isLoadingHistory = false;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [CONSUMER ORDERS FETCH ERROR]: $e');
+      if (mounted) {
+        setState(() {
+          if (isActive) {
+            _isLoadingActive = false;
+          } else {
+            _isLoadingHistory = false;
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchMore({required bool isActive}) async {
+    final isFetching = isActive
+        ? _isFetchingMoreActive
+        : _isFetchingMoreHistory;
+    final hasMore = isActive ? _hasMoreActive : _hasMoreHistory;
+    final cursor = isActive ? _activeCursor : _historyCursor;
+
+    if (isFetching || !hasMore || cursor == null) return;
+
+    setState(() {
+      if (isActive) {
+        _isFetchingMoreActive = true;
+      } else {
+        _isFetchingMoreHistory = true;
+      }
+    });
+
+    try {
+      final response = await _ordersRepository.fetchOrderMatches(
+        isActive: isActive,
+        cursor: cursor,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (isActive) {
+            _activeMatches.addAll(response.orders);
+            _activeCursor = response.nextCursor;
+            _hasMoreActive = response.pagination?.hasMore ?? false;
+            _isFetchingMoreActive = false;
+          } else {
+            _historyMatches.addAll(response.orders);
+            _historyCursor = response.nextCursor;
+            _hasMoreHistory = response.pagination?.hasMore ?? false;
+            _isFetchingMoreHistory = false;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [CONSUMER ORDERS FETCH MORE ERROR]: $e');
+      if (mounted) {
+        setState(() {
+          if (isActive) {
+            _isFetchingMoreActive = false;
+          } else {
+            _isFetchingMoreHistory = false;
+          }
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     _activeScrollController.dispose();
     _historyScrollController.dispose();
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -53,7 +169,7 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen> {
     final pos = _activeScrollController.position.pixels;
     final max = _activeScrollController.position.maxScrollExtent;
     if (pos >= max * 0.8 && max > 0) {
-      widget.onLoadMoreActive();
+      _fetchMore(isActive: true);
     }
   }
 
@@ -62,7 +178,7 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen> {
     final pos = _historyScrollController.position.pixels;
     final max = _historyScrollController.position.maxScrollExtent;
     if (pos >= max * 0.8 && max > 0) {
-      widget.onLoadMoreHistory();
+      _fetchMore(isActive: false);
     }
   }
 
@@ -70,38 +186,37 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return DefaultTabController(
-      length: 2,
-      child: DuruhaScrollHideWrapper(
-        bar: const DuruhaTabBar(
-          tabs: [
-            Tab(text: "Active Orders"),
-            Tab(text: "Order History"),
-          ],
-        ),
-        body: TabBarView(
-          children: [
-            // Active Orders Tab
-            _buildMatchList(
-              widget.activeMatches,
-              theme,
-              "No active orders found.",
-              _activeScrollController,
-              widget.hasMoreActive,
-              widget.isFetchingMoreActive,
-            ),
+    return DuruhaScrollHideWrapper(
+      bar: DuruhaTabBar(
+        controller: _tabController,
+        tabs: const [
+          Tab(text: "Active"),
+          Tab(text: "History"),
+        ],
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // Active Orders Tab
+          _buildMatchList(
+            _activeMatches,
+            theme,
+            "No active orders found.",
+            _activeScrollController,
+            _hasMoreActive,
+            _isLoadingActive || _isFetchingMoreActive,
+          ),
 
-            // Order History Tab
-            _buildMatchList(
-              widget.historyMatches,
-              theme,
-              "No order history found.",
-              _historyScrollController,
-              widget.hasMoreHistory,
-              widget.isFetchingMoreHistory,
-            ),
-          ],
-        ),
+          // Order History Tab
+          _buildMatchList(
+            _historyMatches,
+            theme,
+            "No order history found.",
+            _historyScrollController,
+            _hasMoreHistory,
+            _isLoadingHistory || _isFetchingMoreHistory,
+          ),
+        ],
       ),
     );
   }
@@ -114,7 +229,11 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen> {
     bool hasMore,
     bool isFetchingMore,
   ) {
-    if (matchList.isEmpty && !isFetchingMore) {
+    if (matchList.isEmpty && isFetchingMore) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (matchList.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -146,12 +265,10 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen> {
             child: OrderCard(match: match),
           );
         } else {
-          return Center(
+          return const Center(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: isFetchingMore
-                  ? const CircularProgressIndicator()
-                  : const SizedBox.shrink(),
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
             ),
           );
         }

@@ -1,10 +1,6 @@
-import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/consumer/features/manage/data/orders_repository.dart';
-import 'package:duruha/features/consumer/features/manage/domain/order_details_model.dart';
-import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
 import 'package:flutter/material.dart';
-import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
+import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
 import 'manage_order_screen.dart';
 
 class ConsumerManageScreen extends StatefulWidget {
@@ -15,118 +11,8 @@ class ConsumerManageScreen extends StatefulWidget {
 }
 
 class _ConsumerManageScreenState extends State<ConsumerManageScreen> {
-  final _ordersRepository = OrdersRepository();
-  bool _isLoading = true;
-
   // Order mode is the default. Plan mode is coming soon and cannot be activated.
   bool _isPlanMode = false;
-
-  List<ConsumerOrderMatch> _activeMatches = [];
-  String? _activeCursor;
-  bool _hasMoreActive = false;
-  bool _isFetchingMoreActive = false;
-
-  List<ConsumerOrderMatch> _historyMatches = [];
-  String? _historyCursor;
-  bool _hasMoreHistory = false;
-  bool _isFetchingMoreHistory = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchData();
-  }
-
-  Future<void> _fetchData() async {
-    try {
-      final consumerId = await SessionService.getRoleId();
-      if (consumerId == null) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
-        return;
-      }
-
-      // Fetch both active and history orders initially (or could parallelize)
-      final activeResponse = await _ordersRepository.fetchOrderMatches(
-        isActive: true,
-      );
-      final historyResponse = await _ordersRepository.fetchOrderMatches(
-        isActive: false,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _activeMatches = activeResponse.orders;
-        _activeCursor = activeResponse.nextCursor;
-        _hasMoreActive = activeResponse.pagination?.hasMore ?? false;
-
-        _historyMatches = historyResponse.orders;
-        _historyCursor = historyResponse.nextCursor;
-        _hasMoreHistory = historyResponse.pagination?.hasMore ?? false;
-
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('❌ [CONSUMER MANAGE FETCH ERROR]: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _fetchMore({required bool isActive}) async {
-    final isFetching = isActive
-        ? _isFetchingMoreActive
-        : _isFetchingMoreHistory;
-    final hasMore = isActive ? _hasMoreActive : _hasMoreHistory;
-    final cursor = isActive ? _activeCursor : _historyCursor;
-
-    if (isFetching || !hasMore || cursor == null) return;
-
-    setState(() {
-      if (isActive) {
-        _isFetchingMoreActive = true;
-      } else {
-        _isFetchingMoreHistory = true;
-      }
-    });
-
-    try {
-      final response = await _ordersRepository.fetchOrderMatches(
-        isActive: isActive,
-        cursor: cursor,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        if (isActive) {
-          _activeMatches.addAll(response.orders);
-          _activeCursor = response.nextCursor;
-          _hasMoreActive = response.pagination?.hasMore ?? false;
-          _isFetchingMoreActive = false;
-        } else {
-          _historyMatches.addAll(response.orders);
-          _historyCursor = response.nextCursor;
-          _hasMoreHistory = response.pagination?.hasMore ?? false;
-          _isFetchingMoreHistory = false;
-        }
-      });
-    } catch (e) {
-      debugPrint('❌ [CONSUMER MANAGE FETCH MORE ERROR]: $e');
-      if (mounted) {
-        setState(() {
-          if (isActive) {
-            _isFetchingMoreActive = false;
-          } else {
-            _isFetchingMoreHistory = false;
-          }
-        });
-      }
-    }
-  }
 
   void _toggleMode(bool isPlan) {
     // Plan mode is coming soon — tapping Plan shows the placeholder only.
@@ -159,20 +45,9 @@ class _ConsumerManageScreenState extends State<ConsumerManageScreen> {
       bottomNavigationBar: const ConsumerNavigation(
         currentRoute: '/consumer/manage',
       ),
-      body: _isLoading
-          ? const ConsumerLoadingScreen()
-          : _isPlanMode
+      body: _isPlanMode
           ? _buildComingSoon(theme, scheme)
-          : ConsumerOrdersScreen(
-              activeMatches: _activeMatches,
-              historyMatches: _historyMatches,
-              onLoadMoreActive: () => _fetchMore(isActive: true),
-              onLoadMoreHistory: () => _fetchMore(isActive: false),
-              hasMoreActive: _hasMoreActive,
-              hasMoreHistory: _hasMoreHistory,
-              isFetchingMoreActive: _isFetchingMoreActive,
-              isFetchingMoreHistory: _isFetchingMoreHistory,
-            ),
+          : const ConsumerOrdersScreen(),
     );
   }
 
