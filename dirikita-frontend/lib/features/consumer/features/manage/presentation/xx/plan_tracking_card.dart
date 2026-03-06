@@ -1,8 +1,8 @@
 import 'package:duruha/core/helpers/duruha_status_helper.dart';
 import 'package:duruha/core/widgets/duruha_bottom_sheet.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
-import 'package:duruha/features/consumer/features/manage/domain/market_order_model.dart';
-import 'package:duruha/features/consumer/features/manage/presentation/widgets/plan_tracking_detail_sheet.dart';
+import 'package:duruha/features/consumer/features/manage/presentation/xx/market_order_model.dart';
+import 'package:duruha/features/consumer/features/manage/presentation/xx/plan_tracking_detail_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';

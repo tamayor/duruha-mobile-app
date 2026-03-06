@@ -1,4 +1,4 @@
-import 'package:duruha/core/constants/produce_colors.dart';
+import 'package:duruha/core/constants/color_marker.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/manage/offers/domain/offer_model.dart';
@@ -26,7 +26,7 @@ class OfferCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final now = DateTime.now();
-    final offerColor = produceTints[index % produceTints.length];
+    final offerColor = colorMarker[index % colorMarker.length];
 
     final pendingOrdersCount = offer.orders
         .where((o) => !o.farmerIsPaid)

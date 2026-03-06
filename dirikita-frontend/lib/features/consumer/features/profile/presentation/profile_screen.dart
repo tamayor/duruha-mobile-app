@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
+import 'package:duruha/shared/user/presentation/faq_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
 import 'package:image_picker/image_picker.dart';
@@ -245,7 +246,12 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                       context,
                       icon: Icons.help_outline,
                       title: "Help & Support",
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const FaqScreen()),
+                        );
+                      },
                     ),
                     const Divider(height: 48),
                     _buildMenuOption(

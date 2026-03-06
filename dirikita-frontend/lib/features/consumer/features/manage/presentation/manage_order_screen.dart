@@ -3,10 +3,13 @@ import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/consumer/features/manage/data/orders_repository.dart';
 import '../domain/order_details_model.dart';
+import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
 import 'widgets/order_card.dart';
 
 class ConsumerOrdersScreen extends StatefulWidget {
-  const ConsumerOrdersScreen({super.key});
+  final bool isPlanMode;
+
+  const ConsumerOrdersScreen({super.key, this.isPlanMode = false});
 
   @override
   State<ConsumerOrdersScreen> createState() => _ConsumerOrdersScreenState();
@@ -56,6 +59,20 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen>
     }
   }
 
+  @override
+  void didUpdateWidget(ConsumerOrdersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPlanMode != oldWidget.isPlanMode) {
+      _activeMatches = [];
+      _activeCursor = null;
+      _hasMoreActive = false;
+      _historyMatches = [];
+      _historyCursor = null;
+      _hasMoreHistory = false;
+      _fetchData(isActive: _tabController.index == 0);
+    }
+  }
+
   Future<void> _fetchData({required bool isActive}) async {
     if (!mounted) return;
     setState(() {
@@ -72,6 +89,7 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen>
 
       final response = await _ordersRepository.fetchOrderMatches(
         isActive: isActive,
+        isPlan: widget.isPlanMode ? true : null,
       );
 
       if (mounted) {
@@ -124,6 +142,7 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen>
       final response = await _ordersRepository.fetchOrderMatches(
         isActive: isActive,
         cursor: cursor,
+        isPlan: widget.isPlanMode ? true : null,
       );
 
       if (mounted) {
@@ -230,7 +249,7 @@ class _ConsumerOrdersScreenState extends State<ConsumerOrdersScreen>
     bool isFetchingMore,
   ) {
     if (matchList.isEmpty && isFetchingMore) {
-      return const Center(child: CircularProgressIndicator());
+      return const ConsumerLoadingScreen();
     }
 
     if (matchList.isEmpty) {

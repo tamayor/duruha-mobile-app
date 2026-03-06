@@ -78,15 +78,17 @@ class ConsumerOrderMatch {
   final String paymentMethod;
   final List<ProduceItem> produceItems;
   final OrderStats? stats;
+  final bool isPlan;
 
   ConsumerOrderMatch({
     required this.orderId,
     this.note,
     required this.dateCreated,
     required this.isActive,
-    this.paymentMethod = 'Cash',
+    this.paymentMethod = 'Not Paid',
     required this.produceItems,
     this.stats,
+    this.isPlan = false,
   });
 
   factory ConsumerOrderMatch.fromJson(Map<String, dynamic> json) {
@@ -98,7 +100,7 @@ class ConsumerOrderMatch {
           json['created_at']?.toString() ??
           '',
       isActive: json['is_active'] == true,
-      paymentMethod: json['payment_method']?.toString() ?? 'Cash',
+      paymentMethod: json['payment_method']?.toString() ?? 'Not Paid',
       produceItems:
           (json['produce'] as List<dynamic>? ??
                   json['produce_items'] as List<dynamic>? ??
@@ -110,6 +112,7 @@ class ConsumerOrderMatch {
               )
               .toList(),
       stats: json['stats'] != null ? OrderStats.fromJson(json['stats']) : null,
+      isPlan: json['is_plan'] == true,
     );
   }
 
@@ -121,6 +124,7 @@ class ConsumerOrderMatch {
     'payment_method': paymentMethod,
     'produce': produceItems.map((v) => v.toJson()).toList(),
     'stats': stats?.toJson(),
+    'is_plan': isPlan,
   };
 
   double get totalAmount => produceItems.fold(0.0, (sum, item) {
@@ -186,6 +190,7 @@ class ConsumerOrderMatch {
     createdAt: dateCreated,
     updatedAt: dateCreated,
     stats: stats,
+    isPlan: isPlan,
   );
 
   // Dummy orderTotals structure to avoid breaking UI expecting nested totals
@@ -204,6 +209,7 @@ class OrderSummary {
   final String createdAt;
   final String updatedAt;
   final OrderStats? stats;
+  final bool isPlan;
 
   OrderSummary({
     required this.orderId,
@@ -213,6 +219,7 @@ class OrderSummary {
     required this.createdAt,
     required this.updatedAt,
     this.stats,
+    this.isPlan = false,
   });
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
@@ -224,6 +231,7 @@ class OrderSummary {
       createdAt: json['created_at']?.toString() ?? '',
       updatedAt: json['updated_at']?.toString() ?? '',
       stats: json['stats'] != null ? OrderStats.fromJson(json['stats']) : null,
+      isPlan: json['is_plan'] == true,
     );
   }
 
@@ -235,6 +243,7 @@ class OrderSummary {
     'created_at': createdAt,
     'updated_at': updatedAt,
     'stats': stats?.toJson(),
+    'is_plan': isPlan,
   };
 }
 
@@ -300,39 +309,30 @@ class OrderTotals {
 }
 
 class ProduceItem {
-  final int index;
-  final bool isPriceLock;
-  final bool isAny;
-  final String? cplsId;
-
   final String produceId;
   final String produceEnglishName;
   final String? produceLocalName;
   final double produceTotal;
   final String quality;
   final double qualityFee;
+  final int itemIndex;
+  final bool isDone;
   final List<ProduceVariety> varieties;
 
   ProduceItem({
-    required this.index,
-    required this.isPriceLock,
-    required this.isAny,
-    this.cplsId,
     required this.produceId,
     required this.produceEnglishName,
     this.produceLocalName,
     required this.produceTotal,
     required this.quality,
     required this.qualityFee,
+    this.itemIndex = 0,
+    this.isDone = false,
     required this.varieties,
   });
 
   factory ProduceItem.fromJson(Map<String, dynamic> json) {
     return ProduceItem(
-      index: (json['index'] as num?)?.toInt() ?? 0,
-      isPriceLock: json['is_price_lock'] == true,
-      isAny: json['is_any'] == true,
-      cplsId: json['cpls_id']?.toString(),
       produceId: json['id']?.toString() ?? json['produce_id']?.toString() ?? '',
       produceEnglishName:
           json['english_name']?.toString() ??
@@ -344,6 +344,8 @@ class ProduceItem {
       produceTotal: (json['produce_total'] as num?)?.toDouble() ?? 0.0,
       quality: json['quality']?.toString() ?? 'Regular',
       qualityFee: (json['quality_fee'] as num?)?.toDouble() ?? 0.0,
+      itemIndex: (json['item_index'] as num?)?.toInt() ?? 0,
+      isDone: json['is_done'] == true,
       varieties:
           (json['variety_group'] as List<dynamic>? ??
                   json['varieties'] as List<dynamic>? ??
@@ -355,31 +357,32 @@ class ProduceItem {
 
   factory ProduceItem.fromName(String name) {
     return ProduceItem(
-      index: 0,
-      isPriceLock: false,
-      isAny: true,
       produceId: '',
       produceEnglishName: name,
       produceTotal: 0.0,
       quality: 'Regular',
       qualityFee: 0.0,
+      itemIndex: 0,
+      isDone: false,
       varieties: [],
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'index': index,
-    'is_price_lock': isPriceLock,
-    'is_any': isAny,
-    'cpls_id': cplsId,
     'id': produceId,
     'english_name': produceEnglishName,
     'local_name': produceLocalName,
     'produce_total': produceTotal,
     'quality': quality,
     'quality_fee': qualityFee,
+    'item_index': itemIndex,
+    'is_done': isDone,
     'variety_group': varieties.map((v) => v.toJson()).toList(),
   };
+
+  // Computed: isPriceLock/isAny delegate to variety_group level
+  bool get isPriceLock => varieties.any((v) => v.isPriceLock);
+  bool get isAny => varieties.any((v) => v.isAny);
 
   // Compatibility getters
   String get produceDialectName => produceLocalName ?? produceEnglishName;
@@ -424,18 +427,23 @@ class ProduceVarietyGroup {
 }
 
 class ProduceVariety {
-  // Maintaining these inside ProduceVariety to act as back-compat placeholders if UI calls them directly
+  final int index;
   final bool isPriceLock;
   final bool isAny;
+  final double quantity;
   final String? cplsId;
+  final String? cfpsId;
   final String dateNeeded;
   final String form;
   final List<VarietySelection> varietyGroups;
 
   ProduceVariety({
+    this.index = 0,
     this.isPriceLock = false,
     this.isAny = false,
+    required this.quantity,
     this.cplsId,
+    this.cfpsId,
     required this.dateNeeded,
     required this.form,
     required this.varietyGroups,
@@ -443,9 +451,12 @@ class ProduceVariety {
 
   factory ProduceVariety.fromJson(Map<String, dynamic> json) {
     return ProduceVariety(
+      index: (json['index'] as num?)?.toInt() ?? 0,
       isPriceLock: json['is_price_lock'] == true,
       isAny: json['is_any'] == true,
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0.0,
       cplsId: json['cpls_id']?.toString(),
+      cfpsId: json['cfps_id']?.toString(),
       dateNeeded: json['date_needed']?.toString() ?? '',
       form: json['form']?.toString() ?? '',
       varietyGroups:
@@ -458,22 +469,22 @@ class ProduceVariety {
   }
 
   Map<String, dynamic> toJson() => {
+    'index': index,
     'is_price_lock': isPriceLock,
     'is_any': isAny,
+    'quantity': quantity,
     'cpls_id': cplsId,
+    'cfps_id': cfpsId,
     'date_needed': dateNeeded,
     'form': form,
     'varieties': varietyGroups.map((v) => v.toJson()).toList(),
   };
 
   // Compatibility getters mapping down to allocations
-  String get varietyName =>
-      varietyGroups.isNotEmpty ? varietyGroups.first.name : 'Unknown Variety';
+  String get varietyName => varietyGroups.isNotEmpty
+      ? (varietyGroups.first.name ?? 'Unknown Variety')
+      : 'Unknown Variety';
   String? get produceForm => form;
-
-  // Aggregate total quantity requested
-  double get quantity =>
-      varietyGroups.fold(0.0, (sum, vg) => sum + vg.quantity);
 
   // We consider the variety group price-locked if the item or variety itself requested it
   String pricingMode(bool isItemPriceLocked) =>
@@ -520,7 +531,8 @@ class ProduceVariety {
 }
 
 class VarietySelection {
-  final String name;
+  final String? name;
+  final String selectionType; // 'OPEN' | 'MATCHED'
   final double quantity;
   final String? dispatchDate;
   final String? carrierName;
@@ -535,7 +547,8 @@ class VarietySelection {
   final String? oomId;
 
   VarietySelection({
-    required this.name,
+    this.name,
+    this.selectionType = 'OPEN',
     required this.quantity,
     this.dispatchDate,
     this.carrierName,
@@ -552,7 +565,8 @@ class VarietySelection {
 
   factory VarietySelection.fromJson(Map<String, dynamic> json) {
     return VarietySelection(
-      name: json['name']?.toString() ?? json['variety_name']?.toString() ?? '',
+      name: json['name']?.toString() ?? json['variety_name']?.toString(),
+      selectionType: json['selection_type']?.toString() ?? 'OPEN',
       quantity:
           (json['quantity'] as num?)?.toDouble() ??
           (json['allocated_quantity'] as num?)?.toDouble() ??
@@ -574,6 +588,7 @@ class VarietySelection {
 
   Map<String, dynamic> toJson() => {
     'name': name,
+    'selection_type': selectionType,
     'quantity': quantity,
     'dispatch_date': dispatchDate,
     'carrier_name': carrierName,
@@ -589,9 +604,9 @@ class VarietySelection {
   };
 
   // Compat fields mapping to previous shape
-  String get varietyName => name;
+  String get varietyName => name ?? 'Unknown';
   double get allocatedQuantity => quantity;
-  bool get isSelected => true; // Assuming these are only fulfilled ones
+  bool get isSelected => true;
   bool get isPriceFinalized =>
       deliveryStatus == 'CANCELLED' || (finalPrice != null && finalPrice! > 0);
 }

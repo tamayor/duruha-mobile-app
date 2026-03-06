@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:duruha/core/helpers/duruha_helpers.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
 import 'package:duruha/core/services/session_service.dart';
@@ -10,6 +11,7 @@ import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ConsumerShopScreen extends StatefulWidget {
   const ConsumerShopScreen({super.key});
@@ -37,6 +39,9 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
   bool get _hasMore => _allCrops.length < _totalCount;
   final Set<String> _selectedCropIds = {};
 
+  RealtimeChannel? _realtimeChannel;
+  Timer? _debounce;
+
   List<ConsumerSelectedProduce> _allCrops = [];
   List<ConsumerSelectedProduce> _filteredCrops = [];
   bool _isLoading = true;
@@ -46,6 +51,27 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadPersistenceSettings();
+    _subscribeRealtime();
+  }
+
+  void _subscribeRealtime() {
+    _realtimeChannel = Supabase.instance.client
+        .channel('shop_farmer_offers_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'farmer_offers',
+          callback: (_) => _debouncedReload(),
+        )
+        .subscribe();
+  }
+
+  void _debouncedReload() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      _fetchProduce(silent: true);
+    });
   }
 
   void _onScroll() {
@@ -57,19 +83,17 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
 
   Future<void> _loadPersistenceSettings() async {
     final showFavs = await SessionService.getFavoritePreference();
-    // Plan mode is currently disabled for consumers in the shop
     if (mounted) {
       setState(() {
         _showFavoritesOnly = showFavs;
-        _isPlanMode = false;
       });
       _fetchProduce();
     }
   }
 
-  Future<void> _fetchProduce() async {
+  Future<void> _fetchProduce({bool silent = false}) async {
     setState(() {
-      _isLoading = true;
+      if (!silent) _isLoading = true;
       _allCrops = [];
       _offset = 0;
       _totalCount = 0;
@@ -80,6 +104,7 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
         userId: user!.id,
         offset: 0,
         favoritesOnly: _showFavoritesOnly,
+        search: _searchController.text,
       );
       if (mounted) {
         setState(() {
@@ -104,6 +129,7 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
         userId: user!.id,
         offset: _offset,
         favoritesOnly: _showFavoritesOnly,
+        search: _searchController.text,
       );
       if (mounted) {
         setState(() {
@@ -122,16 +148,6 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
   void _applyFilters() {
     setState(() {
       var crops = List<ConsumerSelectedProduce>.from(_allCrops);
-
-      // Filter by Search
-      final query = _searchController.text.toLowerCase();
-      if (query.isNotEmpty) {
-        crops = crops.where((crop) {
-          return crop.nameDialect.toLowerCase().contains(query) ||
-              crop.nameEnglish.toLowerCase().contains(query) ||
-              crop.category.toLowerCase().contains(query);
-        }).toList();
-      }
 
       // Apply Sorting
       switch (_currentSortOption) {
@@ -173,12 +189,22 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
     _fetchProduce();
   }
 
-  void _toggleSelection(String cropId) {
+  void _toggleSelection(ConsumerSelectedProduce item) {
+    if (!_isPlanMode && item.varietyCountWithOffers == 0) {
+      if (mounted) {
+        DuruhaSnackBar.showError(
+          context,
+          "This produce has no available varieties for ordering right now.",
+        );
+      }
+      return;
+    }
+
     setState(() {
-      if (_selectedCropIds.contains(cropId)) {
-        _selectedCropIds.remove(cropId);
+      if (_selectedCropIds.contains(item.id)) {
+        _selectedCropIds.remove(item.id);
       } else {
-        _selectedCropIds.add(cropId);
+        _selectedCropIds.add(item.id);
       }
     });
   }
@@ -217,13 +243,17 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
       } else {
         _searchFocusNode.unfocus();
         _searchController.clear();
-        _applyFilters();
+        _fetchProduce();
       }
     });
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
     _searchController.dispose();
     _searchFocusNode.dispose();
     _scrollController.dispose();
@@ -250,7 +280,7 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
-              onChanged: (_) => _applyFilters(),
+              onChanged: (_) => _debouncedReload(),
             )
           : Text(
               _isPlanMode ? 'Plan Order' : 'Order Now',
@@ -368,16 +398,18 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                TextSpan(
-                                  text: '${item.varietyCountWithOffers}',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: theme.colorScheme.onPrimary,
-                                    fontWeight: FontWeight.bold,
+                                if (!_isPlanMode)
+                                  TextSpan(
+                                    text: '${item.varietyCountWithOffers}',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onPrimary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
                                 TextSpan(
-                                  text:
-                                      '/${item.totalVarietyCount} varieties available\n',
+                                  text: _isPlanMode
+                                      ? '${item.totalVarietyCount} varieties\n'
+                                      : '/${item.totalVarietyCount} varieties available\n',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: theme.colorScheme.onSecondary
                                         .withValues(alpha: 0.6),
@@ -423,21 +455,29 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
   }
 
   Widget _buildModeToggle(BuildContext context) {
-    return Tooltip(
-      message: "Plan mode coming soon",
-      child: DuruhaToggleButton(
-        value: _isPlanMode,
-        onChanged: (val) {
-          // Plan mode is disabled for now
-          DuruhaSnackBar.showInfo(context, "Plan mode is coming soon!");
-        },
-        labelTrue: "Plan Mode",
-        labelFalse: "Order Mode",
-        iconTrue: Icons.calendar_today,
-        iconFalse: Icons.shopping_cart,
-        descriptionTrue: "Pre-order for future harvest.",
-        descriptionFalse: "Buy available stock now.",
-      ),
+    return DuruhaToggleButton(
+      value: _isPlanMode,
+      onChanged: (val) {
+        setState(() {
+          _isPlanMode = val;
+          // Clear selections of unavailable items if switching to Order Mode
+          if (!_isPlanMode) {
+            _selectedCropIds.removeWhere((id) {
+              final crop = _allCrops.firstWhere(
+                (c) => c.id == id,
+                orElse: () => _allCrops.first,
+              );
+              return crop.varietyCountWithOffers == 0;
+            });
+          }
+        });
+      },
+      labelTrue: "Plan Mode",
+      labelFalse: "Order Mode",
+      iconTrue: Icons.calendar_today,
+      iconFalse: Icons.shopping_cart,
+      descriptionTrue: "Pre-order for future harvest.",
+      descriptionFalse: "Buy available stock now.",
     );
   }
 
@@ -487,6 +527,8 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
   ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+
+    final isDisabled = !_isPlanMode && item.varietyCountWithOffers == 0;
 
     return Card(
       elevation: isSelected
@@ -556,88 +598,97 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
           ),
 
           // 2. Info Area
-          DuruhaInkwell(
-            variation: isSelected
-                ? InkwellVariation.brand
-                : InkwellVariation.subtle,
-            onTap: () => _toggleSelection(item.id),
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title and Toggle Row
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
+          Opacity(
+            opacity: isDisabled ? 0.5 : 1.0,
+            child: DuruhaInkwell(
+              variation: isSelected
+                  ? InkwellVariation.brand
+                  : InkwellVariation.subtle,
+              onTap: () => _toggleSelection(item),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title and Toggle Row
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.nameDialect,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            height: 1.2,
+                            color: isSelected
+                                ? scheme.onPrimary
+                                : scheme.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Scientific Name
+                  if (item.nameEnglish.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2.0),
                       child: Text(
-                        item.nameDialect,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
+                        item.nameEnglish,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontStyle: FontStyle.italic,
                           color: isSelected
-                              ? scheme.onPrimary
-                              : scheme.onSurface,
+                              ? scheme.onPrimary.withValues(alpha: 0.8)
+                              : scheme.onSurfaceVariant,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ],
-                ),
 
-                // Scientific Name
-                if (item.nameEnglish.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2.0),
-                    child: Text(
-                      item.nameEnglish,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontStyle: FontStyle.italic,
-                        color: isSelected
-                            ? scheme.onPrimary.withValues(alpha: 0.8)
-                            : scheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  const SizedBox(height: 12),
+                  Divider(
+                    height: 1,
+                    color: isSelected
+                        ? scheme.onPrimary.withValues(alpha: 0.2)
+                        : scheme.outlineVariant,
                   ),
+                  const SizedBox(height: 12),
 
-                const SizedBox(height: 12),
-                Divider(
-                  height: 1,
-                  color: isSelected
-                      ? scheme.onPrimary.withValues(alpha: 0.2)
-                      : scheme.outlineVariant,
-                ),
-                const SizedBox(height: 12),
-
-                // Stats Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Icon(
-                      isSelected
-                          ? Icons.check_circle_rounded
-                          : Icons.add_circle_outline_rounded,
-                      color: isSelected ? scheme.onPrimary : scheme.primary,
-                      size: 22,
-                    ),
-                    Expanded(
-                      child: _buildStatColumn(
-                        context,
-                        label: 'Varieties',
-                        value: item.totalVarietyCount > 0
-                            ? '${item.varietyCountWithOffers}/${item.totalVarietyCount} available'
-                            : '—',
-                        icon: Icons.local_florist_outlined,
-                        isSelected: isSelected,
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                  // Stats Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(
+                        isSelected
+                            ? Icons.check_circle_rounded
+                            : (isDisabled
+                                  ? Icons.remove_circle_outline_rounded
+                                  : Icons.add_circle_outline_rounded),
+                        color: isSelected
+                            ? scheme.onPrimary
+                            : (isDisabled ? scheme.outline : scheme.primary),
+                        size: 22,
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      Expanded(
+                        child: _buildStatColumn(
+                          context,
+                          label: 'Varieties',
+                          value: _isPlanMode
+                              ? '${item.totalVarietyCount} varieties'
+                              : (item.totalVarietyCount > 0
+                                    ? '${item.varietyCountWithOffers}/${item.totalVarietyCount} available'
+                                    : '—'),
+                          icon: Icons.local_florist_outlined,
+                          isSelected: isSelected,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],

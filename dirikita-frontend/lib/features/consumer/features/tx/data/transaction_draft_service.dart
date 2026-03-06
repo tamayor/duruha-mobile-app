@@ -2,45 +2,85 @@ import 'dart:convert';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Draft key strategy:
+///   Order Mode  →  'ord_draft_<cropId>'
+///   Plan Mode   →  'pln_draft_<cropId>'
+///
+/// This prevents data contamination when the user switches modes.
 class TransactionDraftService {
-  static const String _draftPrefix = 'tx_draft_';
+  static const String _orderPrefix = 'ord_draft_';
+  static const String _planPrefix = 'pln_draft_';
 
-  /// Saves the draft data for a specific crop.
-  static Future<void> saveDraft(String cropId, CropDraftData data) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_draftPrefix$cropId', jsonEncode(data.toJson()));
+  static String _key(String cropId, TransactionMode mode) {
+    final prefix =
+        mode == TransactionMode.order ? _orderPrefix : _planPrefix;
+    return '$prefix$cropId';
   }
 
-  /// Retrieves the draft data for a specific crop.
-  static Future<CropDraftData?> getDraft(String cropId) async {
+  /// Saves the draft data for a specific crop and mode.
+  static Future<void> saveDraft(
+    String cropId,
+    CropDraftData data,
+    TransactionMode mode,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('$_draftPrefix$cropId');
+    await prefs.setString(_key(cropId, mode), jsonEncode(data.toJson()));
+  }
+
+  /// Retrieves the draft data for a specific crop and mode.
+  static Future<CropDraftData?> getDraft(
+    String cropId,
+    TransactionMode mode,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_key(cropId, mode));
     if (jsonStr != null) {
       try {
         return CropDraftData.fromJson(jsonDecode(jsonStr));
-      } catch (e) {
-        // If data is corrupted or schema changed, return null
+      } catch (_) {
         return null;
       }
     }
     return null;
   }
 
-  /// Clears the draft for a specific crop.
-  static Future<void> clearDraft(String cropId) async {
+  /// Clears the draft for a specific crop and mode.
+  static Future<void> clearDraft(String cropId, TransactionMode mode) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('$_draftPrefix$cropId');
+    await prefs.remove(_key(cropId, mode));
   }
 
-  /// Clears all transaction drafts.
+  /// Clears all drafts for a given mode.
+  static Future<void> clearAllForMode(TransactionMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    final prefix =
+        mode == TransactionMode.order ? _orderPrefix : _planPrefix;
+    final keys = prefs.getKeys().where((k) => k.startsWith(prefix)).toList();
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
+  }
+
+  /// Clears ALL drafts (both modes) — used on full reset.
   static Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith(_draftPrefix));
-    for (var key in keys) {
+    final keys = prefs
+        .getKeys()
+        .where(
+          (k) =>
+              k.startsWith(_orderPrefix) || k.startsWith(_planPrefix),
+        )
+        .toList();
+    for (final key in keys) {
       await prefs.remove(key);
     }
   }
 }
+
+/// Which transaction mode is active.
+enum TransactionMode { order, plan }
+
+// ─── CropDraftData ────────────────────────────────────────────────────────────
 
 class CropDraftData {
   final List<DateTime> selectedHarvestDates;
@@ -59,6 +99,7 @@ class CropDraftData {
   final double? qualityFee;
   final Map<String, String?> varietySelectedFormId;
   final Map<String, bool> varietyPriceLock;
+  final Map<String, String?> varietyRecurrence;
 
   CropDraftData({
     this.selectedHarvestDates = const [],
@@ -77,6 +118,7 @@ class CropDraftData {
     this.qualityFee,
     Map<String, String?>? varietySelectedFormId,
     Map<String, bool>? varietyPriceLock,
+    Map<String, String?>? varietyRecurrence,
   }) : varietyQuantities = varietyQuantities ?? {},
        perDatePledges = perDatePledges ?? [],
        dateSpecificDemand = dateSpecificDemand ?? {},
@@ -85,38 +127,37 @@ class CropDraftData {
        varietyDateNeeded = varietyDateNeeded ?? {},
        varietyGroups = varietyGroups ?? [],
        varietySelectedFormId = varietySelectedFormId ?? {},
-       varietyPriceLock = varietyPriceLock ?? {};
+       varietyPriceLock = varietyPriceLock ?? {},
+       varietyRecurrence = varietyRecurrence ?? {};
 
-  Map<String, dynamic> toJson() {
-    return {
-      'selectedHarvestDates': selectedHarvestDates
-          .map((e) => e.toIso8601String())
-          .toList(),
-      'availableDate': availableDate?.toIso8601String(),
-      'disposalDate': disposalDate?.toIso8601String(),
-      'selectedUnit': selectedUnit,
-      'varietyQuantities': varietyQuantities,
-      'simulatedDemand': simulatedDemand,
-      'perDatePledges': perDatePledges.map((e) => e.toJson()).toList(),
-      'dateSpecificDemand': dateSpecificDemand.map(
-        (key, value) => MapEntry(key.toIso8601String(), value.toJson()),
-      ),
-      'varietyAvailableDates': varietyAvailableDates.map(
-        (key, value) => MapEntry(key, value?.toIso8601String()),
-      ),
-      'varietyDisposalDates': varietyDisposalDates.map(
-        (key, value) => MapEntry(key, value?.toIso8601String()),
-      ),
-      'varietyDateNeeded': varietyDateNeeded.map(
-        (key, value) => MapEntry(key, value?.toIso8601String()),
-      ),
-      'varietyGroups': varietyGroups.map((g) => g.toList()).toList(),
-      'qualityPreferences': qualityPreferences,
-      'qualityFee': qualityFee,
-      'varietySelectedFormId': varietySelectedFormId,
-      'varietyPriceLock': varietyPriceLock,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'selectedHarvestDates':
+        selectedHarvestDates.map((e) => e.toIso8601String()).toList(),
+    'availableDate': availableDate?.toIso8601String(),
+    'disposalDate': disposalDate?.toIso8601String(),
+    'selectedUnit': selectedUnit,
+    'varietyQuantities': varietyQuantities,
+    'simulatedDemand': simulatedDemand,
+    'perDatePledges': perDatePledges.map((e) => e.toJson()).toList(),
+    'dateSpecificDemand': dateSpecificDemand.map(
+      (key, value) => MapEntry(key.toIso8601String(), value.toJson()),
+    ),
+    'varietyAvailableDates': varietyAvailableDates.map(
+      (key, value) => MapEntry(key, value?.toIso8601String()),
+    ),
+    'varietyDisposalDates': varietyDisposalDates.map(
+      (key, value) => MapEntry(key, value?.toIso8601String()),
+    ),
+    'varietyDateNeeded': varietyDateNeeded.map(
+      (key, value) => MapEntry(key, value?.toIso8601String()),
+    ),
+    'varietyGroups': varietyGroups.map((g) => g.toList()).toList(),
+    'qualityPreferences': qualityPreferences,
+    'qualityFee': qualityFee,
+    'varietySelectedFormId': varietySelectedFormId,
+    'varietyPriceLock': varietyPriceLock,
+    'varietyRecurrence': varietyRecurrence,
+  };
 
   factory CropDraftData.fromJson(Map<String, dynamic> json) {
     List<HarvestEntry> parsedPledges = [];
@@ -147,46 +188,40 @@ class CropDraftData {
     }
 
     return CropDraftData(
-      selectedHarvestDates: json['selectedHarvestDates'] != null
-          ? (json['selectedHarvestDates'] as List)
-                .map((e) => DateTime.parse(e))
-                .toList()
-          : [],
+      selectedHarvestDates: (json['selectedHarvestDates'] as List? ?? [])
+          .map((e) => DateTime.parse(e as String))
+          .toList(),
       availableDate: json['availableDate'] != null
-          ? DateTime.parse(json['availableDate'])
+          ? DateTime.parse(json['availableDate'] as String)
           : null,
       disposalDate: json['disposalDate'] != null
-          ? DateTime.parse(json['disposalDate'])
+          ? DateTime.parse(json['disposalDate'] as String)
           : null,
-      selectedUnit: json['selectedUnit'] ?? 'kg',
-      varietyQuantities: Map<String, double>.from(
-        json['varietyQuantities'] ?? {},
-      ),
+      selectedUnit: json['selectedUnit'] as String? ?? 'kg',
+      varietyQuantities:
+          Map<String, double>.from(json['varietyQuantities'] ?? {}),
       simulatedDemand: json['simulatedDemand'] != null
-          ? List<Map<String, dynamic>>.from(json['simulatedDemand'])
+          ? List<Map<String, dynamic>>.from(json['simulatedDemand'] as List)
           : null,
       perDatePledges: parsedPledges,
-      dateSpecificDemand: json['dateSpecificDemand'] != null
-          ? (json['dateSpecificDemand'] as Map<String, dynamic>).map((
-              key,
-              value,
-            ) {
-              if (value is num) {
-                return MapEntry(
-                  DateTime.parse(key),
-                  DateDemandData(
-                    totalDemand: value.toDouble(),
-                    totalFulfilled: 0,
-                    varietyBreakdown: [],
-                  ),
-                );
-              }
+      dateSpecificDemand: (json['dateSpecificDemand'] as Map<String, dynamic>?)
+              ?.map((key, value) {
+            if (value is num) {
               return MapEntry(
                 DateTime.parse(key),
-                DateDemandData.fromJson(value),
+                DateDemandData(
+                  totalDemand: value.toDouble(),
+                  totalFulfilled: 0,
+                  varietyBreakdown: [],
+                ),
               );
-            })
-          : {},
+            }
+            return MapEntry(
+              DateTime.parse(key),
+              DateDemandData.fromJson(value as Map<String, dynamic>),
+            );
+          }) ??
+          {},
       varietyAvailableDates: (json['varietyAvailableDates'] as Map? ?? {}).map(
         (key, value) => MapEntry(
           key.toString(),
@@ -209,18 +244,24 @@ class CropDraftData {
           .map((g) => Set<String>.from(g as List))
           .toList(),
       qualityPreferences: json['qualityPreferences'] != null
-          ? List<String>.from(json['qualityPreferences'])
+          ? List<String>.from(json['qualityPreferences'] as List)
           : (json['qualityPreference'] != null
-                ? [json['qualityPreference']]
+                ? [json['qualityPreference'] as String]
                 : null),
       qualityFee: (json['qualityFee'] as num?)?.toDouble(),
       varietySelectedFormId: Map<String, String?>.from(
         json['varietySelectedFormId'] ?? {},
       ),
-      varietyPriceLock: Map<String, bool>.from(json['varietyPriceLock'] ?? {}),
+      varietyPriceLock:
+          Map<String, bool>.from(json['varietyPriceLock'] ?? {}),
+      varietyRecurrence: Map<String, String?>.from(
+        json['varietyRecurrence'] ?? {},
+      ),
     );
   }
 }
+
+// ─── DateDemandData ───────────────────────────────────────────────────────────
 
 class DateDemandData {
   final double totalDemand;
@@ -239,13 +280,10 @@ class DateDemandData {
     'varietyBreakdown': varietyBreakdown,
   };
 
-  factory DateDemandData.fromJson(Map<String, dynamic> json) {
-    return DateDemandData(
-      totalDemand: (json['totalDemand'] as num).toDouble(),
-      totalFulfilled: (json['totalFulfilled'] as num).toDouble(),
-      varietyBreakdown: List<Map<String, dynamic>>.from(
-        json['varietyBreakdown'] ?? [],
-      ),
-    );
-  }
+  factory DateDemandData.fromJson(Map<String, dynamic> json) => DateDemandData(
+    totalDemand: (json['totalDemand'] as num).toDouble(),
+    totalFulfilled: (json['totalFulfilled'] as num).toDouble(),
+    varietyBreakdown:
+        List<Map<String, dynamic>>.from(json['varietyBreakdown'] ?? []),
+  );
 }

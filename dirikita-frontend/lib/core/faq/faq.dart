@@ -18,8 +18,13 @@ class FaqGroup {
 class FaqContent {
   final String title;
   final List<FaqGroup> groups;
+  final Widget? additionalContent;
 
-  const FaqContent({required this.title, required this.groups});
+  const FaqContent({
+    required this.title,
+    required this.groups,
+    this.additionalContent,
+  });
 }
 
 class DuruhaFaqModal extends StatelessWidget {
@@ -43,31 +48,37 @@ class DuruhaFaqModal extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: faqData.groups.asMap().entries.map((entry) {
-        final index = entry.key;
-        final group = entry.value;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (index > 0) ...[
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 24),
-            ],
-            if (group.title != null) ...[
-              _buildSectionTitle(theme, group.title!, isSubtitle: true),
-              const SizedBox(height: 12),
-            ],
-            ...group.sections.expand(
-              (section) => [
-                _buildSectionTitle(theme, section.title),
-                _buildText(theme, section.content),
-                const SizedBox(height: 16),
+      children: [
+        ...faqData.groups.asMap().entries.map((entry) {
+          final index = entry.key;
+          final group = entry.value;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (index > 0) ...[
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 24),
               ],
-            ),
-          ],
-        );
-      }).toList(),
+              if (group.title != null) ...[
+                _buildSectionTitle(theme, group.title!, isSubtitle: true),
+                const SizedBox(height: 12),
+              ],
+              ...group.sections.expand(
+                (section) => [
+                  _buildSectionTitle(theme, section.title),
+                  _buildText(theme, section.content),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ],
+          );
+        }),
+        if (faqData.additionalContent != null) ...[
+          const SizedBox(height: 12),
+          faqData.additionalContent!,
+        ],
+      ],
     );
   }
 

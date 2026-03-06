@@ -8,6 +8,7 @@ class OrdersRepository {
     int limit = 10,
     String? cursor,
     bool isActive = true,
+    bool? isPlan,
   }) async {
     try {
       final response = await supabase.rpc(
@@ -16,6 +17,7 @@ class OrdersRepository {
           'p_limit': limit,
           'p_is_active': isActive,
           if (cursor != null) 'p_cursor': cursor,
+          if (isPlan != null) 'p_is_plan': isPlan,
         },
       );
       if (response == null) {

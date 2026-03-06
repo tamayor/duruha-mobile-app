@@ -73,6 +73,17 @@ class OrderCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (match.isPlan)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: DuruhaStatusBadge(
+                        size: BadgeSize.tiny,
+                        label: 'PLAN',
+                        color: colorScheme
+                            .onPrimary, // Using a distinct color for Plan
+                        isOutlined: false,
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 4),

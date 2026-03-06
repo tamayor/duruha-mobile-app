@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:duruha/core/services/hitpay_service.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/theme/app_theme.dart';
 import 'package:duruha/features/auth/presentation/login_screen.dart';
@@ -12,6 +13,8 @@ import 'package:duruha/features/farmer/features/manage/offers/presentation/offer
 import 'package:duruha/features/consumer/features/manage/presentation/order_details_screen.dart';
 import 'package:duruha/features/consumer/features/subscription/pricelock/presentation/price_lock_subscription_details_screen.dart';
 import 'package:duruha/features/consumer/features/subscription/pricelock/presentation/price_lock_subscriptions_screen.dart';
+import 'package:duruha/features/consumer/features/subscription/futureplan/presentation/consumer_future_plan_details_screen.dart';
+import 'package:duruha/features/consumer/features/subscription/futureplan/presentation/consumer_future_plan_subscriptions_screen.dart';
 import 'package:duruha/features/consumer/features/subscription/presentation/subscriptions_hub_screen.dart';
 import 'package:duruha/features/consumer/features/shop/presentation/shop_screen.dart';
 import 'package:duruha/features/consumer/features/profile/presentation/profile_screen.dart';
@@ -33,7 +36,8 @@ import 'package:duruha/features/consumer/features/tx/presentation/transaction_cr
 import 'package:duruha/features/consumer/features/manage/presentation/manage_screen.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/ratings_screen.dart';
 import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
-import 'package:duruha/features/farmer/features/subscription/presentation/subscriptions_hub_screen.dart' as farmer_hub;
+import 'package:duruha/features/farmer/features/subscription/presentation/subscriptions_hub_screen.dart'
+    as farmer_hub;
 import 'package:duruha/features/farmer/features/subscription/pricelock/presentation/farmer_price_lock_subscriptions_screen.dart';
 import 'package:duruha/features/farmer/features/subscription/pricelock/presentation/farmer_price_lock_subscription_details_screen.dart';
 import 'package:duruha/shared/produce/presentation/produce_detailed_screen.dart';
@@ -69,9 +73,22 @@ class ProtectedScreen extends StatelessWidget {
 
         final user = snapshot.data;
         if (user == null) {
+          // If a deep link is being handled, wait for it to finish navigation
+          if (HitPayService.isRedirecting) {
+            debugPrint(
+              "🤫 [PROTECTED] Deep link in progress. Blocking redirect.",
+            );
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
           // Redirect to Landing if not logged in
           Future.microtask(() {
             if (context.mounted) {
+              debugPrint(
+                "🔄 [PROTECTED] No user found. Redirecting to landing.",
+              );
               Navigator.of(
                 context,
               ).pushNamedAndRemoveUntil('/', (route) => false);
@@ -93,8 +110,16 @@ class ProtectedScreen extends StatelessWidget {
             debugPrint(
               "🚫 [AUTH] Role mismatch. Required: $requiredRole, User: ${user.role}",
             );
+
+            if (HitPayService.isRedirecting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+
             Future.microtask(() {
               if (context.mounted) {
+                debugPrint("🔄 [AUTH] Role mismatch. Redirecting to home.");
                 // Redirect to appropriate home based on user's actual role
                 Navigator.of(context).pushNamedAndRemoveUntil(
                   '/home',
@@ -139,6 +164,14 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       final user = await SessionService.getSavedUser();
+
+      if (HitPayService.isRedirecting) {
+        debugPrint(
+          "🤫 [SPLASH] Deep link redirect in progress. Skipping default nav.",
+        );
+        return;
+      }
+
       if (mounted) {
         if (user != null) {
           debugPrint("✅ [SPLASH] Session valid. User: ${user.name}");
@@ -197,6 +230,9 @@ void main() {
 
         await Supabase.initialize(url: url, anonKey: key);
         debugPrint("✅ [MAIN] Supabase initialized.");
+
+        // Initialize HitPay Service listener AFTER Supabase is ready
+        HitPayService().init();
       } catch (e) {
         debugPrint("❌ [MAIN] Supabase init failed: $e");
       }
@@ -300,6 +336,9 @@ class RoleBasedHome extends StatelessWidget {
 class DuruhaApp extends StatelessWidget {
   const DuruhaApp({super.key});
 
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(
     ThemeMode.system,
   );
@@ -311,6 +350,7 @@ class DuruhaApp extends StatelessWidget {
       valueListenable: themeNotifier,
       builder: (_, mode, _) {
         return MaterialApp(
+          navigatorKey: navigatorKey,
           title: 'Duruha',
           theme: DuruhaTheme.lightTheme,
           darkTheme: DuruhaTheme.darkTheme,
@@ -473,10 +513,24 @@ class DuruhaApp extends StatelessWidget {
         );
       case '/consumer/manage/order':
         if (args is Map<String, dynamic>) {
-          return _protected(
-            OrderDetailsScreen(match: args['match'], action: args['action']),
-            role: UserRole.consumer,
-          );
+          // Handle both old format (match, action) and new format (orderId, action)
+          if (args.containsKey('orderId')) {
+            return _protected(
+              OrderDetailsScreen(
+                orderId: args['orderId'] as String?,
+                action: args['action'] as String?,
+              ),
+              role: UserRole.consumer,
+            );
+          } else {
+            return _protected(
+              OrderDetailsScreen(
+                match: args['match'],
+                action: args['action'] as String?,
+              ),
+              role: UserRole.consumer,
+            );
+          }
         } else if (args is String) {
           return _protected(
             OrderDetailsScreen(orderId: args),
@@ -510,6 +564,27 @@ class DuruhaApp extends StatelessWidget {
           const PriceLockSubscriptionsScreen(),
           role: UserRole.consumer,
         );
+      case '/consumer/subscriptions/cfp':
+        return _protected(
+          const ConsumerFuturePlanSubscriptionsScreen(),
+          role: UserRole.consumer,
+        );
+      case '/consumer/subscriptions/cfp_details':
+        if (args is String) {
+          return _protected(
+            ConsumerFuturePlanDetailsScreen(cfpsId: args),
+            role: UserRole.consumer,
+          );
+        } else if (args is Map<String, dynamic>) {
+          return _protected(
+            ConsumerFuturePlanDetailsScreen(
+              cfpsId: args['cfpsId'],
+              subscription: args['subscription'],
+            ),
+            role: UserRole.consumer,
+          );
+        }
+        break;
       case '/consumer/subscriptions':
         return _protected(
           const SubscriptionsHubScreen(),

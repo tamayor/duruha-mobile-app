@@ -1,4 +1,4 @@
-import 'package:duruha/features/consumer/features/manage/domain/market_order_model.dart';
+import 'package:duruha/features/consumer/features/manage/presentation/xx/market_order_model.dart';
 import 'package:duruha/core/helpers/duruha_status_helper.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/shared/produce/domain/produce_variety.dart';

@@ -21,9 +21,6 @@ class _ConsumerManageScreenState extends State<ConsumerManageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
     return DuruhaScaffold(
       appBarTitle: _isPlanMode ? 'My Plans' : 'My Orders',
       showBackButton: false,
@@ -45,49 +42,7 @@ class _ConsumerManageScreenState extends State<ConsumerManageScreen> {
       bottomNavigationBar: const ConsumerNavigation(
         currentRoute: '/consumer/manage',
       ),
-      body: _isPlanMode
-          ? _buildComingSoon(theme, scheme)
-          : const ConsumerOrdersScreen(),
-    );
-  }
-
-  Widget _buildComingSoon(ThemeData theme, ColorScheme scheme) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.calendar_month_outlined,
-              size: 72,
-              color: scheme.outline,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Plan Mode — Coming Soon',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: scheme.onSurface,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Pre-ordering for future harvest is on the way.\nStay tuned!',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.tonal(
-              onPressed: () => setState(() => _isPlanMode = false),
-              child: const Text('Back to Orders'),
-            ),
-          ],
-        ),
-      ),
+      body: ConsumerOrdersScreen(isPlanMode: _isPlanMode),
     );
   }
 }

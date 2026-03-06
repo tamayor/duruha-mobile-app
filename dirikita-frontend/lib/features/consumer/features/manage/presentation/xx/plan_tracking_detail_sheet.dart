@@ -1,10 +1,10 @@
 import 'package:duruha/core/helpers/duruha_status_helper.dart';
-import 'package:duruha/features/consumer/features/manage/domain/market_order_model.dart';
+import 'package:duruha/features/consumer/features/manage/presentation/xx/market_order_model.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:intl/intl.dart';
-import 'package:duruha/features/consumer/features/manage/data/order_tracking_repository.dart';
+import 'package:duruha/features/consumer/features/manage/presentation/xx/order_tracking_repository.dart';
 
 class OrderTrackingDetailSheet extends StatefulWidget {
   final MarketOrder order;

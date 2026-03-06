@@ -4,6 +4,7 @@ import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
+import 'package:duruha/shared/user/presentation/faq_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -258,7 +259,10 @@ class _ProfileBody extends StatelessWidget {
           _MenuOption(
             icon: Icons.help_outline_rounded,
             title: 'Help & Support',
-            onTap: () {},
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FaqScreen()),
+            ),
           ),
 
           const Divider(height: 32, indent: 24, endIndent: 24),

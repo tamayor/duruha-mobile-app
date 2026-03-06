@@ -3,6 +3,7 @@ import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/shared/produce/domain/produce_variety.dart';
 import '../crop_selection_state.dart';
+import 'package:duruha/features/consumer/features/tx/presentation/widgets/recurring_picker.dart';
 
 class OrderForm extends StatefulWidget {
   final Produce produce;
@@ -10,6 +11,10 @@ class OrderForm extends StatefulWidget {
   final Function(DateTime) onAvailableDatePicked;
   final Function(DateTime) onDisposalDatePicked;
   final VoidCallback onStateChanged;
+  final VoidCallback? onProduceChanged;
+  final String mode;
+  final DateTime? planStartDate;
+  final DateTime? planEndDate;
 
   const OrderForm({
     super.key,
@@ -18,6 +23,10 @@ class OrderForm extends StatefulWidget {
     required this.onAvailableDatePicked,
     required this.onDisposalDatePicked,
     required this.onStateChanged,
+    this.onProduceChanged,
+    this.mode = 'order',
+    this.planStartDate,
+    this.planEndDate,
   });
 
   @override
@@ -43,24 +52,22 @@ class _OrderFormState extends State<OrderForm> {
       _groups.addAll(
         widget.state.varietyGroups.map((g) => Set<String>.from(g)),
       );
-      // Initialize group controllers with split quantities
+      // Initialize group controllers: the group quantity equals the quantity
+      // of any one member (they all share the same value after the fix).
       for (int i = 0; i < _groups.length; i++) {
         final group = _groups[i];
-        double totalQty = 0;
-        for (var v in group) {
-          final controller = widget.state.varietyQuantityControllers[v];
-          if (controller != null) {
-            totalQty += double.tryParse(controller.text) ?? 0;
-          }
-        }
+        // Read the qty from the first member — all members store the full qty
+        final firstMember = group.isNotEmpty ? group.first : null;
+        final firstController = firstMember != null
+            ? widget.state.varietyQuantityControllers[firstMember]
+            : null;
+        final groupQty = double.tryParse(firstController?.text ?? '') ?? 0;
 
-        if (totalQty > 0) {
-          _groupControllers[i] = TextEditingController(
-            text: totalQty.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), ''),
-          );
-        } else {
-          _groupControllers[i] = TextEditingController();
-        }
+        _groupControllers[i] = TextEditingController(
+          text: groupQty > 0
+              ? groupQty.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')
+              : '',
+        );
       }
     }
   }
@@ -79,16 +86,18 @@ class _OrderFormState extends State<OrderForm> {
         if (_selectedVarieties.contains("Any")) {
           _selectedVarieties.remove("Any");
         } else {
-          // Check if there is ANY supply at all
-          final hasAnySupply = widget.produce.availableVarieties.any(
-            (v) => v.total30DaysQuantity > 0,
-          );
-          if (!hasAnySupply) {
-            DuruhaSnackBar.showWarning(
-              context,
-              "You can't buy this because there is no supply for any variety.",
+          // Check if there is ANY supply at all (only enforce in non-plan mode)
+          if (widget.mode != 'plan') {
+            final hasAnySupply = widget.produce.availableVarieties.any(
+              (v) => v.total30DaysQuantity > 0,
             );
-            return;
+            if (!hasAnySupply) {
+              DuruhaSnackBar.showWarning(
+                context,
+                "You can't buy this because there is no supply for any variety.",
+              );
+              return;
+            }
           }
 
           // Selecting "Any" clears everything else
@@ -118,18 +127,19 @@ class _OrderFormState extends State<OrderForm> {
             }
           }
         } else {
-          // Check for individual variety supply
-          final varietyObj = widget.produce.availableVarieties.firstWhere(
-            (v) => v.name == variety,
-            orElse: () => widget.produce.availableVarieties.first,
-          );
-
-          if (varietyObj.total30DaysQuantity <= 0) {
-            DuruhaSnackBar.showWarning(
-              context,
-              "You can't buy this because there is no supply for $variety.",
+          // Check for individual variety supply (only enforce in non-plan mode)
+          if (widget.mode != 'plan') {
+            final varietyObj = widget.produce.availableVarieties.firstWhere(
+              (v) => v.name == variety,
+              orElse: () => widget.produce.availableVarieties.first,
             );
-            return;
+            if (varietyObj.total30DaysQuantity <= 0) {
+              DuruhaSnackBar.showWarning(
+                context,
+                "You can't buy this because there is no supply for $variety.",
+              );
+              return;
+            }
           }
 
           // Selecting a specific variety removes "Any"
@@ -152,6 +162,10 @@ class _OrderFormState extends State<OrderForm> {
       if (!_selectedVarieties.contains(v) &&
           !_groups.any((g) => g.contains(v))) {
         widget.state.varietyQuantityControllers[v]?.text = "";
+
+        // Also wipe any lingering recurrence data to prevent ghosts
+        widget.state.varietyRecurrence.remove(v);
+        widget.state.varietyRecurrence.remove('qty_$v');
       }
     }
 
@@ -196,27 +210,17 @@ class _OrderFormState extends State<OrderForm> {
 
       if (totalQty > 0) {
         final groupList = group.toList();
-        final baseSplitQty = (totalQty / group.length).toStringAsFixed(2);
-        final baseSplitVal = double.parse(baseSplitQty);
 
-        for (int j = 0; j < groupList.length; j++) {
-          final v = groupList[j];
+        for (final v in groupList) {
           if (!widget.state.varietyQuantityControllers.containsKey(v)) {
             widget.state.varietyQuantityControllers[v] =
                 TextEditingController();
           }
-
-          if (j == groupList.length - 1) {
-            // Last one absorbs the remainder to ensure exact total
-            final remainderValue =
-                totalQty - (baseSplitVal * (groupList.length - 1));
-            widget.state.varietyQuantityControllers[v]!.text = remainderValue
-                .toStringAsFixed(2)
-                .replaceAll(RegExp(r'\.00$'), '');
-          } else {
-            widget.state.varietyQuantityControllers[v]!.text = baseSplitQty
-                .replaceAll(RegExp(r'\.00$'), '');
-          }
+          // Each member gets the FULL group quantity — the group means
+          // "any of these varieties, each at this quantity".
+          widget.state.varietyQuantityControllers[v]!.text = totalQty
+              .toStringAsFixed(2)
+              .replaceAll(RegExp(r'\.00$'), '');
         }
       }
     }
@@ -262,7 +266,7 @@ class _OrderFormState extends State<OrderForm> {
       }
       if (!widget.state.varietyDateNeeded.containsKey(v)) {
         widget.state.varietyDateNeeded[v] = DateTime.now().add(
-          const Duration(days: 7), // Default to 7 days from now
+          Duration(days: widget.mode == 'plan' ? 21 : 7),
         );
       }
     }
@@ -277,13 +281,15 @@ class _OrderFormState extends State<OrderForm> {
 
   Future<void> _selectDeliveryDate(String key) async {
     final now = DateTime.now();
+    final threeWeeksFromNow = now.add(const Duration(days: 21));
+    final isPlan = widget.mode == 'plan';
     final picked = await showDatePicker(
       context: context,
       initialDate:
           widget.state.varietyDateNeeded[key] ??
-          now.add(const Duration(days: 7)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 30)),
+          (isPlan ? threeWeeksFromNow : now.add(const Duration(days: 7))),
+      firstDate: isPlan ? threeWeeksFromNow : now,
+      lastDate: now.add(Duration(days: isPlan ? 180 : 30)),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -368,9 +374,18 @@ class _OrderFormState extends State<OrderForm> {
 
   void _ungroup(int groupIndex) {
     setState(() {
+      final prevMembers = _groups[groupIndex];
       _groups.removeAt(groupIndex);
       _groupControllers[groupIndex]?.dispose();
       _groupControllers.remove(groupIndex);
+
+      // Clean up grouping recurrence state
+      widget.state.varietyRecurrence.remove('group_$groupIndex');
+      for (var v in prevMembers) {
+        widget.state.varietyRecurrence.remove(v);
+        widget.state.varietyRecurrence.remove('qty_$v');
+      }
+
       _syncToState();
     });
   }
@@ -381,6 +396,13 @@ class _OrderFormState extends State<OrderForm> {
       _groups.add(newGroup);
       final index = _groups.length - 1;
       _groupControllers[index] = TextEditingController();
+
+      // Clear any individual recurrences as they are now grouped
+      for (var v in newGroup) {
+        widget.state.varietyRecurrence.remove(v);
+        widget.state.varietyRecurrence.remove('qty_$v');
+      }
+
       _syncToState();
     });
   }
@@ -388,6 +410,11 @@ class _OrderFormState extends State<OrderForm> {
   void _addToGroup(int groupIndex, String variety) {
     setState(() {
       _groups[groupIndex].add(variety);
+
+      // Clear individual recurrence as it joined a group
+      widget.state.varietyRecurrence.remove(variety);
+      widget.state.varietyRecurrence.remove('qty_$variety');
+
       _syncToState();
     });
   }
@@ -395,6 +422,11 @@ class _OrderFormState extends State<OrderForm> {
   void _removeFromGroup(int groupIndex, String variety) {
     setState(() {
       _groups[groupIndex].remove(variety);
+
+      // Clear its recurrence just in case so it starts fresh
+      widget.state.varietyRecurrence.remove(variety);
+      widget.state.varietyRecurrence.remove('qty_$variety');
+
       if (_groups[groupIndex].length < 2) {
         _ungroup(groupIndex);
       } else {
@@ -422,12 +454,57 @@ class _OrderFormState extends State<OrderForm> {
 
     final options = sortedVarieties.map((v) => v.name).toList();
 
-    final Map<String, String> optionSubtitles = {
-      for (var v in sortedVarieties)
-        v.name: v.total30DaysQuantity > 0
-            ? "${v.total30DaysQuantity.toInt()} ${widget.produce.baseUnit} available "
-            : "No offers yet",
-    };
+    final Map<String, String> optionSubtitles = {};
+    double absoluteMinPrice = double.infinity;
+    double absoluteMaxPrice = -double.infinity;
+
+    for (var v in sortedVarieties) {
+      double minP = double.infinity;
+      double maxP = -double.infinity;
+      for (var l in v.listings) {
+        if (l.duruhaToConsumerPrice < minP) minP = l.duruhaToConsumerPrice;
+        if (l.duruhaToConsumerPrice > maxP) maxP = l.duruhaToConsumerPrice;
+      }
+
+      if (minP != double.infinity && minP < absoluteMinPrice) {
+        absoluteMinPrice = minP;
+      }
+      if (maxP != -double.infinity && maxP > absoluteMaxPrice) {
+        absoluteMaxPrice = maxP;
+      }
+
+      String priceStr = "";
+      if (minP != double.infinity && maxP != -double.infinity) {
+        priceStr = minP == maxP
+            ? "₱${minP.toStringAsFixed(2)} / ${widget.state.selectedUnit}"
+            : "₱${minP.toStringAsFixed(2)} - ₱${maxP.toStringAsFixed(2)} / ${widget.state.selectedUnit}";
+      }
+
+      if (widget.mode == 'plan') {
+        optionSubtitles[v.name] = priceStr;
+      } else {
+        String stockStr = v.total30DaysQuantity > 0
+            ? "${v.total30DaysQuantity.toInt()} ${widget.produce.baseUnit} available"
+            : "No offers yet";
+        optionSubtitles[v.name] = [
+          priceStr,
+          stockStr,
+        ].where((s) => s.isNotEmpty).join(' • ');
+      }
+    }
+
+    String anyPriceStr = "";
+    if (absoluteMinPrice != double.infinity &&
+        absoluteMaxPrice != -double.infinity) {
+      anyPriceStr = absoluteMinPrice == absoluteMaxPrice
+          ? "₱${absoluteMinPrice.toStringAsFixed(2)} / ${widget.state.selectedUnit}"
+          : "₱${absoluteMinPrice.toStringAsFixed(2)} - ₱${absoluteMaxPrice.toStringAsFixed(2)} / ${widget.state.selectedUnit}";
+    }
+
+    optionSubtitles["Any"] = [
+      anyPriceStr,
+      "Any variety",
+    ].where((s) => s.isNotEmpty).join(' • ');
 
     final groupedVarieties = _groups.expand((g) => g).toSet();
     final ungroupedVarieties = _selectedVarieties
@@ -449,7 +526,7 @@ class _OrderFormState extends State<OrderForm> {
           title: "Variety Preference",
           subtitle: "Choose the specific varieties you need.",
           options: ["Any", ...options],
-          optionSubtitles: {"Any": "Any available variety", ...optionSubtitles},
+          optionSubtitles: optionSubtitles,
           selectedValues: _selectedVarieties.toList(),
           onToggle: _onVarietyToggled,
           isRequired: true,
@@ -801,7 +878,8 @@ class _OrderFormState extends State<OrderForm> {
                       }
                     }
                     return "₱${minPrice == maxPrice ? minPrice.toStringAsFixed(2) : "${minPrice.toStringAsFixed(2)} - ${maxPrice.toStringAsFixed(2)}"} / ${widget.state.selectedUnit}. "
-                        "${currentStock.toInt()} ${widget.produce.baseUnit} available. $helperText";
+                            "${widget.mode == 'plan' ? '' : '${currentStock.toInt()} ${widget.produce.baseUnit} available. '}${widget.mode == 'plan' ? '' : helperText ?? ''}"
+                        .trimRight();
                   })(),
                   padding: EdgeInsets.zero,
                   validator: (value) {
@@ -812,7 +890,9 @@ class _OrderFormState extends State<OrderForm> {
                     if (qty <= 0) {
                       return "Please enter a valid quantity";
                     }
-                    if (maxQuantity != null && qty > maxQuantity) {
+                    if (widget.mode != 'plan' &&
+                        maxQuantity != null &&
+                        qty > maxQuantity) {
                       return "Max available: ${maxQuantity.toInt()}";
                     }
                     return null;
@@ -898,33 +978,37 @@ class _OrderFormState extends State<OrderForm> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: TextButton(
-                  onPressed: () => _applyDateToAll(dateNeeded),
-
-                  style: TextButton.styleFrom(
-                    foregroundColor: colorScheme.onTertiary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 12,
+              if (widget.mode == 'plan') ...[
+                const SizedBox(width: 8),
+                Expanded(child: _buildRecurringButton(key, colorScheme)),
+              ] else ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: TextButton(
+                    onPressed: () => _applyDateToAll(dateNeeded),
+                    style: TextButton.styleFrom(
+                      foregroundColor: colorScheme.onTertiary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                    child: Icon(Icons.copy_all_rounded, size: 14),
                   ),
-                  child: Icon(Icons.copy_all_rounded, size: 14),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DuruhaDateInput(
-                  label: "Date Needed",
-                  value: dateNeeded,
-                  onTap: () => _selectDeliveryDate(key),
-                  icon: Icons.event_available_rounded,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DuruhaDateInput(
+                    label: "Date Needed",
+                    value: dateNeeded,
+                    onTap: () => _selectDeliveryDate(key),
+                    icon: Icons.event_available_rounded,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           if (isSelectionGroup && !hasCommonForms) ...[
@@ -994,15 +1078,19 @@ class _OrderFormState extends State<OrderForm> {
                 return allSame ? [firstSelectedForm] : <String>[];
               })(),
               onToggle: (formName) => toggleGroupForm(formName),
-              optionSubtitles: {
-                for (var fName in commonForms)
-                  fName:
-                      "${commonFormQuantities[fName]?.toInt() ?? 0} ${widget.produce.baseUnit} available",
-              },
-              disabledOptions: [
-                for (var fName in commonForms)
-                  if ((commonFormQuantities[fName] ?? 0) <= 0) fName,
-              ],
+              optionSubtitles: widget.mode == 'plan'
+                  ? {}
+                  : {
+                      for (var fName in commonForms)
+                        fName:
+                            "${commonFormQuantities[fName]?.toInt() ?? 0} ${widget.produce.baseUnit} available",
+                    },
+              disabledOptions: widget.mode == 'plan'
+                  ? []
+                  : [
+                      for (var fName in commonForms)
+                        if ((commonFormQuantities[fName] ?? 0) <= 0) fName,
+                    ],
               layout: SelectionLayout.wrap,
             ),
           ] else if (!isSelectionGroup && listings.length > 1) ...[
@@ -1015,13 +1103,16 @@ class _OrderFormState extends State<OrderForm> {
               },
               optionSubtitles: {
                 for (var l in listings)
-                  l.listingId:
-                      "₱${l.duruhaToConsumerPrice.toStringAsFixed(2)} • ${l.remainingQuantity.toInt()} ${widget.produce.baseUnit} available",
+                  l.listingId: widget.mode == 'plan'
+                      ? "₱${l.duruhaToConsumerPrice.toStringAsFixed(2)}"
+                      : "₱${l.duruhaToConsumerPrice.toStringAsFixed(2)} • ${l.remainingQuantity.toInt()} ${widget.produce.baseUnit} available",
               },
-              disabledOptions: [
-                for (var l in listings)
-                  if (l.remainingQuantity <= 0) l.listingId,
-              ],
+              disabledOptions: widget.mode == 'plan'
+                  ? []
+                  : [
+                      for (var l in listings)
+                        if (l.remainingQuantity <= 0) l.listingId,
+                    ],
               selectedValues: selectedFormId != null ? [selectedFormId] : [],
               onToggle: (id) {
                 setState(() {
@@ -1034,6 +1125,119 @@ class _OrderFormState extends State<OrderForm> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildRecurringButton(String key, ColorScheme colorScheme) {
+    final currentRule = widget.state.varietyRecurrence[key];
+    final hasRule = currentRule != null && currentRule.isNotEmpty;
+    final label = RecurringPickerUtil.toLabel(currentRule);
+
+    // Parse date range for subtext when a rule is set
+    String? subLabel;
+    if (hasRule) {
+      final d = RecurringPickerUtil.decode(currentRule);
+      if (d.startDate != null && d.endDate != null) {
+        final fmt = (DateTime dt) =>
+            '${dt.month}/${dt.day}/${dt.year.toString().substring(2)}';
+        final dates = RecurringPickerUtil.computeDates(currentRule);
+        subLabel =
+            '${fmt(d.startDate!)} → ${fmt(d.endDate!)}  ·  ${dates.length} dates';
+      }
+    }
+
+    return Tooltip(
+      message: hasRule ? label : 'Tap to set a recurring schedule',
+      child: Material(
+        color: hasRule
+            ? colorScheme.primaryContainer
+            : colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _showRecurrenceBottomSheet(key),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  hasRule ? Icons.sync_lock_rounded : Icons.sync_rounded,
+                  size: 20,
+                  color: hasRule
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        hasRule ? label : 'Set Recurring Schedule',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: hasRule
+                              ? colorScheme.onPrimaryContainer
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (subLabel != null)
+                        Text(
+                          subLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: colorScheme.onPrimaryContainer.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        Text(
+                          hasRule ? 'Tap to edit' : 'Daily · Weekly · Monthly',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 16,
+                  color: hasRule
+                      ? colorScheme.onPrimaryContainer.withValues(alpha: 0.6)
+                      : colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRecurrenceBottomSheet(String key) {
+    showRecurringPicker(
+      context: context,
+      initialValue: widget.state.varietyRecurrence[key],
+      planStartDate: widget.planStartDate,
+      planEndDate: widget.planEndDate,
+      onChanged: (newValue) {
+        setState(() {
+          widget.state.varietyRecurrence[key] = newValue;
+          if (key.startsWith('qty_')) {
+            widget.state.varietyRecurrence[key.replaceFirst('qty_', '')] =
+                newValue;
+          }
+        });
+        widget.onStateChanged();
+      },
     );
   }
 }

@@ -4,38 +4,42 @@ import '../data/transaction_draft_service.dart';
 
 class CropSelectionState {
   final TextEditingController dateController;
-  // Multi-selection for harvest dates
+
+  // Multi-selection for harvest dates (plan mode)
   List<DateTime> selectedHarvestDates = [];
-  // Removed single harvestDate and harvestWindow in favor of list
-  // DateTime? harvestDate;
-  // DateTimeRange? harvestWindow;
-  // Per-variety availability dates (for Offer mode)
+
+  // Per-variety dates
   Map<String, DateTime?> varietyAvailableDates = {};
   Map<String, DateTime?> varietyDisposalDates = {};
   Map<String, DateTime?> varietyDateNeeded = {};
-  // Track selected listing/form ID per variety (Key: variety name/id, Value: listing_id)
+
+  // rrule string per variety/input key (plan mode recurring schedules)
+  Map<String, String?> varietyRecurrence = {};
+
+  // Track selected listing/form ID per variety (Key: variety name, Value: listing_id)
   Map<String, String?> varietySelectedFormId = {};
-  // Track price lock status per variety/item
+
+  // Track price lock status per variety/item (order mode only)
   Map<String, bool> varietyPriceLock = {};
+
   String selectedUnit;
   List<String> selectedVariants;
   Map<String, TextEditingController> varietyQuantityControllers;
   List<Map<String, dynamic>>? simulatedDemand;
-  // Map of Date -> Total Demand (sum of all varieties)
+
+  // Map of Date → demand data (used during demand preview)
   Map<DateTime, DateDemandData> dateSpecificDemand = {};
 
-  // List of harvest entries
+  // Harvest pledge entries (plan/pledge mode)
   List<HarvestEntry> perDatePledges = [];
 
-  // Grouped varieties (for Order mode persistence)
+  // Grouped varieties — for "Any in [A || B]" grouping logic
   List<Set<String>> varietyGroups = [];
 
-  // Validation errors (Key: input key, Value: error message)
+  // Field-level validation errors (Key: input key, Value: error message)
   Map<String, String?> validationErrors = {};
 
   bool isLoadingDemand = false;
-  List<String> qualityPreferences = ['Select', 'Regular'];
-  double qualityFee = 0.05;
 
   CropSelectionState({
     required this.dateController,
@@ -47,12 +51,14 @@ class CropSelectionState {
     Map<String, DateTime?>? varietyAvailableDates,
     Map<String, DateTime?>? varietyDisposalDates,
     Map<String, DateTime?>? varietyDateNeeded,
+    Map<String, String?>? varietyRecurrence,
   }) : varietyQuantityControllers = varietyQuantityControllers ?? {},
        varietySelectedFormId = varietySelectedFormId ?? {},
        varietyPriceLock = varietyPriceLock ?? {},
        varietyAvailableDates = varietyAvailableDates ?? {},
        varietyDisposalDates = varietyDisposalDates ?? {},
-       varietyDateNeeded = varietyDateNeeded ?? {};
+       varietyDateNeeded = varietyDateNeeded ?? {},
+       varietyRecurrence = varietyRecurrence ?? {};
 
   Map<DateTime, Map<String, double>> get perDatePledgesMap {
     final map = <DateTime, Map<String, double>>{};
@@ -69,13 +75,12 @@ class CropSelectionState {
   }
 
   double get totalQuantity {
-    double total = 0;
     if (perDatePledges.isNotEmpty) {
-      total = perDatePledges.fold(0, (sum, e) => sum + e.quantity);
-    } else {
-      for (var controller in varietyQuantityControllers.values) {
-        total += double.tryParse(controller.text) ?? 0;
-      }
+      return perDatePledges.fold(0, (sum, e) => sum + e.quantity);
+    }
+    double total = 0;
+    for (var controller in varietyQuantityControllers.values) {
+      total += double.tryParse(controller.text) ?? 0;
     }
     return total;
   }

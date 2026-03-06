@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/core/helpers/duruha_status_helper.dart';
-import 'package:duruha/features/consumer/features/manage/domain/market_order_model.dart';
-import 'package:duruha/features/consumer/features/manage/presentation/widgets/plan_tracking_card.dart';
+import 'package:duruha/features/consumer/features/manage/presentation/xx/market_order_model.dart';
+import 'package:duruha/features/consumer/features/manage/presentation/xx/plan_tracking_card.dart';
 
 class ConsumerPlansScreen extends StatefulWidget {
   final List<MarketOrder> plans;

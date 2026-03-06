@@ -1,6 +1,7 @@
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/core/widgets/text/duruha_scrollable_text_wrapper.dart';
 import '../data/subscription_repository.dart';
 import '../domain/price_lock_subscription_model.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
@@ -419,31 +420,33 @@ class _PriceLockSubscriptionDetailsScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Row(
-                  children: [
-                    Icon(Icons.eco, size: 14, color: cs.onSecondary),
-                    const SizedBox(width: 4),
-                    Text(
-                      v.produceName,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSecondary,
+                child: DuruhaScrollableTextWrapper(
+                  child: Row(
+                    children: [
+                      Icon(Icons.eco, size: 14, color: cs.onSecondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        v.produceName,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: cs.onSecondary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      ' - ',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSecondary,
+                      Text(
+                        ' - ',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: cs.onSecondary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      v.varietyName,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      Text(
+                        v.varietyName,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               if (v.priceLock != null)

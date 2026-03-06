@@ -25,7 +25,7 @@ class SubscriptionsHubScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _buildSubscriptionOption(
               context,
-              title: "Price Lock Plans",
+              title: "Price Lock",
               subtitle:
                   "View your active and past price lock subscriptions for crops.",
               icon: Icons.lock_outline,
@@ -34,6 +34,15 @@ class SubscriptionsHubScreen extends StatelessWidget {
                   context,
                   '/consumer/subscriptions/pricelock',
                 );
+              },
+            ),
+            _buildSubscriptionOption(
+              context,
+              title: "Future Plan",
+              subtitle: "Track and manage your upcoming Future Plans.",
+              icon: Icons.calendar_month_outlined,
+              onTap: () {
+                Navigator.pushNamed(context, '/consumer/subscriptions/cfp');
               },
             ),
             // We can easily add more subscription types here later.
