@@ -1,8 +1,9 @@
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/auth/data/auth_repository.dart';
-import 'package:duruha/features/auth/domain/auth_models.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/features/auth/domain/auth_models.dart';
 import 'package:duruha/features/auth/presentation/otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -77,10 +78,14 @@ class _LoginScreenState extends State<LoginScreen> {
         targetRoute = '/consumer/shop';
       }
 
+      // Ensure Profile is synced (Final Safety Check)
+      final userProfile = await SessionService.syncProfile(user.id);
+      if (userProfile == null) throw Exception("Failed to sync profile");
+
       Navigator.pushReplacementNamed(
         context,
         targetRoute,
-        arguments: response.user,
+        arguments: userProfile,
       );
     } catch (e) {
       if (!mounted) return;

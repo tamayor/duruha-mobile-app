@@ -74,7 +74,9 @@ class _DuruhaSectionContainerState extends State<DuruhaSectionContainer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // MATERIAL + INKWELL wrapped around the PADDING
-          if (widget.title != null || widget.action != null || widget.isShrinkable)
+          if (widget.title != null ||
+              widget.action != null ||
+              widget.isShrinkable)
             Material(
               color: Colors.transparent,
               child: InkWell(
@@ -99,22 +101,25 @@ class _DuruhaSectionContainerState extends State<DuruhaSectionContainer> {
                 ),
               ),
             ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox(width: double.infinity, height: 0),
-            secondChild: Padding(
-              padding: (widget.title != null || widget.action != null || widget.isShrinkable)
-                  ? widget.padding.copyWith(top: 8)
-                  : widget.padding,
-              child: Column(
-                crossAxisAlignment: widget.crossAxisAlignment,
-                children: widget.children,
+          ClipRect(
+            child: AnimatedAlign(
+              alignment: Alignment.topCenter,
+              heightFactor: _isShrunk ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: Padding(
+                padding:
+                    (widget.title != null ||
+                        widget.action != null ||
+                        widget.isShrinkable)
+                    ? widget.padding.copyWith(top: 8)
+                    : widget.padding,
+                child: Column(
+                  crossAxisAlignment: widget.crossAxisAlignment,
+                  children: widget.children,
+                ),
               ),
             ),
-            crossFadeState: _isShrunk
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            duration: const Duration(milliseconds: 300),
-            sizeCurve: Curves.easeInOut,
           ),
         ],
       ),
@@ -134,6 +139,15 @@ class DuruhaSliverSectionContainer extends StatefulWidget {
   final bool initialShrunk;
   final bool? shrinkOverride;
 
+  /// Optional fully-custom header widget. When provided, [title], [subtitle],
+  /// and [action] are ignored for the header. The header is still pinned as a
+  /// [SliverPersistentHeader] and participates in shrink/expand toggling when
+  /// [isShrinkable] is true (the toggle callback is passed via [onCustomHeaderToggle]).
+  final Widget Function(VoidCallback toggle, bool isShrunk)? customHeader;
+
+  /// Height of the custom header. Required when [customHeader] is provided.
+  final double? customHeaderHeight;
+
   const DuruhaSliverSectionContainer({
     super.key,
     this.title,
@@ -146,7 +160,12 @@ class DuruhaSliverSectionContainer extends StatefulWidget {
     this.isShrinkable = true,
     this.initialShrunk = false,
     this.shrinkOverride,
-  });
+    this.customHeader,
+    this.customHeaderHeight,
+  }) : assert(
+         customHeader == null || customHeaderHeight != null,
+         'customHeaderHeight must be provided when customHeader is used',
+       );
 
   @override
   State<DuruhaSliverSectionContainer> createState() =>
@@ -172,6 +191,8 @@ class _DuruhaSliverSectionContainerState
     }
   }
 
+  void _toggle() => setState(() => _isShrunk = !_isShrunk);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -179,56 +200,72 @@ class _DuruhaSliverSectionContainerState
     final Color effectiveBgColor =
         widget.backgroundColor ?? colorScheme.surfaceContainerLow;
 
+    final bool hasHeader =
+        widget.customHeader != null ||
+        widget.title != null ||
+        widget.action != null ||
+        widget.isShrinkable;
+
     return SliverMainAxisGroup(
       slivers: [
-        if (widget.title != null || widget.action != null || widget.isShrinkable)
+        if (hasHeader)
           SliverPersistentHeader(
             pinned: true,
-            delegate: _DuruhaSectionHeaderDelegate(
-              title: widget.title,
-              subtitle: widget.subtitle,
-              action: widget.action,
-              isShrinkable: widget.isShrinkable,
-              isShrunk: _isShrunk,
-              onToggle: () => setState(() => _isShrunk = !_isShrunk),
-              theme: theme,
-              colorScheme: colorScheme,
-              backgroundColor: effectiveBgColor,
-              padding: widget.padding,
-            ),
+            delegate: widget.customHeader != null
+                ? _DuruhaCustomHeaderDelegate(
+                    height: widget.customHeaderHeight!,
+                    isShrunk: _isShrunk,
+                    builder: (isShrunk) =>
+                        widget.customHeader!(_toggle, isShrunk),
+                  )
+                : _DuruhaSectionHeaderDelegate(
+                    title: widget.title,
+                    subtitle: widget.subtitle,
+                    action: widget.action,
+                    isShrinkable: widget.isShrinkable,
+                    isShrunk: _isShrunk,
+                    onToggle: _toggle,
+                    theme: theme,
+                    colorScheme: colorScheme,
+                    backgroundColor: effectiveBgColor,
+                    padding: widget.padding,
+                  ),
           ),
         SliverToBoxAdapter(
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            child: _isShrunk
-                ? const SizedBox(width: double.infinity, height: 0)
-                : Container(
-                    decoration: BoxDecoration(
-                      color: effectiveBgColor.withValues(alpha: 0.5),
-                      borderRadius: const BorderRadius.vertical(
-                        bottom: Radius.circular(16),
-                      ),
-                      border: Border(
-                        left: BorderSide(
-                          color: colorScheme.outline.withValues(alpha: 0.1),
-                        ),
-                        right: BorderSide(
-                          color: colorScheme.outline.withValues(alpha: 0.1),
-                        ),
-                        bottom: BorderSide(
-                          color: colorScheme.outline.withValues(alpha: 0.1),
-                        ),
-                      ),
+          child: ClipRect(
+            child: AnimatedAlign(
+              alignment: Alignment.topCenter,
+              heightFactor: _isShrunk ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: effectiveBgColor.withValues(alpha: 0.5),
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(16),
+                  ),
+                  border: Border(
+                    left: BorderSide(
+                      color: colorScheme.outline.withValues(alpha: 0.1),
                     ),
-                    padding: (widget.title != null || widget.action != null || widget.isShrinkable)
-                        ? widget.padding.copyWith(top: 8)
-                        : widget.padding,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: widget.children,
+                    right: BorderSide(
+                      color: colorScheme.outline.withValues(alpha: 0.1),
+                    ),
+                    bottom: BorderSide(
+                      color: colorScheme.outline.withValues(alpha: 0.1),
                     ),
                   ),
+                ),
+                padding: hasHeader
+                    ? widget.padding.copyWith(top: 8)
+                    : widget.padding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: widget.children,
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -262,7 +299,7 @@ class _DuruhaSectionHeaderDelegate extends SliverPersistentHeaderDelegate {
   });
 
   double get _calculatedHeight {
-    double baseHeight = (subtitle != null) ? 52.0 : 32.0;
+    double baseHeight = (subtitle != null) ? 42.0 : 22.0;
     return baseHeight + padding.vertical;
   }
 
@@ -316,6 +353,54 @@ class _DuruhaSectionHeaderDelegate extends SliverPersistentHeaderDelegate {
     return oldDelegate.isShrunk != isShrunk ||
         oldDelegate.title != title ||
         oldDelegate.subtitle != subtitle;
+  }
+}
+
+class _DuruhaCustomHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double height;
+  final bool isShrunk;
+  final Widget Function(bool isShrunk) builder;
+
+  _DuruhaCustomHeaderDelegate({
+    required this.height,
+    required this.isShrunk,
+    required this.builder,
+  });
+
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+          bottomLeft: isShrunk == true
+              ? Radius.circular(16)
+              : Radius.circular(0),
+          bottomRight: isShrunk == true
+              ? Radius.circular(16)
+              : Radius.circular(0),
+        ),
+      ),
+      child: SizedBox.expand(child: builder(isShrunk)),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _DuruhaCustomHeaderDelegate oldDelegate) {
+    return oldDelegate.isShrunk != isShrunk ||
+        oldDelegate.height != height ||
+        oldDelegate.builder != builder;
   }
 }
 

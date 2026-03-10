@@ -1,11 +1,13 @@
-import 'package:duruha/core/constants/quality_preferences.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/supabase_config.dart';
 import 'package:duruha/core/constants/consumer_options.dart';
 import 'package:duruha/shared/user/data/dialect_repository.dart';
 import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
 import 'package:duruha/shared/user/data/location_repository.dart';
 import 'package:duruha/core/services/session_service.dart';
+import 'package:duruha/features/consumer/features/tx/data/transaction_repository.dart';
+import 'package:duruha/shared/user/domain/user_address_model.dart';
 import 'package:flutter/material.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -25,7 +27,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _emailController;
   late TextEditingController _phoneController;
   late TextEditingController _segmentSizeController;
-  late TextEditingController _barangayController;
+  late TextEditingController _addressLine1Controller;
+  late TextEditingController _addressLine2Controller;
   late TextEditingController _cityController;
   late TextEditingController _provinceController;
   late TextEditingController _landmarkController;
@@ -35,12 +38,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late List<String> _selectedDialect;
   late String _consumerSegment;
   late String _cookingFrequency;
-  late List<String> _qualityPreferences;
   double? _latitude;
   double? _longitude;
+  String? _activeAddressId;
+  String? _editingAddressId;
   bool _isLocating = false;
+  bool _isSavingAddr = false;
+  bool _setAsMain = false;
 
   bool _isLoading = false;
+  bool _addressesLoading = false;
+  List<UserAddress> _addresses = [];
+  final _txRepo = TransactionRepository();
+  final _addrFormKey = GlobalKey<FormState>();
   List<String> _dialectOptions = [
     'Bisaya',
     'Tagalog',
@@ -52,8 +62,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final List<String> _consumerSegmentOptions = ConsumerOptions.segments;
   final List<String> _cookingFrequencyOptions =
       ConsumerOptions.cookingFrequency;
-  final List<String> _qualityPreferenceOptions =
-      QualityPreferences.qualityPreferences;
 
   @override
   void initState() {
@@ -61,6 +69,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _initializeControllers();
     _initializeState();
     _loadDialects();
+    _loadAddresses();
   }
 
   Future<void> _loadDialects() async {
@@ -83,7 +92,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _segmentSizeController = TextEditingController(
       text: (widget.profile.segmentSize ?? 1).toString(),
     );
-    _barangayController = TextEditingController(text: widget.profile.barangay);
+    _addressLine1Controller = TextEditingController(
+      text: widget.profile.addressLine1,
+    );
+    _addressLine2Controller = TextEditingController(
+      text: widget.profile.addressLine2,
+    );
     _cityController = TextEditingController(text: widget.profile.city);
     _provinceController = TextEditingController(text: widget.profile.province);
     _landmarkController = TextEditingController(text: widget.profile.landmark);
@@ -96,9 +110,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _selectedDialect = List.from(widget.profile.dialect);
     _consumerSegment = widget.profile.consumerSegment ?? 'Household';
     _cookingFrequency = widget.profile.cookingFrequency ?? 'Daily';
-    _qualityPreferences = List.from(widget.profile.qualityPreferences);
-    _latitude = widget.profile.latitude;
-    _longitude = widget.profile.longitude;
+    _activeAddressId = widget.profile.addressId;
   }
 
   @override
@@ -107,12 +119,184 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _segmentSizeController.dispose();
-    _barangayController.dispose();
+    _addressLine1Controller.dispose();
+    _addressLine2Controller.dispose();
     _cityController.dispose();
     _provinceController.dispose();
     _landmarkController.dispose();
     _postalCodeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAddresses() async {
+    setState(() => _addressesLoading = true);
+    try {
+      final list = await _txRepo.fetchAllUserAddresses();
+      if (mounted) {
+        setState(() {
+          _addresses = list.where((a) => a.addressId != 'profile').toList();
+          _addressesLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _addressesLoading = false);
+    }
+  }
+
+  void _startEditing(UserAddress addr) {
+    _addressLine1Controller.text = addr.addressLine1 ?? '';
+    _addressLine2Controller.text = addr.addressLine2 ?? '';
+    _cityController.text = addr.city ?? '';
+    _provinceController.text = addr.province ?? '';
+    _landmarkController.text = addr.landmark ?? '';
+    _postalCodeController.text = addr.postalCode ?? '';
+    _latitude = addr.latitude;
+    _longitude = addr.longitude;
+    _setAsMain = addr.addressId == _activeAddressId;
+    setState(() => _editingAddressId = addr.addressId);
+  }
+
+  void _startAddNew() {
+    _addressLine1Controller.clear();
+    _addressLine2Controller.clear();
+    _cityController.clear();
+    _provinceController.clear();
+    _landmarkController.clear();
+    _postalCodeController.clear();
+    _latitude = null;
+    _longitude = null;
+    _setAsMain = true;
+    setState(() => _editingAddressId = 'new');
+  }
+
+  void _cancelEdit() => setState(() => _editingAddressId = null);
+
+  Future<void> _setActiveAddress(String addressId) async {
+    final userId = await SessionService.getUserId();
+    if (userId == null) return;
+    await supabase.rpc(
+      'manage_profile',
+      params: {
+        'p_user_id': userId,
+        'p_mode': 'update',
+        'p_data': {'address_id': addressId},
+      },
+    );
+    await SessionService.saveAddressId(addressId);
+    if (mounted) setState(() => _activeAddressId = addressId);
+  }
+
+  Future<void> _reloadAndMaybeActivate(String? addressId) async {
+    await _loadAddresses();
+    if (_activeAddressId == null && addressId != null) {
+      await _setActiveAddress(addressId);
+    }
+  }
+
+  Future<void> _saveAddress() async {
+    if (!_addrFormKey.currentState!.validate()) return;
+    setState(() => _isSavingAddr = true);
+    try {
+      final isNew = _editingAddressId == 'new';
+      if (isNew) {
+        final created = await _txRepo.createUserAddress(
+          UserAddress(
+            addressId: 'new',
+            createdAt: DateTime.now(),
+            addressLine1: _addressLine1Controller.text.trim(),
+            addressLine2: _addressLine2Controller.text.trim(),
+            city: _cityController.text.trim(),
+            province: _provinceController.text.trim(),
+            landmark: _landmarkController.text.trim(),
+            postalCode: _postalCodeController.text.trim(),
+            latitude: _latitude,
+            longitude: _longitude,
+          ),
+        );
+        if (created != null && mounted) {
+          if (_setAsMain) {
+            await _setActiveAddress(created.addressId);
+            await _loadAddresses();
+          } else {
+            await _reloadAndMaybeActivate(created.addressId);
+          }
+        }
+      } else {
+        final userId = await SessionService.getUserId();
+        if (userId == null) return;
+        final profileWithAddr = widget.profile.copyWith(
+          addressId: _editingAddressId,
+          addressLine1: _addressLine1Controller.text.trim(),
+          addressLine2: _addressLine2Controller.text.trim(),
+          city: _cityController.text.trim(),
+          province: _provinceController.text.trim(),
+          landmark: _landmarkController.text.trim(),
+          postalCode: _postalCodeController.text.trim(),
+          latitude: _latitude,
+          longitude: _longitude,
+        );
+        await ConsumerProfileRepositoryImpl().updateProfile(profileWithAddr);
+        if (_setAsMain && _editingAddressId != null) {
+          await _setActiveAddress(_editingAddressId!);
+        }
+        await _loadAddresses();
+      }
+      if (mounted) {
+        setState(() => _editingAddressId = null);
+        DuruhaSnackBar.showSuccess(
+          context,
+          isNew ? 'Address added!' : 'Address updated!',
+        );
+      }
+    } catch (e) {
+      if (mounted) DuruhaSnackBar.showError(context, 'Failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSavingAddr = false);
+    }
+  }
+
+  Future<void> _deleteAddress(UserAddress addr) async {
+    final ctx = context;
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Address'),
+        content: Text('Remove "${addr.fullAddress}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _isSavingAddr = true);
+    try {
+      final userId = await SessionService.getUserId();
+      if (userId == null) return;
+
+      final newActiveId = await ConsumerProfileRepositoryImpl().deleteAddress(
+        userId,
+        addr.addressId,
+      );
+
+      if (mounted) {
+        await SessionService.saveAddressId(newActiveId);
+        setState(() => _activeAddressId = newActiveId);
+        if (_editingAddressId == addr.addressId) _editingAddressId = null;
+        await _loadAddresses();
+        if (mounted) DuruhaSnackBar.showSuccess(context, 'Address deleted.');
+      }
+    } catch (e) {
+      if (mounted) DuruhaSnackBar.showError(context, 'Failed to delete: $e');
+    } finally {
+      if (mounted) setState(() => _isSavingAddr = false);
+    }
   }
 
   void _toggleSelection(
@@ -161,7 +345,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         name: _nameController.text,
         email: _emailController.text,
         phone: _phoneController.text,
-        barangay: _barangayController.text,
+        addressLine1: _addressLine1Controller.text,
+        addressLine2: _addressLine2Controller.text,
         city: _cityController.text,
         province: _provinceController.text,
         landmark: _landmarkController.text,
@@ -170,12 +355,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         consumerSegment: _consumerSegment,
         segmentSize: int.tryParse(_segmentSizeController.text),
         cookingFrequency: _cookingFrequency,
-        qualityPreferences: _qualityPreferences,
-        latitude: _latitude,
-        longitude: _longitude,
+        addressId: _activeAddressId,
       );
 
       await ConsumerProfileRepositoryImpl().updateProfile(updatedProfile);
+
+      // Explicitly save to local SharedPreferences
+      await SessionService.saveUser(updatedProfile);
 
       final userId = await SessionService.getUserId();
       if (userId != null) {
@@ -285,108 +471,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       }
                     },
                   ),
-                  const SizedBox(height: 16),
-                  DuruhaSelectionChipGroup(
-                    title: "Quality Preferences",
-                    subtitle: "What matters most to you?",
-                    options: _qualityPreferenceOptions,
-                    selectedValues: _qualityPreferences,
-                    onToggle: (val) => _toggleSelection(
-                      _qualityPreferences,
-                      val,
-                      (newList) =>
-                          setState(() => _qualityPreferences = newList),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 24),
 
-              // --- ADDRESS ---
-              DuruhaSectionContainer(
-                title: "Address",
-                children: [
-                  const SizedBox(height: 16),
-                  DuruhaTextField(
-                    controller: _provinceController,
-                    label: "Province",
-                    icon: Icons.map,
-                    validator: (val) =>
-                        val?.isEmpty == true ? "Required" : null,
-                  ),
-                  DuruhaTextField(
-                    controller: _cityController,
-                    label: "City / Municipality",
-                    icon: Icons.location_city,
-                    validator: (val) =>
-                        val?.isEmpty == true ? "Required" : null,
-                  ),
-                  DuruhaTextField(
-                    controller: _barangayController,
-                    label: "Barangay",
-                    icon: Icons.holiday_village,
-                    validator: (val) =>
-                        val?.isEmpty == true ? "Required" : null,
-                  ),
-                  DuruhaTextField(
-                    controller: _landmarkController,
-                    label: "Landmark / Street",
-                    icon: Icons.place,
-                    validator: (val) =>
-                        val?.isEmpty == true ? "Required" : null,
-                  ),
-                  DuruhaTextField(
-                    controller: _postalCodeController,
-                    label: "Postal Code",
-                    icon: Icons.numbers,
-                    keyboardType: TextInputType.number,
-                    validator: (val) =>
-                        val?.isEmpty == true ? "Required" : null,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "GPS Coordinates",
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            Text(
-                              _latitude != null && _longitude != null
-                                  ? "${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}"
-                                  : "Not set",
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_isLocating)
-                        const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else
-                        TextButton.icon(
-                          onPressed: _captureLocation,
-                          icon: Icon(
-                            Icons.my_location,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                          label: Text(
-                            _latitude != null ? "Update" : "Capture",
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
+              _AddressSection(
+                addresses: _addresses,
+                activeAddressId: _activeAddressId,
+                editingAddressId: _editingAddressId,
+                addressesLoading: _addressesLoading,
+                isLocating: _isLocating,
+                isSavingAddr: _isSavingAddr,
+                addrFormKey: _addrFormKey,
+                line1Ctrl: _addressLine1Controller,
+                line2Ctrl: _addressLine2Controller,
+                cityCtrl: _cityController,
+                provinceCtrl: _provinceController,
+                landmarkCtrl: _landmarkController,
+                postalCtrl: _postalCodeController,
+                editLat: _latitude,
+                editLng: _longitude,
+                onStartEditing: _startEditing,
+                onStartAddNew: _startAddNew,
+                onCancelEdit: _cancelEdit,
+                onSaveAddress: _saveAddress,
+                onDeleteAddress: _deleteAddress,
+                onCaptureLocation: _captureLocation,
+                setAsMain: _setAsMain,
+                onToggleMain: (v) => setState(() => _setAsMain = v),
+                onActivate: _setActiveAddress,
               ),
 
               const SizedBox(height: 48),
@@ -398,6 +511,409 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 24),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Address Widgets ─────────────────────────────────────────────────────────
+
+class _AddressSection extends StatelessWidget {
+  final List<UserAddress> addresses;
+  final String? activeAddressId;
+  final String? editingAddressId;
+  final bool addressesLoading;
+  final bool isLocating;
+  final bool isSavingAddr;
+  final GlobalKey<FormState> addrFormKey;
+  final TextEditingController line1Ctrl;
+  final TextEditingController line2Ctrl;
+  final TextEditingController cityCtrl;
+  final TextEditingController provinceCtrl;
+  final TextEditingController landmarkCtrl;
+  final TextEditingController postalCtrl;
+  final double? editLat;
+  final double? editLng;
+  final bool setAsMain;
+
+  final void Function(UserAddress) onStartEditing;
+  final VoidCallback onStartAddNew;
+  final VoidCallback onCancelEdit;
+  final Future<void> Function() onSaveAddress;
+  final Future<void> Function(UserAddress) onDeleteAddress;
+  final Future<void> Function() onCaptureLocation;
+  final ValueChanged<bool> onToggleMain;
+  final Future<void> Function(String) onActivate;
+
+  const _AddressSection({
+    required this.addresses,
+    required this.activeAddressId,
+    required this.editingAddressId,
+    required this.addressesLoading,
+    required this.isLocating,
+    required this.isSavingAddr,
+    required this.addrFormKey,
+    required this.line1Ctrl,
+    required this.line2Ctrl,
+    required this.cityCtrl,
+    required this.provinceCtrl,
+    required this.landmarkCtrl,
+    required this.postalCtrl,
+    required this.editLat,
+    required this.editLng,
+    required this.setAsMain,
+    required this.onStartEditing,
+    required this.onStartAddNew,
+    required this.onCancelEdit,
+    required this.onSaveAddress,
+    required this.onDeleteAddress,
+    required this.onCaptureLocation,
+    required this.onToggleMain,
+    required this.onActivate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DuruhaSectionContainer(
+      title: "Saved Addresses",
+      children: [
+        if (addressesLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else ...[
+          ...addresses.map((addr) {
+            final isActive = addr.addressId == activeAddressId;
+            final isEditing = addr.addressId == editingAddressId;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? theme.colorScheme.primary.withValues(alpha: .2)
+                        : theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isActive
+                          ? theme.colorScheme.primary.withValues(alpha: .5)
+                          : theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            color: isActive
+                                ? theme.colorScheme.primary
+                                : theme.hintColor,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  addr.fullAddress,
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                                if (addr.landmark?.isNotEmpty == true)
+                                  Text(
+                                    addr.landmark!,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.hintColor,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (isActive)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'Active',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            onPressed: () => onDeleteAddress(addr),
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Colors.red,
+                            ),
+                          ),
+                          if (!isActive)
+                            TextButton(
+                              onPressed: () => onActivate(addr.addressId),
+                              child: Text(
+                                'Make Active',
+                                style: TextStyle(
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              ),
+                            ),
+                          TextButton(
+                            onPressed: () => onStartEditing(addr),
+                            child: Text(
+                              'Edit',
+                              style: TextStyle(
+                                color: theme.colorScheme.onSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (isEditing) ...[
+                  const SizedBox(height: 8),
+                  _AddressEditForm(
+                    formKey: addrFormKey,
+                    line1Ctrl: line1Ctrl,
+                    line2Ctrl: line2Ctrl,
+                    cityCtrl: cityCtrl,
+                    provinceCtrl: provinceCtrl,
+                    landmarkCtrl: landmarkCtrl,
+                    postalCtrl: postalCtrl,
+                    latitude: editLat,
+                    longitude: editLng,
+                    isLocating: isLocating,
+                    isSaving: isSavingAddr,
+                    setAsMain: setAsMain,
+                    onToggleMain: onToggleMain,
+                    onCapture: onCaptureLocation,
+                    onSave: onSaveAddress,
+                    onCancel: onCancelEdit,
+                  ),
+                ],
+                const SizedBox(height: 8),
+              ],
+            );
+          }),
+
+          if (editingAddressId == 'new') ...[
+            const Divider(),
+            Text('New Address', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            _AddressEditForm(
+              formKey: addrFormKey,
+              line1Ctrl: line1Ctrl,
+              line2Ctrl: line2Ctrl,
+              cityCtrl: cityCtrl,
+              provinceCtrl: provinceCtrl,
+              landmarkCtrl: landmarkCtrl,
+              postalCtrl: postalCtrl,
+              latitude: editLat,
+              longitude: editLng,
+              isLocating: isLocating,
+              isSaving: isSavingAddr,
+              setAsMain: setAsMain,
+              onToggleMain: onToggleMain,
+              onCapture: onCaptureLocation,
+              onSave: onSaveAddress,
+              onCancel: onCancelEdit,
+            ),
+          ] else
+            TextButton.icon(
+              onPressed: onStartAddNew,
+              icon: Icon(
+                Icons.add_location_alt_outlined,
+                color: theme.colorScheme.onPrimary,
+              ),
+              label: Text(
+                'Add New Address',
+                style: TextStyle(color: theme.colorScheme.onPrimary),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AddressEditForm extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController line1Ctrl;
+  final TextEditingController line2Ctrl;
+  final TextEditingController cityCtrl;
+  final TextEditingController provinceCtrl;
+  final TextEditingController landmarkCtrl;
+  final TextEditingController postalCtrl;
+  final double? latitude;
+  final double? longitude;
+  final bool isLocating;
+  final bool isSaving;
+  final bool setAsMain;
+  final ValueChanged<bool> onToggleMain;
+  final Future<void> Function() onCapture;
+  final Future<void> Function() onSave;
+  final VoidCallback onCancel;
+
+  const _AddressEditForm({
+    required this.formKey,
+    required this.line1Ctrl,
+    required this.line2Ctrl,
+    required this.cityCtrl,
+    required this.provinceCtrl,
+    required this.landmarkCtrl,
+    required this.postalCtrl,
+    required this.latitude,
+    required this.longitude,
+    required this.isLocating,
+    required this.isSaving,
+    required this.setAsMain,
+    required this.onToggleMain,
+    required this.onCapture,
+    required this.onSave,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Form(
+        key: formKey,
+        child: Column(
+          children: [
+            DuruhaTextField(
+              controller: line1Ctrl,
+              label: "Address Line 1",
+              icon: Icons.place_outlined,
+              validator: (v) => v?.isEmpty == true ? "Required" : null,
+            ),
+            DuruhaTextField(
+              controller: line2Ctrl,
+              label: "Address Line 2 (optional)",
+              icon: Icons.place_outlined,
+            ),
+            DuruhaTextField(
+              controller: cityCtrl,
+              label: "City",
+              icon: Icons.location_city,
+              validator: (v) => v?.isEmpty == true ? "Required" : null,
+            ),
+            DuruhaTextField(
+              controller: provinceCtrl,
+              label: "Province",
+              icon: Icons.map,
+              validator: (v) => v?.isEmpty == true ? "Required" : null,
+            ),
+            DuruhaTextField(
+              controller: landmarkCtrl,
+              label: "Landmark / Street",
+              icon: Icons.place,
+              validator: (v) => v?.isEmpty == true ? "Required" : null,
+            ),
+            DuruhaTextField(
+              controller: postalCtrl,
+              label: "Postal Code",
+              icon: Icons.numbers,
+              keyboardType: TextInputType.number,
+              validator: (v) => v?.isEmpty == true ? "Required" : null,
+            ),
+
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "GPS Coordinates",
+                        style: theme.textTheme.labelSmall,
+                      ),
+                      Text(
+                        latitude != null && longitude != null
+                            ? "${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}"
+                            : "Not set",
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                if (isLocating)
+                  const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: onCapture,
+                    icon: const Icon(Icons.my_location, size: 16),
+                    label: Text(latitude != null ? "Update" : "Capture"),
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+            CheckboxListTile(
+              value: setAsMain,
+              onChanged: (v) => onToggleMain(v ?? false),
+              title: const Text('Set as main address'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: DuruhaButton(
+                    text: "Cancel",
+                    isOutline: true,
+                    isSmall: true,
+                    onPressed: onCancel,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DuruhaButton(
+                    text: "Save Address",
+                    isLoading: isSaving,
+                    isSmall: true,
+                    onPressed: onSave,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

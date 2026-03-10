@@ -550,7 +550,6 @@ class _ConsumerShopScreenState extends State<ConsumerShopScreen> {
         children: [
           DuruhaInkwell(
             variation: InkwellVariation.subtle,
-            borderRadius: 0,
             onTap: () => Navigator.pushNamed(context, '/produce/${item.id}'),
             child: AspectRatio(
               aspectRatio: 16 / 9,

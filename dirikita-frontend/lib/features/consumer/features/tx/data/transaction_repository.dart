@@ -1,8 +1,10 @@
 import 'package:duruha/features/consumer/features/manage/domain/order_details_model.dart';
+import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/supabase_config.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
 import '../../../../../shared/produce/domain/produce_model.dart';
+import '../../../../../shared/user/domain/user_address_model.dart';
 import '../presentation/widgets/recurring_picker.dart';
 
 // ─── Return Shapes ────────────────────────────────────────────────────────────
@@ -30,7 +32,8 @@ class TransactionRepository {
     Map<String, Map<String, String?>>? varietySelectedFormId,
     Map<String, Map<String, bool>>? varietyPriceLock,
     String? note,
-    String? cplsId,
+    String? cpsId,
+    String? addressId,
   }) async {
     try {
       final Map<String, Map<String, dynamic>> groupedProduce = {};
@@ -50,6 +53,8 @@ class TransactionRepository {
           String? groupFormName;
           double groupTotalQty = 0;
           DateTime? groupDate;
+          final groupIndex = groups.indexOf(group);
+          final groupKey = 'group_$groupIndex';
 
           for (var variantName in group) {
             if (quantities.containsKey(variantName)) {
@@ -79,7 +84,7 @@ class TransactionRepository {
               formName: groupFormName,
               quantity: groupTotalQty,
               quality: cropQualities[cropId] ?? 'Saver',
-              cplsId: cplsId,
+              isPriceLock: varietyPriceLock?[cropId]?[groupKey] ?? false,
             );
           }
         }
@@ -115,7 +120,7 @@ class TransactionRepository {
             formName: formIds[variantName],
             quantity: qty,
             quality: cropQualities[cropId] ?? 'Saver',
-            cplsId: cplsId,
+            isPriceLock: varietyPriceLock?[cropId]?[variantName] ?? false,
           );
         }
       }
@@ -126,17 +131,19 @@ class TransactionRepository {
         return null;
       }
 
-      // debugPrint('🚀 [ORDER] Submitting ${orderEntries.length} entries');
+      // If explicitly 'profile', treat as null to trigger fetchUserAddressId() fallback
+      final effectiveAddressId =
+          (addressId == 'profile' ? null : addressId) ??
+          await fetchUserAddressId();
 
       final payload = {
-        'p_payload': {'p_orders': orderEntries},
+        'p_orders': orderEntries,
+        if (cpsId != null) 'p_cps_id': cpsId,
         'p_note': note,
+        'p_address_id': effectiveAddressId,
       };
-      // debugPrint('🚀 [ORDER] Payload: $payload');
-      final match = await supabase.rpc(
-        'om_place_and_match_order',
-        params: payload,
-      );
+
+      final match = await supabase.rpc('match_order', params: payload);
 
       if (match != null) {
         return OrderSubmitResult(
@@ -163,6 +170,7 @@ class TransactionRepository {
     required Map<String, List<Set<String>>> varietyGroups,
     Map<String, Map<String, String?>>? varietySelectedFormId,
     String? note,
+    String? addressId,
   }) async {
     try {
       // Key: produceId_quality
@@ -286,8 +294,17 @@ class TransactionRepository {
 
       debugPrint('🗓️ [PLAN] Submitting ${pOrders.length} produce groups');
 
-      final payload = {'p_note': note ?? '', 'p_orders': pOrders};
-      // debugPrint('Payload: $payload');
+      // If explicitly 'profile', treat as null to trigger fetchUserAddressId() fallback
+      final effectiveAddressId =
+          (addressId == 'profile' ? null : addressId) ??
+          await fetchUserAddressId();
+
+      final payload = {
+        'p_note': note ?? '',
+        'p_orders': pOrders,
+        'p_address_id': effectiveAddressId,
+      };
+      debugPrint('Payload: $payload');
 
       final response = await supabase.rpc(
         'plan_orders',
@@ -303,6 +320,101 @@ class TransactionRepository {
       return null;
     } catch (e) {
       debugPrint('❌ : $e');
+      rethrow;
+    }
+  }
+
+  /// Fetches the user's default address ID from the users table.
+  Future<String?> fetchUserAddressId() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return null;
+
+      final response = await supabase
+          .from('users')
+          .select('address_id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      return response?['address_id'] as String?;
+    } catch (e) {
+      debugPrint('⚠️ [FETCH ADDRESS ERROR]: $e');
+      return null;
+    }
+  }
+
+  /// Fetches all saved addresses for the current user.
+  /// Falls back to Profile address if users_addresses is empty.
+  Future<List<UserAddress>> fetchAllUserAddresses() async {
+    try {
+      final authUser = supabase.auth.currentUser;
+      if (authUser == null) return [];
+
+      final List response = await supabase
+          .from('users_addresses')
+          .select()
+          .eq('user_id', authUser.id)
+          .order('created_at', ascending: false);
+
+      if (response.isNotEmpty) {
+        return response.map((addr) {
+          final model = UserAddress.fromJson(Map<String, dynamic>.from(addr));
+          return model;
+        }).toList();
+      }
+
+      // ── Fallback to Profile ───────────────────────────────────────────────
+      final profile = await SessionService.getSavedUser();
+      if (profile != null &&
+          profile.province != null &&
+          profile.province!.isNotEmpty) {
+        return [
+          UserAddress(
+            addressId: 'profile', // Virtual ID
+            userId: authUser.id,
+            createdAt: DateTime.now(),
+            city: profile.city ?? '',
+            province: profile.province ?? '',
+            landmark: profile.landmark ?? '',
+            postalCode: profile.postalCode ?? '',
+            latitude: profile.latitude ?? 0.0,
+            longitude: profile.longitude ?? 0.0,
+          ),
+        ];
+      }
+
+      return [];
+    } catch (e) {
+      debugPrint('⚠️ [FETCH ALL ADDRESSES ERROR]: $e');
+      return [];
+    }
+  }
+
+  /// Creates a new address entry in users_addresses.
+  Future<UserAddress?> createUserAddress(UserAddress address) async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return null;
+
+      final payload = address.toJson();
+      // Remove address_id to let database generate it, or keep if it's a UUID
+      // Usually better to let the DB handle IDs if not specified.
+      if (payload['address_id'] == 'new' || payload['address_id'] == '') {
+        payload.remove('address_id');
+      }
+      payload['user_id'] = user.id;
+
+      final List response = await supabase
+          .from('users_addresses')
+          .insert(payload)
+          .select();
+
+      if (response.isNotEmpty) {
+        return UserAddress.fromJson(Map<String, dynamic>.from(response.first));
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ [CREATE ADDRESS ERROR]: $e');
       rethrow;
     }
   }
@@ -357,14 +469,14 @@ class TransactionRepository {
     required String? formName,
     required double quantity,
     required String quality,
-    required String? cplsId,
+    required bool isPriceLock,
   }) {
     groupedProduce.putIfAbsent(
       cropId,
       () => {
         'produce_id': cropId,
         'order_items': <Map<String, dynamic>>[],
-        'quality': quality,
+        'quality': quality.toLowerCase(),
       },
     );
 
@@ -386,7 +498,7 @@ class TransactionRepository {
         'form': formName,
         'quantity': quantity,
         'date_needed': dateStr,
-        if (cplsId != null) 'cpls_id': cplsId,
+        'is_price_lock': isPriceLock,
       });
     }
   }

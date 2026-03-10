@@ -40,7 +40,7 @@ import 'package:intl/intl.dart';
 
 class OfferDetailScreen extends StatefulWidget {
   final HarvestOffer offer;
-  final ProduceGroup produce;
+  final ProduceOfferGroup produce;
   final bool isActive;
 
   const OfferDetailScreen({
@@ -344,7 +344,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                       'deactivate'
                     else if (_offer.remainingQuantity > 0 &&
                         (_offer.isPriceLocked == false ||
-                            _summaryData?['fpls_status'] == 'ACTIVE'))
+                            _summaryData?['fps_status'] == 'ACTIVE'))
                       'reactivate',
                   ],
                   tooltip: 'Actions',
@@ -393,7 +393,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
             if (!_offer.isActive &&
                 _offer.remainingQuantity > 0 &&
                 (_offer.isPriceLocked == false ||
-                    _summaryData?['fpls_status'] == 'ACTIVE'))
+                    _summaryData?['fps_status'] == 'ACTIVE'))
               Padding(
                 padding: const EdgeInsets.only(right: 8.0),
                 child: IconButton(
@@ -590,7 +590,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                         ))
                 : (_offer.remainingQuantity > 0 &&
                           (_offer.isPriceLocked == false ||
-                              _summaryData?['fpls_status'] == 'ACTIVE')
+                              _summaryData?['fps_status'] == 'ACTIVE')
                       ? DuruhaButton(
                           text: "Reactivate Offer",
                           backgroundColor: theme.colorScheme.tertiary,
@@ -606,7 +606,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   }
 
   Widget _buildPriceLockSection(ThemeData theme) {
-    final String status = "${_summaryData!['fpls_status']}".toUpperCase();
+    final String status = "${_summaryData!['fps_status']}".toUpperCase();
     final bool isActive = status == 'ACTIVE';
 
     return Column(
@@ -634,14 +634,13 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
 
         // Subscription Content Card
         DuruhaInkwell(
-          variation: InkwellVariation.brand, // Subtle surface variation
-          borderRadius: 12,
+          variation: InkwellVariation.brand,
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => FarmerPriceLockSubscriptionDetailsScreen(
-                  fplsId: _summaryData!['fpls_id'],
+                  fplsId: _summaryData!['fps_id'],
                 ),
               ),
             );
@@ -964,11 +963,20 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       return isUnpaid && isPendingStatus;
     }).length;
 
+    final needsDispatchOrders = _orders.where((o) {
+      final isCancelled =
+          (o.deliveryStatus ?? '').toUpperCase() == DeliveryStatus.cancelled;
+      return o.needsDispatchSetup && !isCancelled;
+    }).toList();
+
     // Quality totals
     double saverKg = 0, regularKg = 0, selectKg = 0;
     final Map<String, int> statusCounts = {};
 
     for (var o in _orders) {
+      if ((o.deliveryStatus ?? '').toUpperCase() == DeliveryStatus.cancelled) {
+        continue;
+      }
       final q = o.quality?.toLowerCase() ?? '';
       if (q.contains('saver')) {
         saverKg += o.quantity;
@@ -983,7 +991,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       statusCounts[s] = (statusCounts[s] ?? 0) + 1;
     }
 
-    // Quality tier colour dots
     const tierDots = {
       'Saver': Colors.green,
       'Regular': Colors.blue,
@@ -1025,26 +1032,68 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ── Dispatch Alert Banner ─────────────────────────────────────
+          if (needsDispatchOrders.isNotEmpty) ...[
+            DuruhaInkwell(
+              onTap: () =>
+                  _showSetDispatchDateDialog(context, needsDispatchOrders),
+              variation: InkwellVariation.brand,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "${needsDispatchOrders.length} order${needsDispatchOrders.length > 1 ? 's' : ''} need dispatch date",
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          SizedBox(
+                            width: 160,
+                            child: DuruhaGlidingIconBadge(
+                              text: "SET DISPATCH DATE",
+                              icon: Icons.local_shipping_rounded,
+                              baseColor: Colors.white38,
+                              highlightColor: Colors.amberAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white38,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // ── Order Overview summary ───────────────────────────────────
           if (_orders.isNotEmpty) ...[
             DuruhaSectionContainer(
-              title: "Order Overview",
-              padding: const EdgeInsets.all(16),
+              title: "Overview",
+              padding: const EdgeInsets.all(14),
               children: [
-                // Quality breakdown with coloured dots
-                Text(
-                  "Quality Breakdown",
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 10),
                 Row(
                   children: [
                     buildQualityStat("Saver", saverKg, tierDots['Saver']!),
@@ -1056,30 +1105,18 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     buildQualityStat("Select", selectKg, tierDots['Select']!),
                   ],
                 ),
-
-                const SizedBox(height: 20),
-
-                // Status breakdown with coloured chips
-                Text(
-                  "Delivery Status",
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 14),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: statusCounts.entries.map((e) {
                     final chipColor = DeliveryStatus.getStatusColor(
                       e.key.toLowerCase(),
                     );
                     return Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
+                        horizontal: 8,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
                         color: chipColor.withValues(alpha: 0.1),
@@ -1093,9 +1130,9 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            width: 7,
-                            height: 7,
-                            margin: const EdgeInsets.only(right: 5),
+                            width: 6,
+                            height: 6,
+                            margin: const EdgeInsets.only(right: 4),
                             decoration: BoxDecoration(
                               color: chipColor,
                               shape: BoxShape.circle,
@@ -1106,6 +1143,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: chipColor,
+                              fontSize: 11,
                             ),
                           ),
                         ],
@@ -1113,12 +1151,13 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     );
                   }).toList(),
                 ),
-
-                // Pending payment warning
                 if (pendingPaymentCount > 0) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.errorContainer,
                       borderRadius: BorderRadius.circular(8),
@@ -1128,16 +1167,14 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                         Icon(
                           Icons.warning_amber_rounded,
                           color: theme.colorScheme.onErrorContainer,
-                          size: 18,
+                          size: 16,
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "$pendingPaymentCount order${pendingPaymentCount > 1 ? 's' : ''} pending payment",
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "$pendingPaymentCount order${pendingPaymentCount > 1 ? 's' : ''} pending payment",
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
@@ -1146,14 +1183,13 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                 ],
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
           ],
 
-          // ── Scheduled Orders list ────────────────────────────────────
+          // ── Orders list ──────────────────────────────────────────────
           DuruhaSectionContainer(
             title: "Scheduled Orders",
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
             children: [
               if (_isLoadingOrders)
                 const Center(
@@ -1170,12 +1206,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   padding: EdgeInsets.zero,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _orders.length,
-                  separatorBuilder: (_, _) => Divider(
-                    color: theme.colorScheme.outlineVariant.withValues(
-                      alpha: 0.5,
-                    ),
-                    height: 20,
-                  ),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) =>
                       _buildOrderRow(context, _orders[index], index + 1),
                 ),
@@ -1311,9 +1342,17 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     List<FarmerOfferOrder> targetOrders,
   ) async {
     final theme = Theme.of(context);
-    DateTime? selectedDispatchAt = targetOrders.length == 1
+    DateTime? initialDateRaw = targetOrders.length == 1
         ? targetOrders.first.dispatchAt
         : null;
+
+    // Year 2100 is a database placeholder for "unset" dates.
+    // If we pass it to showDatePicker, it will crash if it exceeds lastDate.
+    if (initialDateRaw != null && initialDateRaw.year >= 2100) {
+      initialDateRaw = null;
+    }
+
+    DateTime? selectedDispatchAt = initialDateRaw;
 
     await DuruhaDialog.show(
       context: context,
@@ -1512,174 +1551,436 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   }
 
   // ── Order row ─────────────────────────────────────────────────────────────
-  /// [orderNumber] is 1-based for display (e.g. "#1", "#2").
   Widget _buildOrderRow(
     BuildContext context,
     FarmerOfferOrder order,
     int orderNumber,
   ) {
     final theme = Theme.of(context);
-
+    final currentStatus = order.deliveryStatus ?? DeliveryStatus.pending;
+    final statusColor = DeliveryStatus.getStatusColor(currentStatus);
     final displayName =
         order.consumerName ??
         "Reserved (${DuruhaRandomNameGenerator.generate(idSeed: (orderNumber - 1).toString())})";
 
-    String? dispatchStr;
-    if (order.dispatchAt != null) {
-      dispatchStr = order.dispatchAt!.difference(DateTime.now()).inDays >= 365
-          ? "DISPATCH NOW"
-          : DuruhaFormatter.formatDateTime(order.dispatchAt!);
-    }
+    final bool isCancelled =
+        currentStatus.toUpperCase() == DeliveryStatus.cancelled;
 
-    final currentStatus = order.deliveryStatus ?? DeliveryStatus.pending;
-    final statusColor = DeliveryStatus.getStatusColor(currentStatus);
-
-    return Container(
+    final widget = Container(
       decoration: BoxDecoration(
-        color: statusColor.withValues(alpha: 0.05),
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: isCancelled
+              ? theme.colorScheme.outlineVariant.withValues(alpha: 0.2)
+              : statusColor.withValues(alpha: 0.25),
+          width: 1.2,
+        ),
       ),
-      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Row header: date-needed centred + index badge ─────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Index badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  "#$orderNumber - $displayName",
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontFamily: 'Courier',
-                  ),
-                ),
+          // ── Header: index + name + quality ───────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.07),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(11),
               ),
-
-              if (order.quality != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  "${order.quality}",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onPrimary,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    "$orderNumber",
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: statusColor,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    displayName,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (order.quality != null)
+                  _buildMiniChip(
+                    theme,
+                    order.quality!,
+                    _qualityColor(order.quality!),
+                  ),
               ],
-            ],
+            ),
           ),
 
-          const SizedBox(height: 8),
-
-          // ── Main content row: details | financials ────────────────────
-          Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.center, // Vertically aligns Column and Badge
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                mainAxisSize:
-                    MainAxisSize.min, // Keeps column height tight to content
-                crossAxisAlignment:
-                    CrossAxisAlignment.start, // Aligns text to the left
-                children: [
-                  Text(
-                    "NEEDED BY",
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      letterSpacing: 1.1,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSecondary,
-                      fontSize: 10,
-                    ),
-                  ),
-                  Text(
-                    DuruhaFormatter.formatDate(order.dateNeeded!).toUpperCase(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      letterSpacing: 1.1,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onTertiary,
-                    ),
-                  ),
-                ],
-              ),
-              if (dispatchStr == "DISPATCH NOW") ...[
-                SizedBox(
-                  width:
-                      130, // <--- Add this! It gives the animation a "track" to run on
-                  child: DuruhaInkwell(
-                    onTap: () => _showSetDispatchDateDialog(context, [order]),
-                    variation: InkwellVariation.brand,
-                    child: DuruhaGlidingIconBadge(
-                      text: dispatchStr!,
-                      icon: Icons.local_shipping_rounded,
-                      baseColor: theme.colorScheme.onSecondary,
-                      highlightColor: theme.colorScheme.onTertiaryContainer,
-                    ),
-                  ),
-                ),
-              ] else
-                Column(
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Dates row ───────────────────────────────────────────
+                Row(
                   children: [
-                    Text(
-                      "DISPATCHED",
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        letterSpacing: 1.1,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSecondary,
-                        fontSize: 10,
-                      ),
+                    _buildCompactDateTile(
+                      theme,
+                      label: "NEEDED BY",
+                      date: order.dateNeeded ?? order.createdAt,
+                      icon: Icons.event_available_outlined,
                     ),
-                    Text(
-                      DuruhaFormatter.formatDate(
-                        order.dispatchAt!,
-                      ).toUpperCase(),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        letterSpacing: 1.1,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onTertiary,
-                      ),
+                    const SizedBox(width: 12),
+                    // Dispatch tile / gliding badge
+                    Expanded(
+                      child: isCancelled
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: theme.colorScheme.outlineVariant
+                                      .withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.block_flipped,
+                                    size: 12,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "DISPATCH",
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.8,
+                                          color: theme
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                      ),
+                                      Text(
+                                        "NOT INCLUDED",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            )
+                          : order.needsDispatchSetup
+                          ? DuruhaInkwell(
+                              onTap: () =>
+                                  _showSetDispatchDateDialog(context, [order]),
+                              variation: InkwellVariation.brand,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: DuruhaGlidingIconBadge(
+                                  text: "SET DISPATCH",
+                                  icon: Icons.local_shipping_rounded,
+                                  baseColor: Colors.white38,
+                                  highlightColor: Colors.amberAccent,
+                                ),
+                              ),
+                            )
+                          : _buildCompactDateTile(
+                              theme,
+                              label: "DISPATCH",
+                              date: order.dispatchAt!,
+                              icon: Icons.local_shipping_outlined,
+                              onTap: () =>
+                                  _showSetDispatchDateDialog(context, [order]),
+                            ),
                     ),
                   ],
                 ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // ── Status scroller ───────────────────────────────────────────
-          _buildStatusScroller(context, order),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                children: [
-                  Text(
-                    DuruhaFormatter.formatCurrency(order.farmerPayout),
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
+
+                const SizedBox(height: 10),
+
+                // ── Status scroller ─────────────────────────────────────
+                _buildStatusScroller(context, order),
+
+                const SizedBox(height: 10),
+
+                // ── Financials row ──────────────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          DuruhaFormatter.formatCurrency(
+                            order.farmerPayout * order.quantity,
+                          ),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        Text(
+                          "${DuruhaFormatter.formatNumber(order.quantity)} kg"
+                          "${order.price > 0 ? ' @ ${DuruhaFormatter.formatCurrency(order.price)}' : ''}",
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
+                    _buildPaymentChip(order.farmerIsPaid),
+                  ],
+                ),
+
+                // ── Carrier ─────────────────────────────────────────────
+                if (order.carrierName != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.local_shipping_outlined,
+                        size: 13,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        order.carrierName!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    "${order.quantity} kg @ ${DuruhaFormatter.formatCurrency(order.price)}",
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                ],
+
+                // ── Delivery address ────────────────────────────────────
+                if (order.consumerAddress != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant.withValues(
+                          alpha: 0.4,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 13,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (order.consumerAddress!.addressLine1 != null &&
+                                  order.consumerAddress!.addressLine2 != null)
+                                Text(
+                                  "${order.consumerAddress!.addressLine1} ${order.consumerAddress!.addressLine2}",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                ),
+
+                              Text(
+                                [
+                                      order.consumerAddress!.city,
+                                      order.consumerAddress!.province,
+                                      order.consumerAddress!.postalCode,
+                                    ]
+                                    .where((p) => p != null && p.isNotEmpty)
+                                    .join(', '),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              if (order.consumerAddress!.landmark != null &&
+                                  order.consumerAddress!.landmark!.isNotEmpty)
+                                Text(
+                                  "Near: ${order.consumerAddress!.landmark}",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontSize: 10,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
+
+                // ── Produce note ────────────────────────────────────────
+                if (order.produceNote != null &&
+                    order.produceNote!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.sticky_note_2_outlined,
+                        size: 13,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          order.produceNote!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (isCancelled) {
+      return Opacity(
+        opacity: 0.75,
+        child: AbsorbPointer(absorbing: true, child: widget),
+      );
+    }
+    return widget;
+  }
+
+  Widget _buildCompactDateTile(
+    ThemeData theme, {
+    required String label,
+    required DateTime date,
+    required IconData icon,
+    VoidCallback? onTap,
+  }) {
+    final widget = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 5),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-              _buildPaymentChip(order.farmerIsPaid),
+              Text(
+                DuruhaFormatter.formatDate(date).toUpperCase(),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
             ],
           ),
         ],
+      ),
+    );
+    if (onTap != null) {
+      return DuruhaInkwell(onTap: onTap, child: widget);
+    }
+    return widget;
+  }
+
+  Color _qualityColor(String quality) {
+    final q = quality.toLowerCase();
+    if (q.contains('saver')) return Colors.green;
+    if (q.contains('select') || q.contains('premium')) return Colors.amber;
+    return Colors.blue;
+  }
+
+  Widget _buildMiniChip(ThemeData theme, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.8),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: color,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
@@ -1719,15 +2020,21 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
 
   /// Status dropdown – wider hit area and proper inkwell effect.
   Widget _buildStatusScroller(BuildContext context, FarmerOfferOrder order) {
+    final theme = Theme.of(context);
     final currentStatus = order.deliveryStatus ?? DeliveryStatus.pending;
     final statusColor = DeliveryStatus.getStatusColor(currentStatus);
 
+    final bool isCancelled =
+        currentStatus.toUpperCase() == DeliveryStatus.cancelled;
+
     return Material(
-      color: statusColor.withValues(alpha: 0.07),
+      color: isCancelled
+          ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
+          : statusColor.withValues(alpha: 0.07),
       clipBehavior: Clip.antiAlias,
       borderRadius: BorderRadius.circular(8),
       child: DuruhaPopupMenu<String>(
-        items: DeliveryStatus.farmerEditable,
+        items: isCancelled ? [] : DeliveryStatus.farmerEditable,
         selectedValue: currentStatus,
         isTextOnly: true, // Bypass default internal styling
         onSelected: (newStatus) =>
@@ -1754,11 +2061,12 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                 ),
               ),
               // Caret hint
-              Icon(
-                Icons.unfold_more_rounded,
-                size: 16,
-                color: statusColor.withValues(alpha: 0.6),
-              ),
+              if (!isCancelled)
+                Icon(
+                  Icons.unfold_more_rounded,
+                  size: 16,
+                  color: statusColor.withValues(alpha: 0.6),
+                ),
             ],
           ),
         ),
@@ -1856,116 +2164,6 @@ class _SectionDivider extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class DispatchNowBadge extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const DispatchNowBadge({super.key, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return DuruhaInkwell(
-      onTap: onTap,
-      variation: InkwellVariation.brand,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const _GlidingIconBadge(
-          text: "DISPATCH NOW",
-          icon: Icons.electric_bolt,
-        ),
-      ),
-    );
-  }
-}
-
-class _GlidingIconBadge extends StatefulWidget {
-  final String text;
-  final IconData icon;
-
-  const _GlidingIconBadge({required this.text, required this.icon});
-
-  @override
-  State<_GlidingIconBadge> createState() => _GlidingIconBadgeState();
-}
-
-class _GlidingIconBadgeState extends State<_GlidingIconBadge>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _positionAnimation;
-  late Animation<double> _opacityAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat();
-
-    // Moves the icon from left to right (-0.5 to 1.5 to ensure it clears the edges)
-    _positionAnimation = Tween<double>(
-      begin: -0.2,
-      end: 1.2,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-    // Fades the icon in the middle and out at the edges
-    _opacityAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.8), weight: 20),
-      TweenSequenceItem(tween: ConstantTween(0.8), weight: 60),
-      TweenSequenceItem(tween: Tween(begin: 0.8, end: 0.0), weight: 20),
-    ]).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // The Base Text
-            Text(
-              widget.text,
-              style: const TextStyle(
-                color: Colors.white24, // Faded so the icon "lights it up"
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
-            ),
-
-            // The Animating Icon "Over" the text
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Positioned(
-                  left: _positionAnimation.value * 100, // Moves across
-                  child: FadeTransition(
-                    opacity: _opacityAnimation,
-                    child: Icon(
-                      widget.icon,
-                      color: Colors.yellowAccent,
-                      size: 18,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        );
-      },
     );
   }
 }

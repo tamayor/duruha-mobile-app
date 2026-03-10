@@ -79,6 +79,7 @@ class ConsumerOrderMatch {
   final List<ProduceItem> produceItems;
   final OrderStats? stats;
   final bool isPlan;
+  final String? cpsId;
 
   ConsumerOrderMatch({
     required this.orderId,
@@ -89,6 +90,7 @@ class ConsumerOrderMatch {
     required this.produceItems,
     this.stats,
     this.isPlan = false,
+    this.cpsId,
   });
 
   factory ConsumerOrderMatch.fromJson(Map<String, dynamic> json) {
@@ -113,6 +115,7 @@ class ConsumerOrderMatch {
               .toList(),
       stats: json['stats'] != null ? OrderStats.fromJson(json['stats']) : null,
       isPlan: json['is_plan'] == true,
+      cpsId: json['cps_id']?.toString(),
     );
   }
 
@@ -125,12 +128,14 @@ class ConsumerOrderMatch {
     'produce': produceItems.map((v) => v.toJson()).toList(),
     'stats': stats?.toJson(),
     'is_plan': isPlan,
+    'cps_id': cpsId,
   };
 
   double get totalAmount => produceItems.fold(0.0, (sum, item) {
     final double varietyTotal = item.varieties.fold(
       0.0,
-      (vSum, v) => vSum + v.varietySubtotal(item.isPriceLock),
+      (vSum, v) =>
+          vSum + (v.isCancelled ? 0.0 : v.varietySubtotal(item.isPriceLock)),
     );
     final double deliveryTotal = item.varieties.fold(
       0.0,
@@ -191,6 +196,7 @@ class ConsumerOrderMatch {
     updatedAt: dateCreated,
     stats: stats,
     isPlan: isPlan,
+    cpsId: cpsId,
   );
 
   // Dummy orderTotals structure to avoid breaking UI expecting nested totals
@@ -210,6 +216,7 @@ class OrderSummary {
   final String updatedAt;
   final OrderStats? stats;
   final bool isPlan;
+  final String? cpsId;
 
   OrderSummary({
     required this.orderId,
@@ -220,6 +227,7 @@ class OrderSummary {
     required this.updatedAt,
     this.stats,
     this.isPlan = false,
+    this.cpsId,
   });
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
@@ -232,6 +240,7 @@ class OrderSummary {
       updatedAt: json['updated_at']?.toString() ?? '',
       stats: json['stats'] != null ? OrderStats.fromJson(json['stats']) : null,
       isPlan: json['is_plan'] == true,
+      cpsId: json['cps_id']?.toString(),
     );
   }
 
@@ -244,6 +253,7 @@ class OrderSummary {
     'updated_at': updatedAt,
     'stats': stats?.toJson(),
     'is_plan': isPlan,
+    'cps_id': cpsId,
   };
 }
 
@@ -309,23 +319,29 @@ class OrderTotals {
 }
 
 class ProduceItem {
+  final String? copId;
+  final String? note;
   final String produceId;
   final String produceEnglishName;
   final String? produceLocalName;
   final double produceTotal;
   final String quality;
   final double qualityFee;
+  final String? produceImgUrl;
   final int itemIndex;
   final bool isDone;
   final List<ProduceVariety> varieties;
 
   ProduceItem({
+    this.copId,
+    this.note,
     required this.produceId,
     required this.produceEnglishName,
     this.produceLocalName,
     required this.produceTotal,
     required this.quality,
     required this.qualityFee,
+    this.produceImgUrl,
     this.itemIndex = 0,
     this.isDone = false,
     required this.varieties,
@@ -333,6 +349,8 @@ class ProduceItem {
 
   factory ProduceItem.fromJson(Map<String, dynamic> json) {
     return ProduceItem(
+      copId: json['cop_id']?.toString(),
+      note: json['note']?.toString(),
       produceId: json['id']?.toString() ?? json['produce_id']?.toString() ?? '',
       produceEnglishName:
           json['english_name']?.toString() ??
@@ -344,10 +362,14 @@ class ProduceItem {
       produceTotal: (json['produce_total'] as num?)?.toDouble() ?? 0.0,
       quality: json['quality']?.toString() ?? 'Regular',
       qualityFee: (json['quality_fee'] as num?)?.toDouble() ?? 0.0,
+      produceImgUrl:
+          json['produce_img_url']?.toString() ??
+          json['produce_image_url']?.toString(),
       itemIndex: (json['item_index'] as num?)?.toInt() ?? 0,
       isDone: json['is_done'] == true,
       varieties:
           (json['variety_group'] as List<dynamic>? ??
+                  json['variety_groups'] as List<dynamic>? ??
                   json['varieties'] as List<dynamic>? ??
                   [])
               .map((v) => ProduceVariety.fromJson(v as Map<String, dynamic>))
@@ -369,12 +391,15 @@ class ProduceItem {
   }
 
   Map<String, dynamic> toJson() => {
+    'cop_id': copId,
+    'note': note,
     'id': produceId,
     'english_name': produceEnglishName,
     'local_name': produceLocalName,
     'produce_total': produceTotal,
     'quality': quality,
     'quality_fee': qualityFee,
+    'produce_img_url': produceImgUrl,
     'item_index': itemIndex,
     'is_done': isDone,
     'variety_group': varieties.map((v) => v.toJson()).toList(),
@@ -386,7 +411,7 @@ class ProduceItem {
 
   // Compatibility getters
   String get produceDialectName => produceLocalName ?? produceEnglishName;
-  String get produceImageUrl => '';
+  String get produceImageUrl => produceImgUrl ?? '';
 
   bool get isCancelled => varieties.every((v) => v.isCancelled);
   double get effectiveQualityFee => isCancelled ? 0.0 : qualityFee;
@@ -423,16 +448,36 @@ class ProduceVarietyGroup {
 
   String get groupId => "0";
   double get totalQuantity => varieties.fold(0.0, (sum, v) => sum + v.quantity);
-  double get totalPrice => varieties.fold(0.0, (sum, v) => sum + v.finalPrice);
+  double get totalPrice => varieties.fold(
+    0.0,
+    (sum, v) =>
+        sum + (v.isCancelled ? 0.0 : v.varietySubtotal(isItemPriceLocked)),
+  );
 }
 
 class ProduceVariety {
   final int index;
   final bool isPriceLock;
   final bool isAny;
+
+  /// Requested quantity (what the consumer asked for — always set)
   final double quantity;
-  final String? cplsId;
-  final String? cfpsId;
+
+  /// Allocated quantity (sum of matched/pledged allocations — from SQL)
+  final double allocatedQuantity;
+
+  /// Subtotal computed by SQL (matched rows only, using final/pricelock/dtc price)
+  final double subtotal;
+
+  /// Delivery fee for this group computed by SQL
+  final double groupDeliveryFee;
+
+  /// Whether all matched rows have a final_price (SQL-computed)
+  final bool isPriceFinalized;
+
+  /// Human-readable price state: 'pending' | 'tentative' | 'final' | 'price_lock' | 'plan'
+  final String? priceLabel;
+  final String? cpsId;
   final String dateNeeded;
   final String form;
   final List<VarietySelection> varietyGroups;
@@ -442,8 +487,12 @@ class ProduceVariety {
     this.isPriceLock = false,
     this.isAny = false,
     required this.quantity,
-    this.cplsId,
-    this.cfpsId,
+    this.allocatedQuantity = 0.0,
+    this.subtotal = 0.0,
+    this.groupDeliveryFee = 0.0,
+    this.isPriceFinalized = false,
+    this.priceLabel,
+    this.cpsId,
     required this.dateNeeded,
     required this.form,
     required this.varietyGroups,
@@ -455,8 +504,13 @@ class ProduceVariety {
       isPriceLock: json['is_price_lock'] == true,
       isAny: json['is_any'] == true,
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0.0,
-      cplsId: json['cpls_id']?.toString(),
-      cfpsId: json['cfps_id']?.toString(),
+      allocatedQuantity:
+          (json['allocated_quantity'] as num?)?.toDouble() ?? 0.0,
+      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
+      groupDeliveryFee: (json['delivery_fee'] as num?)?.toDouble() ?? 0.0,
+      isPriceFinalized: json['is_price_final'] == true,
+      priceLabel: json['price_label']?.toString() ?? 'pending',
+      cpsId: json['cps_id']?.toString(),
       dateNeeded: json['date_needed']?.toString() ?? '',
       form: json['form']?.toString() ?? '',
       varietyGroups:
@@ -473,66 +527,93 @@ class ProduceVariety {
     'is_price_lock': isPriceLock,
     'is_any': isAny,
     'quantity': quantity,
-    'cpls_id': cplsId,
-    'cfps_id': cfpsId,
+    'allocated_quantity': allocatedQuantity,
+    'subtotal': subtotal,
+    'delivery_fee': groupDeliveryFee,
+    'is_price_final': isPriceFinalized,
+    'price_label': priceLabel,
+    'cps_id': cpsId,
     'date_needed': dateNeeded,
     'form': form,
     'varieties': varietyGroups.map((v) => v.toJson()).toList(),
   };
 
-  // Compatibility getters mapping down to allocations
-  String get varietyName => varietyGroups.isNotEmpty
-      ? (varietyGroups.first.name ?? 'Unknown Variety')
-      : 'Unknown Variety';
   String? get produceForm => form;
 
-  // We consider the variety group price-locked if the item or variety itself requested it
   String pricingMode(bool isItemPriceLocked) =>
       (isItemPriceLocked || isPriceLock) ? 'price_lock' : 'market';
 
-  // Expose these fields from the first selection for backward compat where UI only shows one generic row
   bool get isPaid => varietyGroups.isNotEmpty && varietyGroups.first.isPaid;
-  double? get variableConsumerPrice =>
-      varietyGroups.isNotEmpty ? varietyGroups.first.variablePrice : null;
-  double get finalPrice =>
-      varietyGroups.isNotEmpty ? (varietyGroups.first.finalPrice ?? 0.0) : 0.0;
-  double? get priceLock =>
-      varietyGroups.isNotEmpty ? varietyGroups.first.priceLock : null;
 
-  /// Returns the total price for this variety sum(quantity * unitPrice).
-  double varietySubtotal(bool isItemPriceLocked) =>
-      varietyGroups.fold(0.0, (sum, vg) {
-        if (vg.deliveryStatus == 'CANCELLED') return sum;
-        double unitPrice = vg.variablePrice ?? 0.0;
-        if (vg.finalPrice != null && vg.finalPrice! > 0) {
-          unitPrice = vg.finalPrice!;
-        } else if ((isItemPriceLocked || isPriceLock) && vg.priceLock != null) {
-          unitPrice = vg.priceLock!;
-        }
-        return sum + (vg.quantity * unitPrice);
-      });
+  /// Use SQL-computed subtotal (includes delivery fee component from matched rows only)
+  double varietySubtotal(bool isItemPriceLocked) => subtotal;
 
-  bool get isFinalized =>
+  bool get isCancelled =>
       varietyGroups.isNotEmpty &&
-      varietyGroups.every(
-        (vg) =>
-            vg.deliveryStatus == 'DISPATCHED' ||
-            vg.deliveryStatus == 'QC_PASSED',
-      );
-  bool get isPriceFinalized => varietyGroups.every((vg) => vg.isPriceFinalized);
+      varietyGroups.every((vg) => vg.deliveryStatus == 'CANCELLED');
 
   MatchCompat? get match =>
       varietyGroups.isNotEmpty && varietyGroups.first.deliveryStatus != null
       ? MatchCompat(this)
       : null;
 
-  bool get isCancelled =>
-      varietyGroups.every((vg) => vg.deliveryStatus == 'CANCELLED');
+  /// Compatibility getter: returns the effective unit price.
+  double get finalPrice =>
+      allocatedQuantity > 0 ? (subtotal / allocatedQuantity) : 0.0;
+}
+
+class DeliveryAddress {
+  final String? addressLine1;
+  final String? addressLine2;
+  final String? city;
+  final String? province;
+  final String? region;
+  final String? landmark;
+  final String? postalCode;
+  final String? country;
+
+  DeliveryAddress({
+    this.addressLine1,
+    this.addressLine2,
+    this.city,
+    this.province,
+    this.region,
+    this.landmark,
+    this.postalCode,
+    this.country,
+  });
+
+  factory DeliveryAddress.fromJson(Map<String, dynamic> json) {
+    return DeliveryAddress(
+      addressLine1: json['address_line_1']?.toString(),
+      addressLine2: json['address_line_2']?.toString(),
+      city: json['city']?.toString(),
+      province: json['province']?.toString(),
+      region: json['region']?.toString(),
+      landmark: json['landmark']?.toString(),
+      postalCode: json['postal_code']?.toString(),
+      country: json['country']?.toString(),
+    );
+  }
+
+  String get displayLine {
+    final parts = [
+      addressLine1,
+      addressLine2,
+      city,
+      province,
+      region,
+      postalCode,
+      country,
+    ].where((p) => p != null && p.isNotEmpty).toList();
+    return parts.join(', ');
+  }
 }
 
 class VarietySelection {
   final String? name;
-  final String selectionType; // 'OPEN' | 'MATCHED'
+  final String
+  selectionType; // 'MATCHED' | 'PLEDGED' | 'DENIED' | 'SKIPPED' | 'CANCELLED'
   final double quantity;
   final String? dispatchDate;
   final String? carrierName;
@@ -541,10 +622,16 @@ class VarietySelection {
   final double? deliveryFee;
   final double? priceLock;
   final double? finalPrice;
-  final double? variablePrice;
+  final double? dtcPrice;
   final bool isPaid;
+  final bool isPriceLock;
   final String? listingId;
   final String? oomId;
+
+  /// SQL-computed price label: 'final' | 'tentative' | 'price_lock' | 'plan' | 'pending' | delivery-status
+  final String? priceLabel;
+  final DeliveryAddress? farmerLocation;
+  final DeliveryAddress? consumerLocation;
 
   VarietySelection({
     this.name,
@@ -557,10 +644,14 @@ class VarietySelection {
     this.deliveryFee,
     this.priceLock,
     this.finalPrice,
-    this.variablePrice,
+    this.dtcPrice,
     required this.isPaid,
+    this.isPriceLock = false,
     this.listingId,
     this.oomId,
+    this.priceLabel,
+    this.farmerLocation,
+    this.consumerLocation,
   });
 
   factory VarietySelection.fromJson(Map<String, dynamic> json) {
@@ -572,17 +663,41 @@ class VarietySelection {
           (json['allocated_quantity'] as num?)?.toDouble() ??
           0.0,
       dispatchDate:
-          json['dispatch_date']?.toString() ?? json['dispatch_at']?.toString(),
-      carrierName: json['carrier_name']?.toString(),
-      carrierId: json['carrier_id']?.toString(),
-      deliveryStatus: json['delivery_status']?.toString(),
-      deliveryFee: (json['delivery_fee'] as num?)?.toDouble(),
+          json['dispatch_date']?.toString() ??
+          json['dispatch_at']?.toString() ??
+          json['match']?['dispatch_at']?.toString(),
+      carrierName:
+          json['carrier_name']?.toString() ??
+          json['match']?['carrier_name']?.toString(),
+      carrierId:
+          json['carrier_id']?.toString() ??
+          json['match']?['carrier_id']?.toString(),
+      deliveryStatus:
+          json['delivery_status']?.toString() ??
+          json['match']?['delivery_status']?.toString(),
+      deliveryFee:
+          (json['delivery_fee'] as num?)?.toDouble() ??
+          (json['match']?['delivery_fee'] as num?)?.toDouble(),
       priceLock: (json['price_lock'] as num?)?.toDouble(),
       finalPrice: (json['final_price'] as num?)?.toDouble(),
-      variablePrice: (json['variable_price'] as num?)?.toDouble(),
+      dtcPrice:
+          (json['dtc_price'] as num?)?.toDouble() ??
+          (json['variable_price'] as num?)?.toDouble(),
       isPaid: json['is_paid'] == true,
+      isPriceLock: json['is_price_lock'] == true,
       listingId: json['listing_id']?.toString(),
-      oomId: json['oom_id']?.toString(),
+      oomId: json['oom_id']?.toString() ?? json['match']?['oom_id']?.toString(),
+      priceLabel: json['price_label']?.toString() ?? 'pending',
+      farmerLocation: json['farmer_location'] != null
+          ? DeliveryAddress.fromJson(
+              json['farmer_location'] as Map<String, dynamic>,
+            )
+          : null,
+      consumerLocation: json['consumer_location'] != null
+          ? DeliveryAddress.fromJson(
+              json['consumer_location'] as Map<String, dynamic>,
+            )
+          : null,
     );
   }
 
@@ -597,10 +712,12 @@ class VarietySelection {
     'delivery_fee': deliveryFee,
     'price_lock': priceLock,
     'final_price': finalPrice,
-    'variable_price': variablePrice,
+    'dtc_price': dtcPrice,
     'is_paid': isPaid,
+    'is_price_lock': isPriceLock,
     'listing_id': listingId,
     'oom_id': oomId,
+    'price_label': priceLabel,
   };
 
   // Compat fields mapping to previous shape
@@ -608,7 +725,9 @@ class VarietySelection {
   double get allocatedQuantity => quantity;
   bool get isSelected => true;
   bool get isPriceFinalized =>
-      deliveryStatus == 'CANCELLED' || (finalPrice != null && finalPrice! > 0);
+      selectionType.toUpperCase() != 'OPEN' &&
+      (deliveryStatus == 'CANCELLED' ||
+          (finalPrice != null && finalPrice! > 0));
 }
 
 class MatchCompat {

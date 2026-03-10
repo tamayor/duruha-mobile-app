@@ -1,42 +1,47 @@
-class DailyOfferGroup {
-  final DateTime dateCreated;
-  final List<ProduceGroup> produces;
-
-  DailyOfferGroup({required this.dateCreated, required this.produces});
-
-  factory DailyOfferGroup.fromJson(Map<String, dynamic> json) {
-    return DailyOfferGroup(
-      dateCreated: json['date_created'] != null
-          ? DateTime.parse(json['date_created'])
-          : DateTime.now(),
-      produces: (json['produce'] as List? ?? [])
-          .map((p) => ProduceGroup.fromJson(p))
-          .toList(),
-    );
-  }
-}
-
-class ProduceGroup {
+/// Thin produce info carried on every flat offer — also used by the detail screens.
+class ProduceOfferGroup {
   final String produceId;
   final String produceLocalName;
   final String produceEnglishName;
-  final List<HarvestOffer> varieties;
+  /// Unused in the flat list view; kept for compatibility with detail screens
+  /// (e.g. OfferDetailLoaderScreen passes `dates: []`).
+  final List<DailyOfferGroup> dates;
 
-  ProduceGroup({
+  ProduceOfferGroup({
     required this.produceId,
     required this.produceLocalName,
     required this.produceEnglishName,
-    required this.varieties,
+    this.dates = const [],
   });
 
-  factory ProduceGroup.fromJson(Map<String, dynamic> json) {
-    return ProduceGroup(
-      produceId: json['produce_id'] ?? '',
-      produceLocalName: json['produce_local_name']?.toString().trim() ?? '',
-      produceEnglishName: json['produce_english_name']?.toString().trim() ?? '',
-      varieties: (json['produce_varieties'] as List? ?? [])
-          .map((v) => HarvestOffer.fromJson(v))
-          .toList(),
+  String get displayName =>
+      produceLocalName.isNotEmpty ? produceLocalName : produceEnglishName;
+}
+
+/// Kept only for OfferDetailLoaderScreen compatibility; not used in the list.
+class DailyOfferGroup {
+  final DateTime dateCreated;
+  final List<HarvestOffer> varieties;
+
+  DailyOfferGroup({required this.dateCreated, required this.varieties});
+}
+
+/// A single flat offer as returned by get_farmer_offers — carries produce info inline.
+class FlatOffer {
+  final HarvestOffer offer;
+  final ProduceOfferGroup produce;
+
+  FlatOffer({required this.offer, required this.produce});
+
+  factory FlatOffer.fromJson(Map<String, dynamic> json) {
+    return FlatOffer(
+      offer: HarvestOffer.fromJson(json),
+      produce: ProduceOfferGroup(
+        produceId: json['produce_id'] ?? '',
+        produceLocalName: json['produce_local_name']?.toString().trim() ?? '',
+        produceEnglishName:
+            json['produce_english_name']?.toString().trim() ?? '',
+      ),
     );
   }
 }
@@ -52,6 +57,7 @@ class HarvestOffer {
   final double? remainingPriceLockCredit;
   final DateTime availableFrom;
   final DateTime availableTo;
+  final DateTime createdAt;
   final double ordersTotalPrice;
   final double farmerTotalEarnings;
   final String? fplsStatus;
@@ -70,6 +76,7 @@ class HarvestOffer {
     this.remainingPriceLockCredit,
     required this.availableFrom,
     required this.availableTo,
+    required this.createdAt,
     required this.ordersTotalPrice,
     required this.farmerTotalEarnings,
     required this.fplsStatus,
@@ -95,6 +102,9 @@ class HarvestOffer {
       availableTo: json['available_to'] != null
           ? DateTime.parse(json['available_to'])
           : DateTime(2100),
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : DateTime.now(),
       ordersTotalPrice: (json['orders_total_price'] as num? ?? 0.0).toDouble(),
       farmerTotalEarnings: (json['farmer_total_earnings'] as num? ?? 0.0)
           .toDouble(),
@@ -105,11 +115,57 @@ class HarvestOffer {
   }
 }
 
+class ConsumerDeliveryAddress {
+  final String addressId;
+  final String? addressLine1;
+  final String? addressLine2;
+  final String? city;
+  final String? province;
+  final String? region;
+  final String? postalCode;
+  final String? landmark;
+  final String? country;
+
+  ConsumerDeliveryAddress({
+    required this.addressId,
+    this.addressLine1,
+    this.addressLine2,
+    this.city,
+    this.province,
+    this.region,
+    this.postalCode,
+    this.landmark,
+    this.country,
+  });
+
+  factory ConsumerDeliveryAddress.fromJson(Map<String, dynamic> json) {
+    return ConsumerDeliveryAddress(
+      addressId: json['address_id'] ?? '',
+      addressLine1: json['address_line_1'],
+      addressLine2: json['address_line_2'],
+      city: json['city'],
+      province: json['province'],
+      region: json['region'],
+      postalCode: json['postal_code'],
+      landmark: json['landmark'],
+      country: json['country'],
+    );
+  }
+
+  String get shortAddress {
+    final parts = [addressLine1, city, province].where((p) => p != null && p.isNotEmpty).toList();
+    return parts.join(', ');
+  }
+}
+
 class FarmerOfferOrder {
   final String? consumerId;
   final double price;
+  final double finalPrice;
+  final double ftdPrice;
   final double quantity;
   final String? quality;
+  final String? produceNote;
   final double farmerPayout;
   final bool farmerIsPaid;
   final String? deliveryStatus;
@@ -119,32 +175,42 @@ class FarmerOfferOrder {
   final DateTime createdAt;
   final String offerOrderMatchId;
   final DateTime? dateNeeded;
+  final ConsumerDeliveryAddress? consumerAddress;
 
   FarmerOfferOrder({
     this.consumerId,
     required this.price,
+    required this.finalPrice,
+    required this.ftdPrice,
     required this.quantity,
     this.quality,
+    this.produceNote,
     required this.farmerPayout,
     required this.farmerIsPaid,
     this.deliveryStatus,
     this.dispatchAt,
     this.carrierName,
     this.consumerName,
-
     required this.createdAt,
     required this.offerOrderMatchId,
     this.dateNeeded,
+    this.consumerAddress,
   });
 
+  /// True when dispatch date is not set, is far future (>= year 2100),
+  /// or is more than 365 days from today — meaning the farmer still needs to set it.
+  bool get needsDispatchSetup {
+    if (dispatchAt == null) return true;
+    if (dispatchAt!.year >= 2100) return true;
+    if (dispatchAt!.difference(DateTime.now()).inDays >= 365) return true;
+    return false;
+  }
+
   factory FarmerOfferOrder.fromJson(Map<String, dynamic> json) {
+    final double parsedFinalPrice = (json['final_price'] ?? 0.0).toDouble();
+    final double parsedFtdPrice = (json['ftd_price'] ?? parsedFinalPrice).toDouble();
     final double parsedPrice =
-        (json['final_price'] ??
-                json['variable_farmer_price'] ??
-                json['price_lock'] ??
-                json['price'] ??
-                0.0)
-            .toDouble();
+        (json['price_lock'] ?? json['final_price'] ?? 0.0).toDouble();
 
     final double parsedQuantity = (json['quantity'] ?? 0.0).toDouble();
 
@@ -154,9 +220,13 @@ class FarmerOfferOrder {
               ? DateTime.parse(json['created_at'])
               : DateTime.now());
 
+    final addressJson = json['consumer_address'];
+
     return FarmerOfferOrder(
       consumerId: json['consumer_id'],
       price: parsedPrice,
+      finalPrice: parsedFinalPrice,
+      ftdPrice: parsedFtdPrice,
       quantity: parsedQuantity,
       offerOrderMatchId:
           (json['foa_id'] ?? json['offer_order_match_item_id'] ?? ''),
@@ -164,8 +234,8 @@ class FarmerOfferOrder {
           ? DateTime.parse(json['date_needed'])
           : created,
       quality: json['quality'],
-      farmerPayout: (json['farmer_payout'] ?? (parsedPrice * parsedQuantity))
-          .toDouble(),
+      produceNote: json['produce_note'],
+      farmerPayout: parsedFtdPrice,
       farmerIsPaid: json['is_paid'] ?? json['farmer_is_paid'] ?? false,
       deliveryStatus: json['delivery_status'],
       dispatchAt: json['dispatch_at'] != null
@@ -174,14 +244,21 @@ class FarmerOfferOrder {
       carrierName: json['carrier_name'],
       consumerName: json['consumer_name'],
       createdAt: created,
+      consumerAddress: addressJson != null
+          ? ConsumerDeliveryAddress.fromJson(
+              Map<String, dynamic>.from(addressJson))
+          : null,
     );
   }
 
   FarmerOfferOrder copyWith({
     String? consumerId,
     double? price,
+    double? finalPrice,
+    double? ftdPrice,
     double? quantity,
     String? quality,
+    String? produceNote,
     double? farmerPayout,
     bool? farmerIsPaid,
     String? deliveryStatus,
@@ -191,12 +268,16 @@ class FarmerOfferOrder {
     DateTime? createdAt,
     String? offerOrderMatchId,
     DateTime? dateNeeded,
+    ConsumerDeliveryAddress? consumerAddress,
   }) {
     return FarmerOfferOrder(
       consumerId: consumerId ?? this.consumerId,
       price: price ?? this.price,
+      finalPrice: finalPrice ?? this.finalPrice,
+      ftdPrice: ftdPrice ?? this.ftdPrice,
       quantity: quantity ?? this.quantity,
       quality: quality ?? this.quality,
+      produceNote: produceNote ?? this.produceNote,
       farmerPayout: farmerPayout ?? this.farmerPayout,
       farmerIsPaid: farmerIsPaid ?? this.farmerIsPaid,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
@@ -206,6 +287,7 @@ class FarmerOfferOrder {
       createdAt: createdAt ?? this.createdAt,
       offerOrderMatchId: offerOrderMatchId ?? this.offerOrderMatchId,
       dateNeeded: dateNeeded ?? this.dateNeeded,
+      consumerAddress: consumerAddress ?? this.consumerAddress,
     );
   }
 }

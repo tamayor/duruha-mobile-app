@@ -301,17 +301,29 @@ class _RecurringPickerSheetState extends State<RecurringPickerSheet> {
   Future<void> _pickDate({required bool isStart}) async {
     final now = DateTime.now();
     final defaultStart =
-        widget.planStartDate ?? now.add(const Duration(days: 21));
+        widget.planStartDate ?? now.add(const Duration(days: 30));
     final defaultEnd = widget.planEndDate ?? now.add(const Duration(days: 366));
+
+    final firstDate = widget.planStartDate ?? now.add(const Duration(days: 30));
+    final lastDate = widget.planEndDate ?? now.add(const Duration(days: 366));
+
+    DateTime initialDate;
+    if (isStart) {
+      initialDate = _startDate ?? defaultStart;
+    } else {
+      initialDate =
+          _endDate ?? (_startDate?.add(const Duration(days: 60)) ?? defaultEnd);
+    }
+
+    // Ensure initialDate is within [firstDate, lastDate]
+    if (initialDate.isBefore(firstDate)) initialDate = firstDate;
+    if (initialDate.isAfter(lastDate)) initialDate = lastDate;
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: isStart
-          ? (_startDate ?? defaultStart)
-          : (_endDate ??
-                (_startDate?.add(const Duration(days: 60)) ?? defaultEnd)),
-      firstDate: widget.planStartDate ?? now.add(const Duration(days: 21)),
-      lastDate: widget.planEndDate ?? now.add(const Duration(days: 366)),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
     );
 
     if (picked != null) {

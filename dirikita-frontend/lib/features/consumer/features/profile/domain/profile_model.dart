@@ -10,7 +10,6 @@ class ConsumerProfile extends UserProfile {
     required super.name,
     super.email,
     required super.phone,
-    required super.barangay,
     required super.city,
     required super.landmark,
     required super.province,
@@ -19,12 +18,16 @@ class ConsumerProfile extends UserProfile {
     super.latitude,
     super.longitude,
     super.dialect,
+    super.addressId,
+    super.addressLine1,
+    super.addressLine2,
     required this.consumerId,
     this.consumerSegment,
     this.segmentSize,
     this.cookingFrequency,
     this.qualityPreferences = const [],
     this.consumerFavProduce = const [],
+    this.isPriceLocked = false,
   }) : super(role: UserRole.consumer);
   final String consumerId;
   final String? consumerSegment;
@@ -32,6 +35,7 @@ class ConsumerProfile extends UserProfile {
   final String? cookingFrequency;
   final List<String> qualityPreferences;
   final List<Produce> consumerFavProduce;
+  final bool isPriceLocked;
 
   factory ConsumerProfile.fromJson(Map<String, dynamic> json) {
     final user = UserProfile.fromJson(json);
@@ -41,7 +45,6 @@ class ConsumerProfile extends UserProfile {
       name: user.name,
       email: user.email,
       phone: user.phone,
-      barangay: user.barangay,
       city: user.city,
       province: user.province,
       postalCode: user.postalCode,
@@ -50,9 +53,13 @@ class ConsumerProfile extends UserProfile {
       latitude: user.latitude,
       longitude: user.longitude,
       dialect: user.dialect,
+      addressId: user.addressId,
+      addressLine1: user.addressLine1,
+      addressLine2: user.addressLine2,
       consumerId: json['consumer_id'] as String? ?? '',
       consumerSegment: json['consumer_segment'] as String?,
       cookingFrequency: json['cooking_frequency'] as String?,
+      isPriceLocked: json['is_price_locked'] as bool? ?? false,
       qualityPreferences: json['quality_preferences'] != null
           ? List<String>.from(json['quality_preferences'] as List)
           : [],
@@ -82,7 +89,6 @@ class ConsumerProfile extends UserProfile {
       name: user.name,
       email: user.email,
       phone: user.phone,
-      barangay: user.barangay,
       city: user.city,
       province: user.province,
       postalCode: user.postalCode,
@@ -98,6 +104,7 @@ class ConsumerProfile extends UserProfile {
       cookingFrequency: null,
       qualityPreferences: [],
       consumerFavProduce: [],
+      isPriceLocked: false,
     );
   }
 
@@ -110,6 +117,7 @@ class ConsumerProfile extends UserProfile {
       'cooking_frequency': cookingFrequency,
       'quality_preferences': qualityPreferences,
       'fav_produce': consumerFavProduce.map((p) => p.id).toList(),
+      'is_price_locked': isPriceLocked,
     });
     return json;
   }
@@ -120,7 +128,6 @@ class ConsumerProfile extends UserProfile {
     String? name,
     String? email,
     String? phone,
-    String? barangay,
     String? city,
     String? province,
     String? landmark,
@@ -135,6 +142,10 @@ class ConsumerProfile extends UserProfile {
     String? cookingFrequency,
     List<String>? qualityPreferences,
     List<Produce>? consumerFavProduce,
+    String? addressId,
+    String? addressLine1,
+    String? addressLine2,
+    bool? isPriceLocked,
   }) {
     return ConsumerProfile(
       id: id ?? this.id,
@@ -142,7 +153,6 @@ class ConsumerProfile extends UserProfile {
       name: name ?? this.name,
       email: email ?? this.email,
       phone: phone ?? this.phone,
-      barangay: barangay ?? this.barangay,
       city: city ?? this.city,
       province: province ?? this.province,
       landmark: landmark ?? this.landmark,
@@ -151,12 +161,16 @@ class ConsumerProfile extends UserProfile {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       dialect: dialect ?? this.dialect,
+      addressId: addressId ?? this.addressId,
+      addressLine1: addressLine1 ?? this.addressLine1,
+      addressLine2: addressLine2 ?? this.addressLine2,
       consumerId: consumerId ?? this.consumerId,
       consumerSegment: consumerSegment ?? this.consumerSegment,
       segmentSize: segmentSize ?? this.segmentSize,
       cookingFrequency: cookingFrequency ?? this.cookingFrequency,
       qualityPreferences: qualityPreferences ?? this.qualityPreferences,
       consumerFavProduce: consumerFavProduce ?? this.consumerFavProduce,
+      isPriceLocked: isPriceLocked ?? this.isPriceLocked,
     );
   }
 }
@@ -165,4 +179,5 @@ abstract class ConsumerProfileRepository {
   Future<ConsumerProfile> getConsumerProfile(String consumerId);
   Future<String> uploadProfileImage(File file); // Returns the URL
   Future<void> updateProfile(ConsumerProfile profile);
+  Future<String?> deleteAddress(String userId, String addressId);
 }

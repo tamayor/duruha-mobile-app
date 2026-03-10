@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
 import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
+import 'package:duruha/features/consumer/features/subscription/data/consumer_plan_repository.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/features/consumer/features/profile/presentation/edit_profile_screen.dart';
 
@@ -23,11 +24,13 @@ class ConsumerProfileScreen extends StatefulWidget {
 
 class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
   late Future<ConsumerProfile> _profileFuture;
+  late Future<String?> _tierNameFuture;
 
   @override
   void initState() {
     super.initState();
     _profileFuture = _loadProfile();
+    _tierNameFuture = _loadTierName();
   }
 
   Future<ConsumerProfile> _loadProfile() async {
@@ -36,6 +39,13 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
       throw Exception('User is not logged in');
     }
     return ConsumerProfileRepositoryImpl().getConsumerProfile(userId);
+  }
+
+  Future<String?> _loadTierName() async {
+    final consumerId = await SessionService.getRoleId();
+    if (consumerId == null) return null;
+    final plan = await ConsumerPlanRepository().getActivePlan(consumerId);
+    return plan?.qualityLevel;
   }
 
   @override
@@ -60,7 +70,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
           final displayName = profile.name;
           const displayRole = 'Consumer';
           final displayLocation =
-              "${profile.barangay}, ${profile.city}, \n${profile.province}, ${profile.postalCode}";
+              "${profile.addressLine1}, ${profile.addressLine2}\n${profile.city}, ${profile.province}";
           final displayLandmark = profile.landmark;
 
           return Stack(
@@ -212,6 +222,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
                             );
 
                         if (updatedProfile != null) {
+                          if (!mounted) return;
                           setState(() {
                             _profileFuture = Future.value(updatedProfile);
                           });
@@ -281,6 +292,21 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
   Widget _buildDetailsCard(BuildContext context, ConsumerProfile profile) {
     final theme = Theme.of(context);
 
+    return FutureBuilder<String?>(
+      future: _tierNameFuture,
+      builder: (context, tierSnapshot) {
+        final tierName = tierSnapshot.data ?? 'Saver';
+        return _buildDetailsCardContent(context, profile, theme, tierName);
+      },
+    );
+  }
+
+  Widget _buildDetailsCardContent(
+    BuildContext context,
+    ConsumerProfile profile,
+    ThemeData theme,
+    String tierName,
+  ) {
     final items = [
       _DetailItem(
         'Joined',
@@ -298,11 +324,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
         profile.cookingFrequency ?? 'Daily',
         Icons.restaurant_menu,
       ),
-      _DetailItem(
-        'Preferences',
-        '${profile.qualityPreferences.length} Saved',
-        Icons.verified_outlined,
-      ),
+      _DetailItem('Quality', tierName, Icons.workspace_premium_outlined),
       _DetailItem(
         'Interests',
         '${profile.consumerFavProduce.length} Crops',
@@ -478,6 +500,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
         final newImageUrl = await ConsumerProfileRepositoryImpl()
             .uploadProfileImage(File(image.path));
 
+        if (!mounted) return;
         setState(() {
           _profileFuture = Future.value(
             profile.copyWith(imageUrl: newImageUrl),

@@ -112,14 +112,28 @@ class SessionService {
 
       final userData = Map<String, dynamic>.from(response);
 
-      // Flatten joined IDs
-      if (response['user_farmers'] != null &&
-          (response['user_farmers'] as List).isNotEmpty) {
-        userData['farmer_id'] = response['user_farmers'][0]['farmer_id'];
+      // Flatten joined IDs - handle lists safely
+      if (response['user_farmers'] != null) {
+        final farmers = response['user_farmers'] as List;
+        if (farmers.length > 1) {
+          debugPrint(
+            "⚠️ [SESSION] Multiple farmer profiles found for user $userId: $farmers",
+          );
+        }
+        if (farmers.isNotEmpty) {
+          userData['farmer_id'] = farmers[0]['farmer_id'];
+        }
       }
-      if (response['user_consumers'] != null &&
-          (response['user_consumers'] as List).isNotEmpty) {
-        userData['consumer_id'] = response['user_consumers'][0]['consumer_id'];
+      if (response['user_consumers'] != null) {
+        final consumers = response['user_consumers'] as List;
+        if (consumers.length > 1) {
+          debugPrint(
+            "⚠️ [SESSION] Multiple consumer profiles found for user $userId: $consumers",
+          );
+        }
+        if (consumers.isNotEmpty) {
+          userData['consumer_id'] = consumers[0]['consumer_id'];
+        }
       }
 
       final profile = UserProfile.fromJson(userData);
@@ -134,6 +148,16 @@ class SessionService {
   static Future<String?> getUserId() async {
     final data = await getUserData();
     return data?['id'];
+  }
+
+  /// Updates only address_id in the cached profile without a full re-sync.
+  static Future<void> saveAddressId(String? addressId) async {
+    final data = await getUserData();
+    if (data == null) return;
+    final updated = Map<String, dynamic>.from(data);
+    updated['address_id'] = addressId;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(updated));
   }
 
   static Future<String?> getRoleId() async {
@@ -164,22 +188,36 @@ class SessionService {
         final res = await supabase
             .from('user_farmers')
             .select('farmer_id')
-            .eq('user_id', userId)
-            .maybeSingle();
-        roleId = res?['farmer_id'];
+            .eq('user_id', userId);
+        final list = res as List;
+        if (list.length > 1) {
+          debugPrint(
+            "⚠️ [SESSION] Multiple farmer profiles found for user $userId: $list",
+          );
+        }
+        if (list.isNotEmpty) {
+          roleId = list[0]['farmer_id'];
+        }
       } else if (role == 'CONSUMER') {
         final res = await supabase
             .from('user_consumers')
             .select('consumer_id')
-            .eq('user_id', userId)
-            .maybeSingle();
-        roleId = res?['consumer_id'];
+            .eq('user_id', userId);
+        final list = res as List;
+        if (list.length > 1) {
+          debugPrint(
+            "⚠️ [SESSION] Multiple consumer profiles found for user $userId: $list",
+          );
+        }
+        if (list.isNotEmpty) {
+          roleId = list[0]['consumer_id'];
+        }
       }
 
       if (roleId != null) {
         debugPrint("🔄 [SESSION] Synced roleId: $roleId for user: $userId");
         final updatedData = Map<String, dynamic>.from(data);
-        if (role == 'farmer') {
+        if (role == 'FARMER') {
           updatedData['farmer_id'] = roleId;
         } else {
           updatedData['consumer_id'] = roleId;
@@ -187,6 +225,10 @@ class SessionService {
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_userKey, jsonEncode(updatedData));
+      } else {
+        debugPrint(
+          "⚠️ [SESSION] No roleId found for user: $userId and role: $role",
+        );
       }
 
       return roleId;

@@ -9,6 +9,8 @@ class OrdersRepository {
     String? cursor,
     bool isActive = true,
     bool? isPlan,
+    bool? isOrder,
+    bool? hasPaymentMethod,
   }) async {
     try {
       final response = await supabase.rpc(
@@ -18,6 +20,9 @@ class OrdersRepository {
           'p_is_active': isActive,
           if (cursor != null) 'p_cursor': cursor,
           if (isPlan != null) 'p_is_plan': isPlan,
+          if (isOrder != null) 'p_is_order': isOrder,
+          if (hasPaymentMethod != null)
+            'p_has_payment_method': hasPaymentMethod,
         },
       );
       if (response == null) {
@@ -84,6 +89,43 @@ class OrdersRepository {
       debugPrint('✅ [CANCEL ORDER SUCCESS]: $orderId');
     } catch (e) {
       debugPrint('❌ [CANCEL ORDER ERROR]: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateOrderNote(String orderId, String note) async {
+    try {
+      debugPrint('📝 [UPDATE NOTE]: orderId=$orderId note=$note');
+      await supabase
+          .from('consumer_orders')
+          .update({'note': note})
+          .eq('order_id', orderId);
+      debugPrint('✅ [UPDATE NOTE SUCCESS]: $orderId');
+    } catch (e) {
+      debugPrint('❌ [UPDATE NOTE ERROR]: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateOrderItemNote(
+    String orderId,
+    String copId,
+    String note,
+  ) async {
+    try {
+      debugPrint(
+        '📝 [UPDATE ORDER ITEM NOTE]: orderId=$orderId copId=$copId note=$note',
+      );
+      await supabase
+          .from('consumer_orders_produce')
+          .update({'note': note})
+          .eq('order_id', orderId)
+          .eq('cop_id', copId);
+      debugPrint(
+        '✅ [UPDATE ORDER ITEM NOTE SUCCESS]: $copId in order $orderId',
+      );
+    } catch (e) {
+      debugPrint('❌ [UPDATE ORDER ITEM NOTE ERROR]: $e');
       rethrow;
     }
   }

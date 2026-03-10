@@ -48,16 +48,23 @@ class _FarmerPriceLockSubscriptionDetailsScreenState
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Failed to load details\n${snapshot.error}',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-                  ElevatedButton(
+                  DuruhaButton(
+                    text: 'Retry',
+                    isSmall: true,
+                    isOutline: true,
+                    isFullWidth: false,
                     onPressed: _loadDetails,
-                    child: const Text('Retry'),
                   ),
                 ],
               ),

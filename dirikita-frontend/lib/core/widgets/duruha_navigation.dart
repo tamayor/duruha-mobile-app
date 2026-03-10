@@ -54,9 +54,8 @@ class DuruhaNavigation extends StatelessWidget {
 
           return Expanded(
             child: DuruhaInkwell(
-              borderRadius: 16,
               onTap: () => _handleNavigation(context, item),
-              backgroundColor: Colors.transparent,
+              variation: InkwellVariation.classic,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.fromLTRB(6, 6, 6, 20),

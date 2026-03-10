@@ -1,7 +1,8 @@
 import 'package:duruha/core/widgets/badge/duruha_delivery_status_badge.dart';
 import 'package:duruha/core/constants/delivery_statuses.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
-import 'package:duruha/core/widgets/duruha_inkwell.dart';
+import 'package:duruha/core/helpers/duruha_color_helper.dart';
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:flutter/material.dart';
 import '../../domain/order_details_model.dart';
 import '../../data/orders_repository.dart';
@@ -12,14 +13,45 @@ class OrderCard extends StatelessWidget {
 
   const OrderCard({super.key, required this.match});
 
+  Widget _buildPaymentWidget(BuildContext context) {
+    final pm = match.paymentMethod.toLowerCase();
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    if (pm.isEmpty || pm == 'not paid') {
+      return Text(
+        'Pay Now',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: DuruhaColorHelper.getColor(context, 'pending'),
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    } else if (pm == 'cash') {
+      return Icon(Icons.attach_money, size: 16, color: color);
+    } else if (pm == 'card') {
+      return Icon(Icons.credit_card, size: 16, color: color);
+    } else {
+      return Icon(Icons.payment, size: 16, color: color);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final note = match.order.note;
+    final note = match.note;
     final produceNames = match.produceItems
         .map((item) => item.produceEnglishName)
         .toList();
+    // Build frequency map: { 'Rice': 2, 'Coconut': 5 }
+    final produceCount = <String, int>{};
+    for (final name in produceNames) {
+      produceCount[name] = (produceCount[name] ?? 0) + 1;
+    }
+
+    // Format: "Rice x2, Coconut x5"
+    final produceDisplay = produceCount.entries
+        .map((e) => e.value > 1 ? '${e.key} (x${e.value})' : e.key)
+        .join(', ');
 
     return Card(
       margin: EdgeInsets.zero,
@@ -48,8 +80,9 @@ class OrderCard extends StatelessWidget {
             }
           } catch (e) {
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to load order details: $e')),
+              DuruhaSnackBar.showError(
+                context,
+                'Failed to load order details: $e',
               );
             }
           }
@@ -60,41 +93,38 @@ class OrderCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
                     child: Text(
-                      match.order.orderId,
+                      '${match.order.orderId.trimRight().substring(0, 8)} - ${DuruhaFormatter.formatDate(DateTime.parse(match.order.createdAt))}', // Truncate long order IDs
+                      maxLines: 1,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: colorScheme.onSecondary,
+                        color: colorScheme.onSecondary.withValues(alpha: 0.8),
                         fontSize: 10,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (match.isPlan)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: DuruhaStatusBadge(
-                        size: BadgeSize.tiny,
-                        label: 'PLAN',
-                        color: colorScheme
-                            .onPrimary, // Using a distinct color for Plan
-                        isOutlined: false,
-                      ),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (match.isPlan)
+                        DuruhaStatusBadge(
+                          size: BadgeSize.tiny,
+                          label: 'PLAN',
+                          color: colorScheme
+                              .onPrimary, // Using a distinct color for Plan
+                          isOutlined: false,
+                        ),
+                      if (match.isPlan) const SizedBox(width: 8),
+                      _buildPaymentWidget(context),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                DuruhaFormatter.formatDate(
-                  DateTime.parse(match.order.createdAt),
-                ),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
+
               if (note != null && note.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -106,21 +136,21 @@ class OrderCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.note_outlined,
-                        size: 14,
+                        size: 13,
                         color: colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           note,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -128,31 +158,15 @@ class OrderCard extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: produceNames.map((name) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer.withValues(
-                        alpha: 0.5,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      name,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  );
-                }).toList(),
+              DuruhaTextEmphasis(
+                text: produceDisplay,
+                breaker: '()',
+                mainColor: theme.colorScheme.onPrimary,
+                subColor: theme.colorScheme.onSecondary,
+                mainWeight: FontWeight.bold,
+                subSize: 12,
               ),
+              const SizedBox(height: 12),
               if (match.stats != null) ...[
                 const SizedBox(height: 12),
                 Wrap(
@@ -164,14 +178,14 @@ class OrderCard extends StatelessWidget {
                     if (match.stats!.paidCount > 0)
                       DuruhaStatusBadge(
                         size: BadgeSize.tiny,
-                        color: Colors.green,
+                        color: DuruhaColorHelper.getColor(context, 'completed'),
                         label: "PAID: ${match.stats!.paidCount}",
                         isOutlined: true,
                       ),
                     if (match.stats!.unpaidCount > 0)
                       DuruhaStatusBadge(
                         size: BadgeSize.tiny,
-                        color: colorScheme.error,
+                        color: colorScheme.onError,
                         label: "UNPAID: ${match.stats!.unpaidCount}",
                         isOutlined: true,
                       ),

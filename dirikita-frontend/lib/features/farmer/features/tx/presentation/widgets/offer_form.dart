@@ -401,7 +401,7 @@ class _OfferFormState extends State<OfferForm> {
                     }
                   });
                 },
-                borderRadius: 16,
+
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

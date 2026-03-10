@@ -5,15 +5,6 @@ import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/supabase_config.dart';
 
 class ProduceRepository {
-  Future<List<Produce>> fetchProduce() async {
-    final response = await supabase.from('produce_master_view').select();
-    final List<Produce> produceList = (response as List)
-        .map((json) => Produce.fromJson(json))
-        .toList();
-
-    return _attachVarietyOfferQuantities(produceList);
-  }
-
   Future<List<Produce>> _attachVarietyOfferQuantities(
     List<Produce> produceList,
   ) async {
@@ -108,9 +99,6 @@ class ProduceRepository {
       );
     }).toList();
   }
-
-  // Compatibility Alias
-  Future<List<Produce>> getAllProduce() => fetchProduce();
 
   Future<List<Produce>> fetchProduceByIds(
     List<String> ids, {

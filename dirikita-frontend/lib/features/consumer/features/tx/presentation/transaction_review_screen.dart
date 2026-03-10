@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/consumer/features/subscription/futureplan/domain/consumer_future_plan_subscription_model.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/shared/produce/domain/produce_variety.dart';
@@ -15,13 +14,13 @@ import 'crop_selection_state.dart';
 import '../data/transaction_draft_service.dart';
 import '../data/transaction_repository.dart';
 import 'widgets/recurring_picker.dart';
-import '../../subscription/pricelock/domain/price_lock_subscription_model.dart';
-import '../../subscription/pricelock/data/subscription_repository.dart';
+import 'package:duruha/shared/user/domain/user_address_model.dart';
 import '../../../shared/presentation/consumer_loading_screen.dart';
 import '../../manage/presentation/order_details_screen.dart';
 import 'package:duruha/core/faq/faq_transaction_review.dart';
 import 'package:duruha/core/constants/color_marker.dart';
-import '../../subscription/quality/domain/quality_subscription_model.dart';
+import '../../subscription/data/consumer_plan_repository.dart';
+import '../../subscription/domain/consumer_plan_subscription_model.dart';
 
 // ─── Price-range helper ───────────────────────────────────────────────────────
 
@@ -69,6 +68,8 @@ class _DeliveryEntry {
     required this.priceMin,
     required this.priceMax,
   });
+
+  String get key => label;
 }
 
 /// Computes min/max duruhaToConsumerPrice across the listings selected for
@@ -129,21 +130,18 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   RealtimeChannel? _realtimeChannel;
   Timer? _debounce;
 
-  // Order-mode specific
-  bool _isOrderPriceLocked = false;
+  // No longer needed as price lock is automatic with a plan
 
-  // Price-lock subscription (order mode only)
-  final _subRepository = SubscriptionRepository();
-  List<PriceLockSubscription> _subscriptions = [];
-  PriceLockSubscription? _activeSubscription;
-  // Quality subscription
-  QualitySubscription? _qualitySubscription;
-  bool _isLoadingQuality = true;
+  // Unified plan subscription
+  final _planRepository = ConsumerPlanRepository();
+  ConsumerPlanSubscription? _activePlan;
   bool _isLoadingSubscription = true;
   bool _isAllCompact = false;
 
-  // CFP subscription (plan mode only)
-  ConsumerFuturePlanSubscription? _cfpSubscription;
+  // Address selection
+  List<UserAddress> _addresses = [];
+  String? _selectedAddressId;
+  bool _isLoadingAddresses = true;
 
   TransactionMode get _txMode =>
       widget.mode == 'plan' ? TransactionMode.plan : TransactionMode.order;
@@ -153,13 +151,8 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   void initState() {
     super.initState();
     _produce = List.from(widget.selectedProduce);
-    _fetchQualitySubscription();
-    if (!_isPlan) {
-      _fetchSubscriptions();
-    } else {
-      setState(() => _isLoadingSubscription = false);
-      _loadCfpSubscription();
-    }
+    _fetchActivePlan();
+    _fetchAddresses();
     _subscribeRealtime();
   }
 
@@ -218,83 +211,56 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
 
   // ─── Subscription loading ─────────────────────────────────────────────────
 
-  Future<void> _loadCfpSubscription() async {
-    try {
-      final userId = await SessionService.getUserId();
-      if (userId == null) return;
-      final consumerRow = await Supabase.instance.client
-          .from('user_consumers')
-          .select('consumer_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-      final consumerId = consumerRow?['consumer_id'] as String?;
-      if (consumerId == null) return;
-      final response = await Supabase.instance.client
-          .from('consumer_future_plan_subscriptions')
-          .select('*, consumer_future_plan_configs!cfp_subs_config_fkey(*)')
-          .eq('consumer_id', consumerId)
-          .eq('is_active', true)
-          .order('starts_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-      if (response != null && mounted) {
-        setState(() {
-          _cfpSubscription = ConsumerFuturePlanSubscription.fromJson(
-            Map<String, dynamic>.from(response),
-          );
-        });
-      }
-    } catch (e) {
-      debugPrint('⚠️ [REVIEW-CFP] Failed to load subscription: $e');
-    }
-  }
-
-  Future<void> _fetchQualitySubscription() async {
-    try {
-      final consumerId = await SessionService.getRoleId();
-      if (consumerId == null) {
-        setState(() => _isLoadingQuality = false);
-        return;
-      }
-      final sub = await _subRepository.getActiveQualitySubscription(consumerId);
-      if (mounted) {
-        setState(() {
-          _qualitySubscription = sub;
-          _isLoadingQuality = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('⚠️ [REVIEW-QUALITY] Failed to load quality subscription: $e');
-      if (mounted) setState(() => _isLoadingQuality = false);
-    }
-  }
-
-  Future<void> _fetchSubscriptions() async {
+  Future<void> _fetchActivePlan() async {
     final consumerId = await SessionService.getRoleId();
     if (consumerId == null) {
       if (mounted) setState(() => _isLoadingSubscription = false);
       return;
     }
-    final subs = await _subRepository.getConsumerPriceLockSubscriptions();
-    subs.sort((a, b) {
-      if (a.status == 'active' && b.status != 'active') return -1;
-      if (a.status != 'active' && b.status == 'active') return 1;
-      if (a.remainingCredits != b.remainingCredits) {
-        return b.remainingCredits.compareTo(a.remainingCredits);
+    try {
+      final plan = await _planRepository.getActivePlan(consumerId);
+      if (mounted) {
+        setState(() {
+          _activePlan = plan;
+          _isLoadingSubscription = false;
+        });
       }
-      return b.endsAt.compareTo(a.endsAt);
-    });
-    if (mounted) {
-      setState(() {
-        _subscriptions = subs;
-        _activeSubscription =
-            (subs.isNotEmpty &&
-                subs.first.status == 'active' &&
-                subs.first.remainingCredits > 0)
-            ? subs.first
-            : null;
-        _isLoadingSubscription = false;
-      });
+    } catch (e) {
+      debugPrint('⚠️ [REVIEW] Failed to load active plan: $e');
+      if (mounted) setState(() => _isLoadingSubscription = false);
+    }
+  }
+
+  Future<void> _fetchAddresses() async {
+    try {
+      final addrs = await _txRepository.fetchAllUserAddresses();
+      final defaultId = await _txRepository.fetchUserAddressId();
+
+      if (mounted) {
+        setState(() {
+          _addresses = addrs;
+
+          if (addrs.isNotEmpty) {
+            // Priority:
+            // 1. Primary linked address (users.address_id)
+            // 2. Virtual 'profile' address
+            // 3. First available
+            final selected =
+                addrs.where((a) => a.addressId == defaultId).firstOrNull ??
+                addrs.where((a) => a.addressId == 'profile').firstOrNull ??
+                addrs.first;
+
+            _selectedAddressId = selected.addressId;
+          } else {
+            _selectedAddressId = null;
+          }
+
+          _isLoadingAddresses = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ [REVIEW] Failed to load addresses: $e');
+      if (mounted) setState(() => _isLoadingAddresses = false);
     }
   }
 
@@ -354,6 +320,23 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
         sub += entry.priceMax * entry.qty;
       }
       total += sub;
+    }
+    return total;
+  }
+
+  /// Total value of price-locked items in Order mode (max estimate).
+  double get _grandTotalLocked {
+    if (_isPlan) return 0;
+    double total = 0;
+    for (final produce in _produce) {
+      final state = widget.cropStates[produce.id]!;
+      final entries = _buildSingleDeliveryBreakdown(produce, state);
+      for (final e in entries) {
+        final isLocked = state.varietyPriceLock[e.key] ?? false;
+        if (isLocked) {
+          total += e.priceMax * e.qty;
+        }
+      }
     }
     return total;
   }
@@ -529,7 +512,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   /// True when the grand total (min) is below the subscription minimum.
   bool get _planBelowMin {
     if (!_isPlan) return false;
-    final min = _cfpSubscription?.minTotalValue;
+    final min = _activePlan?.minOrderValue;
     if (min == null || min <= 0) return false;
     return _grandTotalAllDeliveries < min;
   }
@@ -537,16 +520,18 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   /// True when the grand total (max) exceeds the subscription maximum.
   bool get _planAboveMax {
     if (!_isPlan) return false;
-    final max = _cfpSubscription?.maxTotalValue;
+    final max = _activePlan?.maxOrderValue;
     if (max == null || max <= 0) return false;
     return _grandTotalAllDeliveriesMax > max;
   }
 
   /// True when any scheduled delivery date falls outside the subscription window.
   bool get _planDatesOutOfRange {
-    if (!_isPlan || _cfpSubscription == null) return false;
-    final start = _cfpSubscription!.startsAt;
-    final end = _cfpSubscription!.expiresAt;
+    if (!_isPlan || _activePlan == null) return false;
+    final now = DateTime.now();
+    final start = now.add(const Duration(days: 30));
+    final end = now.add(Duration(days: _activePlan!.scheduleWindowDays ?? 365));
+
     for (final produce in _produce) {
       final state = widget.cropStates[produce.id]!;
       for (final recStr in state.varietyRecurrence.values) {
@@ -568,98 +553,18 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
   bool get _isPlanInvalid =>
       _isPlan && (_planBelowMin || _planAboveMax || _planDatesOutOfRange);
 
-  // ─── Price-lock credit calculations ──────────────────────────────────────
-
   bool get _isOverLimit {
-    // Check plan mode credit limits
-    if (_isPlan && _activeSubscription != null) {
-      final totalLocked = _calculateTotalLockedCredits();
-      final totalUnlocked = _calculateTotalUnlockedCredits();
-      final newRemaining = _activeSubscription!.remainingCredits - totalLocked;
-      return newRemaining < 0;
+    // Plan mode does not use price lock, so no credit check needed.
+    if (_isPlan) return false;
+    // In order mode, only locked items consume credits.
+    if (_activePlan != null && (_activePlan!.monthlyCreditLimit ?? 0) > 0) {
+      final lockedTotal = _grandTotalLocked;
+      return _activePlan!.remainingCredits < lockedTotal;
     }
-
-    // Check order mode price lock limits
-    if (!_isPlan && _isOrderPriceLocked && _activeSubscription != null) {
-      final orderTotal = _grandTotalMax;
-      return _activeSubscription!.remainingCredits < orderTotal;
-    }
-
     return false;
   }
 
-  double _calculateTotalLockedCredits() {
-    if (_activeSubscription == null) return 0;
-    double total = 0;
-    for (final produce in _produce) {
-      final state = widget.cropStates[produce.id]!;
-      final qtys = _buildVarietyBreakdown(state);
-      final groupedVarieties = state.varietyGroups.expand((g) => g).toSet();
-
-      // Ungrouped
-      for (final variant in state.selectedVariants) {
-        if (groupedVarieties.contains(variant)) continue;
-        if (state.varietyPriceLock[variant] != true) continue;
-        final qty = qtys[variant] ?? 0;
-        if (qty <= 0) continue;
-        final price = _resolvePrice(produce, state, variant);
-        total += price.max * qty;
-      }
-
-      // Groups
-      for (int i = 0; i < state.varietyGroups.length; i++) {
-        final group = state.varietyGroups[i];
-        if (group.isEmpty) continue;
-        // If ANY member of the group is locked, the whole group quantity is considered locked
-        bool isLocked = group.any((m) => state.varietyPriceLock[m] == true);
-        if (!isLocked) continue;
-
-        final membersWithQty = group.where((m) => (qtys[m] ?? 0) > 0).toList();
-        if (membersWithQty.isEmpty) continue;
-
-        final qty = qtys[membersWithQty.first]!;
-        final price = _resolvePrice(produce, state, 'group_$i');
-        total += price.max * qty;
-      }
-    }
-    return total;
-  }
-
-  double _calculateTotalUnlockedCredits() {
-    double total = 0;
-    for (final produce in _produce) {
-      final state = widget.cropStates[produce.id]!;
-      final qtys = _buildVarietyBreakdown(state);
-      final groupedVarieties = state.varietyGroups.expand((g) => g).toSet();
-
-      // Ungrouped
-      for (final variant in state.selectedVariants) {
-        if (groupedVarieties.contains(variant)) continue;
-        if (state.varietyPriceLock[variant] == true) continue;
-        final qty = qtys[variant] ?? 0;
-        if (qty <= 0) continue;
-        final price = _resolvePrice(produce, state, variant);
-        total += price.min * qty;
-      }
-
-      // Groups
-      for (int i = 0; i < state.varietyGroups.length; i++) {
-        final group = state.varietyGroups[i];
-        if (group.isEmpty) continue;
-        // Group is unlocked ONLY if no member is locked
-        bool isLocked = group.any((m) => state.varietyPriceLock[m] == true);
-        if (isLocked) continue;
-
-        final membersWithQty = group.where((m) => (qtys[m] ?? 0) > 0).toList();
-        if (membersWithQty.isEmpty) continue;
-
-        final qty = qtys[membersWithQty.first]!;
-        final price = _resolvePrice(produce, state, 'group_$i');
-        total += price.min * qty;
-      }
-    }
-    return total;
-  }
+  // These separate calculations are no longer needed as we use the unified plan credits
 
   // ─── Submission ───────────────────────────────────────────────────────────
 
@@ -695,8 +600,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
         cropQuantities[produce.id] = quantities;
         cropVarietyDateNeeded[produce.id] = state.varietyDateNeeded;
         varietyGroups[produce.id] = state.varietyGroups;
-        cropQualities[produce.id] =
-            _qualitySubscription?.tierName ?? 'Selection';
+        cropQualities[produce.id] = _activePlan?.qualityLevel ?? 'Selection';
 
         // Convert listing IDs → form names
         final formNames = <String, String?>{};
@@ -723,12 +627,17 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
         }
         cropFormSelections[produce.id] = formNames;
 
-        cropPriceLocks[produce.id] = {};
+        final priceLocks = <String, bool>{};
+        for (final entry in state.varietyPriceLock.entries) {
+          if (entry.value) priceLocks[entry.key] = true;
+        }
+        cropPriceLocks[produce.id] = priceLocks;
       }
 
-      // Prepare price lock subscription if locked
-      final cplsIdToUse = (_isOrderPriceLocked && _activeSubscription != null)
-          ? _activeSubscription!.cplsId
+      // In Order mode, we pass cpsId only if there are items to be price-locked.
+      // The RPC layer then handles applying it only to those specific groups/items.
+      final String? cpsIdToUse = _grandTotalLocked > 0
+          ? _activePlan?.cpsId
           : null;
 
       if (supabase.auth.currentUser == null) {
@@ -743,10 +652,9 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
         varietyGroups: varietyGroups,
         varietySelectedFormId: cropFormSelections,
         varietyPriceLock: cropPriceLocks,
-        note: _noteController.text.trim().isNotEmpty
-            ? _noteController.text.trim()
-            : null,
-        cplsId: cplsIdToUse,
+        note: _noteController.text.trim(),
+        cpsId: cpsIdToUse,
+        addressId: _selectedAddressId,
       );
 
       if (result == null) {
@@ -785,12 +693,9 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
       final Map<String, List<Set<String>>> varietyGroups = {};
       final Map<String, Map<String, String?>> cropFormSelections = {};
       final Map<String, String> cropQualities = {};
-      final Map<String, Map<String, bool>> cropPriceLocks = {};
 
       for (final produce in _produce) {
         final state = widget.cropStates[produce.id]!;
-
-        cropPriceLocks[produce.id] = {};
 
         final quantities = <String, double>{};
         for (final entry in state.varietyQuantityControllers.entries) {
@@ -801,7 +706,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
         cropQuantities[produce.id] = quantities;
         cropRecurrences[produce.id] = state.varietyRecurrence;
         varietyGroups[produce.id] = state.varietyGroups;
-        cropQualities[produce.id] = _qualitySubscription?.tierName ?? 'Saver';
+        cropQualities[produce.id] = _activePlan?.qualityLevel ?? 'Saver';
 
         final formNames = <String, String?>{};
         for (final entry in state.varietySelectedFormId.entries) {
@@ -835,9 +740,8 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
         cropVarietyRecurrence: cropRecurrences,
         varietyGroups: varietyGroups,
         varietySelectedFormId: cropFormSelections,
-        note: _noteController.text.trim().isNotEmpty
-            ? _noteController.text.trim()
-            : null,
+        note: _noteController.text.trim(),
+        addressId: _selectedAddressId,
       );
 
       if (orderId == null) {
@@ -883,7 +787,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
       ],
       body: Stack(
         children: [
-          (_isLoadingSubscription || _isLoadingQuality)
+          _isLoadingSubscription
               ? const ConsumerLoadingScreen()
               : CustomScrollView(
                   slivers: [
@@ -903,12 +807,17 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                           _buildGrandTotalCard(theme),
                           const SizedBox(height: 20),
 
+                          // Address selector
+                          _buildAddressSelector(theme),
+                          const SizedBox(height: 16),
+
                           DuruhaTextField(
-                            label: 'Order Notes',
-                            icon: Icons.notes_rounded,
+                            label: 'Order Note',
+                            icon: Icons.edit_note_rounded,
                             controller: _noteController,
-                            maxLines: 2,
+                            maxLines: 3,
                             isRequired: false,
+                            helperText: 'e.g. Please leave at the gate',
                           ),
                           const SizedBox(height: 24),
                         ]),
@@ -973,12 +882,214 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
     );
   }
 
+  Widget _buildAddressSelector(ThemeData theme) {
+    if (_isLoadingAddresses) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_addresses.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.location_off_rounded, color: theme.colorScheme.error),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'No saved addresses found. Please add one in your profile.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final selectedAddress = _addresses.firstWhere(
+      (a) => a.addressId == _selectedAddressId,
+      orElse: () => _addresses.first,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text(
+            'Delivery Address',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        InkWell(
+          onTap: () => _showAddressPicker(theme),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_rounded,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedAddress.fullAddress,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (selectedAddress.landmark?.isNotEmpty ?? false)
+                        Text(
+                          'Landmark: ${selectedAddress.landmark}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showAddressPicker(ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Select Delivery Address',
+                  style: theme.textTheme.titleLarge,
+                ),
+              ),
+              const Divider(),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _addresses.length,
+                  itemBuilder: (context, index) {
+                    final addr = _addresses[index];
+                    final isSelected = addr.addressId == _selectedAddressId;
+                    final isVirtual = addr.addressId == 'profile';
+
+                    return ListTile(
+                      leading: Icon(
+                        isSelected
+                            ? Icons.check_circle_rounded
+                            : (isVirtual
+                                  ? Icons.account_circle_outlined
+                                  : Icons.location_on_outlined),
+                        color: isSelected ? theme.colorScheme.primary : null,
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              addr.fullAddress,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: isSelected ? FontWeight.w600 : null,
+                              ),
+                            ),
+                          ),
+                          if (isSelected || isVirtual) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isVirtual
+                                    ? theme.colorScheme.secondaryContainer
+                                    : theme.colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isVirtual ? 'PROFILE' : 'DEFAULT',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: isVirtual
+                                      ? theme.colorScheme.onSecondaryContainer
+                                      : theme.colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 8,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (addr.landmark != null &&
+                              addr.landmark!.isNotEmpty)
+                            Text(addr.landmark!),
+                          if (isVirtual)
+                            Text(
+                              'Using address set in your profile',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.secondary,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                        ],
+                      ),
+                      selected: isSelected,
+                      onTap: () {
+                        setState(() => _selectedAddressId = addr.addressId);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildModeBanner(ThemeData theme) {
     final isOrder = !_isPlan;
 
-    // ── Plan mode with CFP subscription ──────────────────────────────────────
-    if (_isPlan && _cfpSubscription != null) {
-      final sub = _cfpSubscription!;
+    // ── Plan mode with active plan subscription ───────────────────────────────
+    if (_isPlan && _activePlan != null) {
       final color = theme.colorScheme.secondaryContainer;
       final onColor = theme.colorScheme.onSecondaryContainer;
 
@@ -997,7 +1108,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    sub.planName ?? 'Consumer Future Plan',
+                    _activePlan?.planName ?? 'Subscription Plan',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: onColor,
                       fontWeight: FontWeight.w700,
@@ -1007,19 +1118,35 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            _cfpInfoRow(
-              theme,
-              Icons.price_change_outlined,
-              'Total value',
-              sub.formattedValueRange ?? 'No limit set',
-              onColor,
-            ),
+            _cfpInfoRow(theme, Icons.price_change_outlined, 'Total value', () {
+              final min = _activePlan?.minOrderValue;
+              final max = _activePlan?.maxOrderValue;
+              if (min == null && max == null) return 'No limit set';
+              final fmt = NumberFormat('#,##0.##');
+              final minStr = min != null ? '₱${fmt.format(min)}' : null;
+              final maxStr = max != null ? '₱${fmt.format(max)}' : null;
+              if (minStr != null && maxStr != null) return '$minStr – $maxStr';
+              return minStr ?? maxStr ?? 'No limit set';
+            }(), onColor),
             _cfpInfoRow(
               theme,
               Icons.date_range_outlined,
               'Schedule window',
-              '${DateFormat('MMM d').format(sub.startsAt)} – '
-                  '${DateFormat('MMM d, yyyy').format(sub.expiresAt)}',
+              (() {
+                final now = DateTime.now();
+                final start = now.add(const Duration(days: 30));
+                final end = now.add(
+                  Duration(days: _activePlan?.scheduleWindowDays ?? 365),
+                );
+                return '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
+              })(),
+              onColor,
+            ),
+            _cfpInfoRow(
+              theme,
+              Icons.workspace_premium_rounded,
+              'Quality Level',
+              _activePlan?.qualityLevel ?? 'Selection',
               onColor,
             ),
             // ── Validation warnings ───────────────────────────────────────
@@ -1032,7 +1159,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                   theme,
                   Icons.arrow_downward_rounded,
                   'Total is below the minimum plan value '
-                  '(${DuruhaFormatter.formatCurrency(sub.minTotalValue!)}). '
+                  '(${DuruhaFormatter.formatCurrency(_activePlan!.minOrderValue!)}). '
                   'Please add more items.',
                   onColor,
                 ),
@@ -1041,7 +1168,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                   theme,
                   Icons.arrow_upward_rounded,
                   'Total exceeds the maximum plan value '
-                  '(${DuruhaFormatter.formatCurrency(sub.maxTotalValue!)}). '
+                  '(${DuruhaFormatter.formatCurrency(_activePlan!.maxOrderValue!)}). '
                   'Please reduce quantities.',
                   onColor,
                 ),
@@ -1050,8 +1177,8 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                   theme,
                   Icons.calendar_month_outlined,
                   'Some scheduled dates fall outside your plan window '
-                  '(${DateFormat('MMM d').format(sub.startsAt)} – '
-                  '${DateFormat('MMM d, yyyy').format(sub.expiresAt)}). '
+                  '(${DateFormat('MMM d').format(_activePlan!.startsAt)} – '
+                  '${DateFormat('MMM d, yyyy').format(_activePlan!.endsAt)}). '
                   'Please adjust the recurring schedule.',
                   onColor,
                 ),
@@ -1261,73 +1388,85 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                       ),
                     ),
 
-                  // Price Lock Selection (Order Mode Only)
-                  if (!_isPlan) ...[
+                  // Unified Plan Credit Info
+                  if (_activePlan != null &&
+                      (_activePlan!.monthlyCreditLimit ?? 0) > 0) ...[
                     const SizedBox(height: 16),
-                    InkWell(
-                      onTap: _showPriceLockSelectionDialog,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface.withValues(
-                            alpha: 0.5,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _isOrderPriceLocked
-                                ? theme.colorScheme.tertiary
-                                : theme.colorScheme.outlineVariant.withValues(
-                                    alpha: 0.3,
-                                  ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.colorScheme.tertiary.withValues(
+                            alpha: 0.3,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _isOrderPriceLocked
-                                  ? Icons.lock_rounded
-                                  : Icons.lock_open_rounded,
-                              size: 20,
-                              color: _isOrderPriceLocked
-                                  ? theme.colorScheme.tertiary
-                                  : theme.colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Price Lock Status',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.stars_rounded,
+                            size: 20,
+                            color: theme.colorScheme.onTertiaryContainer,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _isPlan
+                                      ? 'Remaining Plan Credits'
+                                      : 'Credits to be Used',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
                                   ),
-                                  Text(
-                                    !_isOrderPriceLocked
-                                        ? 'Disabled'
-                                        : (_activeSubscription?.planName ??
-                                              'Active Subscription'),
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: _isOrderPriceLocked
-                                          ? theme.colorScheme.tertiary
-                                          : theme.colorScheme.onSurface,
-                                    ),
+                                ),
+                                Text(
+                                  DuruhaFormatter.formatCurrency(
+                                    _isPlan
+                                        ? _activePlan!.remainingCredits
+                                        : _grandTotalLocked,
                                   ),
-                                ],
-                              ),
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: _isOverLimit
+                                        ? theme.colorScheme.error
+                                        : (_isPlan
+                                              ? theme.colorScheme.onSecondary
+                                              : theme.colorScheme.onTertiary),
+                                  ),
+                                ),
+                              ],
                             ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          if (!_isPlan) ...[
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Available',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                Text(
+                                  DuruhaFormatter.formatCurrency(
+                                    _activePlan!.remainingCredits,
+                                  ),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                        ),
+                        ],
                       ),
                     ),
                   ],
@@ -1337,78 +1476,6 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  void _showPriceLockSelectionDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        final theme = Theme.of(context);
-        return AlertDialog(
-          title: const Text('Price Lock Subscription'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // None / Disable option
-                ListTile(
-                  leading: Icon(
-                    !_isOrderPriceLocked
-                        ? Icons.radio_button_checked_rounded
-                        : Icons.radio_button_unchecked_rounded,
-                    color: theme.colorScheme.primary,
-                  ),
-                  title: const Text('None / Disable'),
-                  subtitle: const Text('Turn off price lock for this order'),
-                  onTap: () {
-                    setState(() {
-                      _isOrderPriceLocked = false;
-                      _activeSubscription = null;
-                    });
-                    Navigator.pop(context);
-                  },
-                ),
-                const Divider(),
-                if (_subscriptions.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text('No active subscriptions found.'),
-                  )
-                else
-                  ..._subscriptions.map((sub) {
-                    final isActive = _activeSubscription?.cplsId == sub.cplsId;
-                    return ListTile(
-                      leading: Icon(
-                        isActive
-                            ? Icons.radio_button_checked_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        color: theme.colorScheme.tertiary,
-                      ),
-                      title: Text(sub.planName),
-                      subtitle: Text(
-                        '${sub.remainingCredits.toStringAsFixed(0)} credits remaining',
-                      ),
-                      onTap: () {
-                        setState(() {
-                          _isOrderPriceLocked = true;
-                          _activeSubscription = sub;
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  }),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -1424,6 +1491,8 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
       buttonLabel = 'Total exceeds maximum';
     } else if (_isPlan && _planDatesOutOfRange) {
       buttonLabel = 'Dates out of plan window';
+    } else if (_isOverLimit) {
+      buttonLabel = 'Insufficient Credits';
     } else {
       buttonLabel = _isPlan ? 'Confirm Plan' : 'Confirm Order';
     }
@@ -2108,7 +2177,6 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
           );
         }).toList();
 
-        final isLocked = state.varietyPriceLock[groupKey] ?? false;
         final color = _getEntryColor(produce, state, groupKey);
 
         rows.add(
@@ -2132,37 +2200,43 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            groupFormStr != null
-                                ? 'Any of: $groupFormStr'
-                                : 'Any of:',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (_isOrderPriceLocked &&
-                              _activeSubscription != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.lock_rounded,
-                                    size: 10,
-                                    color: theme.colorScheme.tertiary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Price Locked',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: theme.colorScheme.tertiary,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 9,
-                                    ),
-                                  ),
-                                ],
+                          Row(
+                            children: [
+                              Text(
+                                groupFormStr != null
+                                    ? 'Any of: $groupFormStr'
+                                    : 'Any of:',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
+                              if (!_isPlan && _activePlan != null) ...[
+                                const SizedBox(width: 8),
+                                InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      final current =
+                                          state.varietyPriceLock[groupKey] ??
+                                          false;
+                                      state.varietyPriceLock[groupKey] =
+                                          !current;
+                                    });
+                                  },
+                                  child: Icon(
+                                    state.varietyPriceLock[groupKey] == true
+                                        ? Icons.lock_rounded
+                                        : Icons.lock_open_rounded,
+                                    size: 16,
+                                    color:
+                                        state.varietyPriceLock[groupKey] == true
+                                        ? theme.colorScheme.onTertiary
+                                        : theme.colorScheme.onSurfaceVariant
+                                              .withValues(alpha: 0.5),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -2225,8 +2299,8 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
               dateNeeded:
                   state.varietyDateNeeded[key] ??
                   state.varietyDateNeeded['qty_$key'],
-              priceLock: _isOrderPriceLocked,
-              onPriceLockChanged: null,
+              priceLock: false, // Automatic with plan
+
               unit: state.selectedUnit,
               form: form,
             ),
@@ -2472,7 +2546,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
     required String unit,
     DateTime? dateNeeded,
     bool priceLock = false,
-    ValueChanged<bool>? onPriceLockChanged,
+
     int? numDates,
     bool isGrouped = false,
     String? form,
@@ -2483,7 +2557,6 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
         ? baseTotal * numDates
         : baseTotal;
     final isAny = label.toLowerCase() == 'any';
-    final isRange = !priceRange.isSingle;
 
     return Container(
       margin: isGrouped ? const EdgeInsets.only(bottom: 10) : EdgeInsets.zero,
@@ -2495,11 +2568,11 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
               color: theme.colorScheme.surfaceContainerLowest,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.4),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withValues(alpha: 0.02),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -2523,11 +2596,37 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (!_isPlan && _activePlan != null) ...[
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                final current =
+                                    state.varietyPriceLock[label] ?? false;
+                                state.varietyPriceLock[label] = !current;
+                              });
+                            },
+                            child: Icon(
+                              state.varietyPriceLock[label] == true
+                                  ? Icons.lock_rounded
+                                  : Icons.lock_open_rounded,
+                              size: 16,
+                              color: state.varietyPriceLock[label] == true
+                                  ? theme.colorScheme.onTertiary
+                                  : theme.colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (form != null && form.isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -2542,57 +2641,27 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                   ],
                 ),
               ),
-              // Price-lock checkbox moved into the price column below
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (onPriceLockChanged != null) ...[
+                  if (priceLock) ...[
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (priceLock && !_isPlan) ...[
-                          Icon(
-                            Icons.lock_outline_rounded,
-                            size: 11,
-                            color: theme.colorScheme.tertiary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Price locked',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.tertiary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        Text(
-                          'LOCK',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 8,
-                            letterSpacing: 0.5,
-                          ),
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 11,
+                          color: theme.colorScheme.tertiary,
                         ),
                         const SizedBox(width: 4),
-                        SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: Checkbox(
-                            value: priceLock,
-                            onChanged: (val) =>
-                                onPriceLockChanged(val ?? false),
-                            activeColor: theme.colorScheme.tertiary,
-                            side: BorderSide(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              width: 2,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
+                        Text(
+                          'Price Protected',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.tertiary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 9,
                           ),
                         ),
                       ],
@@ -2613,9 +2682,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
                           return '${DuruhaFormatter.formatCurrency(displayTotal)}–${DuruhaFormatter.formatCurrency(displayMaxTotal)}';
                         }
 
-                        return isAny || isRange
-                            ? DuruhaFormatter.formatCurrency(displayTotal)
-                            : DuruhaFormatter.formatCurrency(displayTotal);
+                        return DuruhaFormatter.formatCurrency(displayTotal);
                       }(),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -2860,6 +2927,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
       final totalStr = isRange ? '${fmt(estMin)}–${fmt(estMax)}' : fmt(estMin);
 
       return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _pricingRow(
             theme,
@@ -2872,6 +2940,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _pricingRow(
           theme,
@@ -2918,297 +2987,8 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
     );
   }
 
-  // ─── Price Lock Banner (Order Mode) ──────────────────────────────────────
-
-  Widget _buildPriceLockSummaryBanner(
-    ThemeData theme, {
-    bool showChangeButton = true,
-  }) {
-    if (_activeSubscription == null) {
-      return const SizedBox.shrink();
-    }
-
-    final sub = _activeSubscription!;
-    final totalLocked = _calculateTotalLockedCredits();
-    final totalUnlocked = _calculateTotalUnlockedCredits();
-    final newRemaining = sub.remainingCredits - totalLocked;
-    final isOver = _isOverLimit;
-    final baseColor = isOver
-        ? theme.colorScheme.errorContainer
-        : theme.colorScheme.tertiaryContainer;
-    final onColor = isOver
-        ? theme.colorScheme.error
-        : theme.colorScheme.onTertiaryContainer;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: baseColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isOver ? theme.colorScheme.error : theme.colorScheme.tertiary,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.security_rounded, color: onColor),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Price Lock Active',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: onColor,
-                  ),
-                ),
-              ),
-              if (showChangeButton)
-                TextButton.icon(
-                  onPressed: () => _showPriceLockPicker(context, theme),
-                  icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
-                  label: const Text('Change'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: onColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'CPLS ID: ${sub.cplsId.substring(0, 8)}…',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: onColor.withValues(alpha: 0.8),
-            ),
-          ),
-          // Price-lock note
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: onColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline_rounded, size: 14, color: onColor),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '⚠️ Price Lock Note: Final price lock is determined after the transaction. '
-                    'You will only pay the locked amount if the available price '
-                    'meets or exceeds it. Price might change anytime.',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: onColor,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Divider(color: onColor.withValues(alpha: 0.2), height: 1),
-          const SizedBox(height: 12),
-          _creditRow(
-            theme,
-            'Locked Total (max):',
-            DuruhaFormatter.formatCurrency(totalLocked),
-            onColor,
-          ),
-          const SizedBox(height: 4),
-          _creditRow(
-            theme,
-            'Remaining Credits:',
-            DuruhaFormatter.formatCurrency(newRemaining),
-            onColor,
-            bold: true,
-          ),
-          const SizedBox(height: 4),
-          Divider(color: onColor.withValues(alpha: 0.2), height: 1),
-          _creditRow(
-            theme,
-            'Unlocked Total:',
-            DuruhaFormatter.formatCurrency(totalUnlocked),
-            onColor.withValues(alpha: 0.7),
-          ),
-          if (isOver) ...[
-            const SizedBox(height: 8),
-            Text(
-              'You have exceeded your price lock credit limit. Please uncheck some items.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _creditRow(
-    ThemeData theme,
-    String label,
-    String value,
-    Color color, {
-    bool bold = false,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: theme.textTheme.bodyMedium?.copyWith(color: color)),
-        Text(
-          value,
-          style:
-              (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)
-                  ?.copyWith(fontWeight: FontWeight.bold, color: color),
-        ),
-      ],
-    );
-  }
-
-  void _showPriceLockPicker(BuildContext context, ThemeData theme) {
-    if (_subscriptions.isEmpty) {
-      DuruhaSnackBar.showInfo(
-        context,
-        'No active Price Lock subscriptions found.',
-      );
-      return;
-    }
-
-    DuruhaBottomSheet.show(
-      context: context,
-      title: 'Select Price Lock',
-      icon: Icons.security_rounded,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildPriceLockSummaryBanner(theme, showChangeButton: false),
-          const SizedBox(height: 16),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            itemCount: _subscriptions.length + 1,
-            itemBuilder: (_, index) {
-              if (index == 0) {
-                final isSel = _activeSubscription == null;
-                return ListTile(
-                  leading: const Icon(Icons.cancel_outlined),
-                  title: const Text('No Price Lock'),
-                  trailing: isSel
-                      ? Icon(
-                          Icons.check_circle_rounded,
-                          color: theme.colorScheme.primary,
-                        )
-                      : null,
-                  selected: isSel,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  onTap: () {
-                    setState(() => _activeSubscription = null);
-                    Navigator.pop(context);
-                  },
-                );
-              }
-
-              final sub = _subscriptions[index - 1];
-              final isSel = _activeSubscription?.cplsId == sub.cplsId;
-              final isActive = sub.status == 'active';
-
-              return Container(
-                margin: const EdgeInsets.only(top: 8),
-                child: ListTile(
-                  leading: Icon(
-                    Icons.security_rounded,
-                    color: isActive
-                        ? theme.colorScheme.tertiary
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                  title: Text('CPLS: ${sub.cplsId.substring(0, 8)}…'),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Remaining: ${DuruhaFormatter.formatCurrency(sub.remainingCredits.toDouble())}',
-                        style: TextStyle(
-                          color: isActive ? theme.colorScheme.tertiary : null,
-                          fontWeight: isActive ? FontWeight.bold : null,
-                        ),
-                      ),
-                      Text(
-                        'Expires: ${DateFormat('MMM dd, yyyy').format(sub.endsAt)}',
-                      ),
-                    ],
-                  ),
-                  trailing: isSel
-                      ? Icon(
-                          Icons.check_circle_rounded,
-                          color: theme.colorScheme.tertiary,
-                        )
-                      : null,
-                  enabled: isActive && sub.remainingCredits > 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  onTap: () {
-                    if (!isActive || sub.remainingCredits <= 0) return;
-                    setState(() => _activeSubscription = sub);
-                    Navigator.pop(context);
-                  },
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _saveDraft(String cropId) async {
-    final state = widget.cropStates[cropId];
-    if (state == null) return;
-
-    final quantities = <String, double>{};
-    for (final entry in state.varietyQuantityControllers.entries) {
-      final val = double.tryParse(entry.value.text);
-      if (val != null && val > 0) quantities[entry.key] = val;
-    }
-
-    await TransactionDraftService.saveDraft(
-      cropId,
-      CropDraftData(
-        selectedHarvestDates: state.selectedHarvestDates,
-        selectedUnit: state.selectedUnit,
-        varietyQuantities: quantities,
-        varietyAvailableDates: state.varietyAvailableDates,
-        varietyDisposalDates: state.varietyDisposalDates,
-        varietyDateNeeded: state.varietyDateNeeded,
-        varietyGroups: state.varietyGroups,
-        simulatedDemand: state.simulatedDemand,
-        perDatePledges: state.perDatePledges,
-        dateSpecificDemand: state.dateSpecificDemand,
-        varietySelectedFormId: state.varietySelectedFormId,
-        varietyPriceLock: state.varietyPriceLock,
-        varietyRecurrence: state.varietyRecurrence,
-      ),
-      _txMode,
-    );
-  }
-
   Widget _buildQualitySubscriptionBanner(ThemeData theme) {
-    if (_qualitySubscription == null) {
+    if (_activePlan?.qualityLevel == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
@@ -3236,7 +3016,6 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
       );
     }
 
-    final sub = _qualitySubscription!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -3259,9 +3038,9 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Active Quality: ${sub.tierName}',
+                  'Quality: ${_activePlan!.qualityLevel!}',
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
+                    color: theme.colorScheme.onPrimary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -3285,8 +3064,7 @@ class _TransactionReviewScreenState extends State<TransactionReviewScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            sub.description ??
-                'Your subscription unlocks premium quality for all produce.',
+            'Your subscription unlocks premium quality for all produce.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onPrimaryContainer,
             ),

@@ -11,11 +11,8 @@ import 'package:duruha/features/admin/price_calculator/presentation/price_calcul
 import 'package:duruha/features/admin/settings/presentation/admin_settings_screen.dart';
 import 'package:duruha/features/farmer/features/manage/offers/presentation/offer_detail_loader_screen.dart';
 import 'package:duruha/features/consumer/features/manage/presentation/order_details_screen.dart';
-import 'package:duruha/features/consumer/features/subscription/pricelock/presentation/price_lock_subscription_details_screen.dart';
-import 'package:duruha/features/consumer/features/subscription/pricelock/presentation/price_lock_subscriptions_screen.dart';
-import 'package:duruha/features/consumer/features/subscription/futureplan/presentation/consumer_future_plan_details_screen.dart';
-import 'package:duruha/features/consumer/features/subscription/futureplan/presentation/consumer_future_plan_subscriptions_screen.dart';
 import 'package:duruha/features/consumer/features/subscription/presentation/subscriptions_hub_screen.dart';
+import 'package:duruha/features/consumer/features/subscription/presentation/plan_details_screen.dart';
 import 'package:duruha/features/consumer/features/shop/presentation/shop_screen.dart';
 import 'package:duruha/features/consumer/features/profile/presentation/profile_screen.dart';
 import 'package:duruha/features/landing/presentation/landing_screen.dart';
@@ -23,11 +20,9 @@ import 'package:duruha/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/profile_screen.dart';
 import 'package:duruha/features/farmer/features/main/presentation/main_screen.dart';
-import 'package:duruha/features/farmer/features/main/presentation/crop_study_screen.dart';
-
 import 'package:duruha/features/farmer/features/sales/presentation/sales_screen.dart';
 import 'package:duruha/features/farmer/features/manage/shared/presentation/manage_screen.dart';
-import 'package:duruha/features/farmer/features/manage/pledge/presentation/pledge_detail_screen.dart';
+
 import 'package:duruha/features/farmer/features/biz/presentation/biz_screen.dart';
 import 'package:duruha/features/farmer/features/programs/presentation/programs_screen.dart';
 import 'package:duruha/features/farmer/features/tx/presentation/transaction_create_screen.dart';
@@ -35,7 +30,7 @@ import 'package:duruha/features/consumer/features/tx/presentation/transaction_cr
     as consumer_tx;
 import 'package:duruha/features/consumer/features/manage/presentation/manage_screen.dart';
 import 'package:duruha/features/farmer/features/profile/presentation/ratings_screen.dart';
-import 'package:duruha/features/farmer/shared/domain/pledge_model.dart';
+
 import 'package:duruha/features/farmer/features/subscription/presentation/subscriptions_hub_screen.dart'
     as farmer_hub;
 import 'package:duruha/features/farmer/features/subscription/pricelock/presentation/farmer_price_lock_subscriptions_screen.dart';
@@ -551,36 +546,10 @@ class DuruhaApp extends StatelessWidget {
           );
         }
         break;
-      case '/consumer/subscriptions/pricelock_details':
+      case '/consumer/subscriptions/plan_details':
         if (args is String) {
           return _protected(
-            PriceLockSubscriptionDetailsScreen(cplsId: args),
-            role: UserRole.consumer,
-          );
-        }
-        break;
-      case '/consumer/subscriptions/pricelock':
-        return _protected(
-          const PriceLockSubscriptionsScreen(),
-          role: UserRole.consumer,
-        );
-      case '/consumer/subscriptions/cfp':
-        return _protected(
-          const ConsumerFuturePlanSubscriptionsScreen(),
-          role: UserRole.consumer,
-        );
-      case '/consumer/subscriptions/cfp_details':
-        if (args is String) {
-          return _protected(
-            ConsumerFuturePlanDetailsScreen(cfpsId: args),
-            role: UserRole.consumer,
-          );
-        } else if (args is Map<String, dynamic>) {
-          return _protected(
-            ConsumerFuturePlanDetailsScreen(
-              cfpsId: args['cfpsId'],
-              subscription: args['subscription'],
-            ),
+            ConsumerPlanDetailsScreen(cpsId: args),
             role: UserRole.consumer,
           );
         }
@@ -618,14 +587,7 @@ class DuruhaApp extends StatelessWidget {
     switch (routeName) {
       case '/farmer/main':
         return _protected(const FarmerMainScreen(), role: UserRole.farmer);
-      case '/farmer/pledge/study':
-        if (args is String) {
-          return _protected(
-            CropStudyScreen(cropId: args),
-            role: UserRole.farmer,
-          );
-        }
-        break;
+
       case '/farmer/sales':
         return _protected(const FarmerSalesScreen(), role: UserRole.farmer);
       case '/farmer/biz':
@@ -681,14 +643,6 @@ class DuruhaApp extends StatelessWidget {
         }
         break;
       default:
-        if (routeName.startsWith('/farmer/monitor/')) {
-          final id = routeName.replaceFirst('/farmer/monitor/', '');
-          final pledge = args is HarvestPledge ? args : null;
-          return _protected(
-            PledgeDetailScreen(pledgeId: id, pledge: pledge),
-            role: UserRole.farmer,
-          );
-        }
     }
     return null;
   }

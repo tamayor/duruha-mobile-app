@@ -5,7 +5,8 @@ create table public.consumer_orders (
     consumer_id text null,
     note text null,
     is_active boolean null,
-    payment_method public.payment_method not null default 'Cash'::payment_method,
+    payment_method text null,
+    payment_id text null,
     constraint consumer_orders_pkey primary key (order_id),
     constraint consumer_orders_consumer_id_fkey foreign KEY (consumer_id) references user_consumers (consumer_id) on update CASCADE on delete CASCADE
 ) TABLESPACE pg_default;

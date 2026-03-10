@@ -235,8 +235,8 @@ class DuruhaTheme {
         // ========================
         // ERROR
         // ========================
-        error: Color(0xFFFFB4AB),
-        onError: Color(0xFF690005),
+        error: Color(0xFF690005),
+        onError: Color(0xFFFFB4AB),
         errorContainer: Color(0xFF93000A),
         onErrorContainer: Color(0xFFFFDAD6),
 

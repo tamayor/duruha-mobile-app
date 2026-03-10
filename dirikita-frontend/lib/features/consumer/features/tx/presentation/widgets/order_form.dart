@@ -1138,7 +1138,7 @@ class _OrderFormState extends State<OrderForm> {
     if (hasRule) {
       final d = RecurringPickerUtil.decode(currentRule);
       if (d.startDate != null && d.endDate != null) {
-        final fmt = (DateTime dt) =>
+        String fmt(DateTime dt) =>
             '${dt.month}/${dt.day}/${dt.year.toString().substring(2)}';
         final dates = RecurringPickerUtil.computeDates(currentRule);
         subLabel =

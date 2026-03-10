@@ -16,11 +16,11 @@ class CropSelectionState {
   // rrule string per variety/input key (plan mode recurring schedules)
   Map<String, String?> varietyRecurrence = {};
 
+  // Price lock toggles per variety/group key
+  Map<String, bool> varietyPriceLock = {};
+
   // Track selected listing/form ID per variety (Key: variety name, Value: listing_id)
   Map<String, String?> varietySelectedFormId = {};
-
-  // Track price lock status per variety/item (order mode only)
-  Map<String, bool> varietyPriceLock = {};
 
   String selectedUnit;
   List<String> selectedVariants;
@@ -47,18 +47,18 @@ class CropSelectionState {
     required this.selectedVariants,
     Map<String, TextEditingController>? varietyQuantityControllers,
     Map<String, String?>? varietySelectedFormId,
-    Map<String, bool>? varietyPriceLock,
     Map<String, DateTime?>? varietyAvailableDates,
     Map<String, DateTime?>? varietyDisposalDates,
     Map<String, DateTime?>? varietyDateNeeded,
     Map<String, String?>? varietyRecurrence,
+    Map<String, bool>? varietyPriceLock,
   }) : varietyQuantityControllers = varietyQuantityControllers ?? {},
        varietySelectedFormId = varietySelectedFormId ?? {},
-       varietyPriceLock = varietyPriceLock ?? {},
        varietyAvailableDates = varietyAvailableDates ?? {},
        varietyDisposalDates = varietyDisposalDates ?? {},
        varietyDateNeeded = varietyDateNeeded ?? {},
-       varietyRecurrence = varietyRecurrence ?? {};
+       varietyRecurrence = varietyRecurrence ?? {},
+       varietyPriceLock = varietyPriceLock ?? {};
 
   Map<DateTime, Map<String, double>> get perDatePledgesMap {
     final map = <DateTime, Map<String, double>>{};

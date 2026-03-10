@@ -16,7 +16,7 @@ class OfferDetailLoaderScreen extends StatefulWidget {
 }
 
 class _OfferDetailLoaderScreenState extends State<OfferDetailLoaderScreen> {
-  late Future<({HarvestOffer offer, ProduceGroup produce})> _future;
+  late Future<({HarvestOffer offer, ProduceOfferGroup produce})> _future;
 
   @override
   void initState() {
@@ -24,7 +24,7 @@ class _OfferDetailLoaderScreenState extends State<OfferDetailLoaderScreen> {
     _future = _loadOfferDetails();
   }
 
-  Future<({HarvestOffer offer, ProduceGroup produce})>
+  Future<({HarvestOffer offer, ProduceOfferGroup produce})>
   _loadOfferDetails() async {
     final response = await supabase
         .from('farmer_offers')
@@ -47,11 +47,11 @@ class _OfferDetailLoaderScreenState extends State<OfferDetailLoaderScreen> {
     final variety = response['produce_varieties'];
     final produce = variety['produce'];
 
-    final produceGroup = ProduceGroup(
+    final produceGroup = ProduceOfferGroup(
       produceId: produce['id'],
       produceLocalName: produce['english_name'] ?? '',
       produceEnglishName: produce['english_name'] ?? '',
-      varieties: [],
+      dates: [],
     );
 
     final String availableFromStr =
@@ -77,6 +77,9 @@ class _OfferDetailLoaderScreenState extends State<OfferDetailLoaderScreen> {
       availableTo: response['available_to'] != null
           ? DateTime.parse(response['available_to'])
           : DateTime(2100),
+      createdAt: response['created_at'] != null
+          ? DateTime.parse(response['created_at'])
+          : DateTime.now(),
       ordersTotalPrice: 0,
       farmerTotalEarnings: 0,
       orders: [],

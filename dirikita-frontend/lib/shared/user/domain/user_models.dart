@@ -6,7 +6,9 @@ class UserProfile {
   final String name;
   final String? email;
   final String? phone;
-  final String? barangay;
+  final String? addressId;
+  final String? addressLine1;
+  final String? addressLine2;
   final String? city;
   final String? province;
   final String? landmark;
@@ -23,7 +25,9 @@ class UserProfile {
     required this.name,
     this.email,
     this.phone,
-    this.barangay,
+    this.addressId,
+    this.addressLine1,
+    this.addressLine2,
     this.city,
     this.province,
     this.landmark,
@@ -47,7 +51,9 @@ class UserProfile {
       'name': name,
       'email': email,
       'phone': phone,
-      'barangay': barangay,
+      'address_id': addressId,
+      'address_line_1': addressLine1,
+      'address_line_2': addressLine2,
       'city': city,
       'province': province,
       'landmark': landmark,
@@ -86,7 +92,9 @@ class UserProfile {
       name: json['name'] as String? ?? '',
       email: json['email'] as String?,
       phone: json['phone'] as String? ?? '',
-      barangay: json['barangay'] as String? ?? '',
+      addressId: json['address_id'] as String?,
+      addressLine1: json['address_line_1'] as String?,
+      addressLine2: json['address_line_2'] as String?,
       city: json['city'] as String? ?? '',
       province: json['province'] as String? ?? '',
       landmark: json['landmark'] as String? ?? '',

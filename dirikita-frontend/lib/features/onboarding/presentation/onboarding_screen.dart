@@ -47,7 +47,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final _phoneController = TextEditingController();
   final _telephoneController = TextEditingController();
   final _streetAddressController = TextEditingController();
-  final _barangayController = TextEditingController();
   final _cityController = TextEditingController();
   final _provinceController = TextEditingController();
   final _postalCodeController = TextEditingController();
@@ -56,7 +55,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   // Consumer Data
   String _consumerSegment = 'Household';
   String _cookingFrequency = 'Weekly';
-  List<String> _qualityPreferences = ['Class A'];
 
   // Farmer Data
   final _farmAliasController = TextEditingController();
@@ -105,7 +103,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _telephoneController.dispose();
     _searchController.dispose(); // Dispose search controller
     _streetAddressController.dispose();
-    _barangayController.dispose();
     _cityController.dispose();
     _provinceController.dispose();
     _postalCodeController.dispose();
@@ -160,7 +157,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       await prefs.setString('onboarding_phone', _phoneController.text);
       await prefs.setString('onboarding_telephone', _telephoneController.text);
       await prefs.setString('onboarding_street', _streetAddressController.text);
-      await prefs.setString('onboarding_barangay', _barangayController.text);
       await prefs.setString('onboarding_city', _cityController.text);
       await prefs.setString('onboarding_province', _provinceController.text);
       await prefs.setString('onboarding_postal', _postalCodeController.text);
@@ -181,7 +177,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       // Consumer
       await prefs.setString('onboarding_segment', _consumerSegment);
       await prefs.setString('onboarding_cooking', _cookingFrequency);
-      await prefs.setStringList('onboarding_quality', _qualityPreferences);
       await prefs.setStringList('onboarding_demands', _consumerFavProduce);
 
       // Farmer
@@ -213,8 +208,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               prefs.getString('onboarding_telephone') ?? '';
           _streetAddressController.text =
               prefs.getString('onboarding_street') ?? '';
-          _barangayController.text =
-              prefs.getString('onboarding_barangay') ?? '';
           _cityController.text = prefs.getString('onboarding_city') ?? '';
           _provinceController.text =
               prefs.getString('onboarding_province') ?? '';
@@ -239,10 +232,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           _consumerSegment =
               prefs.getString('onboarding_segment') ?? 'Household';
           _cookingFrequency = prefs.getString('onboarding_cooking') ?? 'Weekly';
-          _qualityPreferences.clear();
-          _qualityPreferences.addAll(
-            prefs.getStringList('onboarding_quality') ?? ['Class A'],
-          );
 
           _consumerFavProduce.clear();
           _consumerFavProduce.addAll(
@@ -289,7 +278,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         'phone': _phoneController.text,
         'telephone': _telephoneController.text,
         'streetAddress': _streetAddressController.text,
-        'barangay': _barangayController.text,
         'city': _cityController.text,
         'province': _provinceController.text,
         'postalCode': _postalCodeController.text,
@@ -304,7 +292,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         'consumerProfile': {
           'segment': _consumerSegment,
           'cookingFreq': _cookingFrequency,
-          'qualityPrefs': _qualityPreferences,
           'demands': _consumerFavProduce,
         },
       if (_userRole == 'Farmer')
@@ -551,7 +538,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       phoneController: _phoneController,
       telephoneController: _telephoneController,
       streetAddressController: _streetAddressController,
-      barangayController: _barangayController,
       cityController: _cityController,
       provinceController: _provinceController,
       postalCodeController: _postalCodeController,
@@ -602,17 +588,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               ? ConsumerProfileStep(
                   initialSegment: _consumerSegment,
                   initialCookingFreq: _cookingFrequency,
-                  initialQualityPrefs: _qualityPreferences,
                   onSegmentChanged: (v) {
                     _consumerSegment = v;
                     _saveState();
                   },
                   onCookingFreqChanged: (v) {
                     _cookingFrequency = v;
-                    _saveState();
-                  },
-                  onQualityChanged: (v) {
-                    _qualityPreferences = v;
                     _saveState();
                   },
                 )

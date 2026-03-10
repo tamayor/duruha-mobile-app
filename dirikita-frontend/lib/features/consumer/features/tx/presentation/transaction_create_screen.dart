@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
-import 'package:duruha/features/consumer/features/subscription/futureplan/domain/consumer_future_plan_subscription_model.dart';
+import 'package:duruha/features/consumer/features/subscription/data/consumer_plan_repository.dart';
+import 'package:duruha/features/consumer/features/subscription/domain/consumer_plan_subscription_model.dart';
 import 'package:duruha/features/consumer/features/tx/presentation/widgets/faq_customer_order_note.dart';
 import 'package:duruha/shared/produce/data/produce_repository.dart';
 import 'package:duruha/shared/produce/domain/produce_model.dart';
@@ -13,6 +14,7 @@ import '../data/transaction_draft_service.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'transaction_review_screen.dart';
 import 'package:duruha/core/faq/faq.dart';
+import 'widgets/recurring_picker.dart';
 
 class TransactionCreateScreen extends StatefulWidget {
   final List<String> selectedCropIds;
@@ -49,48 +51,24 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
 
   bool get _isPlan => _txMode == TransactionMode.plan;
 
-  ConsumerFuturePlanSubscription? _cfpSubscription;
+  ConsumerPlanSubscription? _activePlan;
 
   @override
   void initState() {
     super.initState();
     _loadData();
     _subscribeRealtime();
-    if (_isPlan) _loadCfpSubscription();
+    if (_isPlan) _loadActivePlan();
   }
 
-  Future<void> _loadCfpSubscription() async {
+  Future<void> _loadActivePlan() async {
     try {
-      final userId = await SessionService.getUserId();
-      if (userId == null) return;
-      final supabase = Supabase.instance.client;
-      // First resolve consumer_id from user_id
-      final consumerRow = await supabase
-          .from('user_consumers')
-          .select('consumer_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-      final consumerId = consumerRow?['consumer_id'] as String?;
+      final consumerId = await SessionService.getRoleId();
       if (consumerId == null) return;
-
-      // Fetch active CFP subscription joined with config via explicit FK
-      final response = await supabase
-          .from('consumer_future_plan_subscriptions')
-          .select('*, consumer_future_plan_configs!cfp_subs_config_fkey(*)')
-          .eq('consumer_id', consumerId)
-          .eq('is_active', true)
-          .order('starts_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-      if (response != null && mounted) {
-        setState(() {
-          _cfpSubscription = ConsumerFuturePlanSubscription.fromJson(
-            Map<String, dynamic>.from(response),
-          );
-        });
-      }
+      final plan = await ConsumerPlanRepository().getActivePlan(consumerId);
+      if (mounted) setState(() => _activePlan = plan);
     } catch (e) {
-      debugPrint('⚠️ [CFP] Failed to load subscription: $e');
+      debugPrint('⚠️ [PLAN] Failed to load active plan: $e');
     }
   }
 
@@ -173,9 +151,7 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
           varietyDateNeeded: draft?.varietyDateNeeded ?? {},
           varietyRecurrence: draft?.varietyRecurrence ?? {},
           varietySelectedFormId: draft?.varietySelectedFormId ?? {},
-          // Price locks are NEVER restored — reset on every session entry
-          // to prevent stale locks from bleeding between mode switches.
-          varietyPriceLock: {},
+          // Price locks are no longer tracked per-item.
         );
 
         if (draft != null) {
@@ -294,7 +270,6 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
         perDatePledges: state.perDatePledges,
         dateSpecificDemand: state.dateSpecificDemand,
         varietySelectedFormId: state.varietySelectedFormId,
-        varietyPriceLock: state.varietyPriceLock,
         varietyRecurrence: state.varietyRecurrence,
       ),
       _txMode,
@@ -433,6 +408,14 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
         );
         return false;
       }
+      final dates = RecurringPickerUtil.computeDates(recurrence);
+      if (dates.isEmpty) {
+        DuruhaSnackBar.showWarning(
+          context,
+          'The recurring schedule for "$v" in ${produce.nameEnglish} yields no dates. Please adjust it.',
+        );
+        return false;
+      }
     }
 
     // ── 3. Validate groups ────────────────────────────────────────────────────
@@ -459,6 +442,14 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
         DuruhaSnackBar.showWarning(
           context,
           'Please set a recurring schedule for Group ${i + 1} in ${produce.nameEnglish}.',
+        );
+        return false;
+      }
+      final dates = RecurringPickerUtil.computeDates(recurrence);
+      if (dates.isEmpty) {
+        DuruhaSnackBar.showWarning(
+          context,
+          'The recurring schedule for Group ${i + 1} in ${produce.nameEnglish} yields no dates. Please adjust it.',
         );
         return false;
       }
@@ -559,7 +550,7 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
             ? const Center(child: Text('No crops selected'))
             : DuruhaScrollHideWrapper(
                 bar: _buildModeNote(theme),
-                hideHeight: 100,
+                hideHeight: 120,
                 body: CustomScrollView(slivers: slivers),
               ),
         floatingActionButton: _selectedProduce.isNotEmpty && !_isLoading
@@ -632,8 +623,14 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
             onDisposalDatePicked: (_) => _saveDraft(produce.id),
             onStateChanged: () => _saveDraft(produce.id),
             onProduceChanged: () => _reloadProduce(produce.id),
-            planStartDate: _isPlan ? _cfpSubscription?.startsAt : null,
-            planEndDate: _isPlan ? _cfpSubscription?.expiresAt : null,
+            planStartDate: _isPlan
+                ? DateTime.now().add(const Duration(days: 30))
+                : null,
+            planEndDate: _isPlan
+                ? DateTime.now().add(
+                    Duration(days: _activePlan?.scheduleWindowDays ?? 365),
+                  )
+                : null,
           ),
         ],
       ),
@@ -641,9 +638,9 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
   }
 
   Widget _buildModeNote(ThemeData theme) {
-    // Plan mode: show CFP subscription info when available
-    if (_isPlan && _cfpSubscription != null) {
-      final sub = _cfpSubscription!;
+    // Plan or Order mode: show unified plan info when available
+    if (_activePlan != null) {
+      final sub = _activePlan!;
       final color = theme.colorScheme.onPrimary;
       return Container(
         margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -658,11 +655,17 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.event_repeat_rounded, size: 18, color: color),
+                Icon(
+                  _isPlan
+                      ? Icons.event_repeat_rounded
+                      : Icons.shopping_bag_outlined,
+                  size: 18,
+                  color: color,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    sub.planName ?? 'Consumer Future Plan',
+                    'Active Plan: ${sub.planName}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: color,
                       fontWeight: FontWeight.w700,
@@ -672,20 +675,55 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            _cfpInfoRow(
-              theme,
-              Icons.price_change_outlined,
-              'Total value',
-              sub.formattedValueRange ?? 'N/A',
-              color,
-            ),
-            _cfpInfoRow(
-              theme,
-              Icons.date_range_outlined,
-              'Schedule window',
-              '${DateFormat('MMM d').format(sub.startsAt)} – ${DateFormat('MMM d, yyyy').format(sub.expiresAt)}',
-              color,
-            ),
+            if (sub.monthlyCreditLimit != null && sub.monthlyCreditLimit! > 0)
+              _cfpInfoRow(
+                theme,
+                Icons.account_balance_wallet_outlined,
+                'Monthly credit limit',
+                '₱${NumberFormat('#,##0.##').format(sub.monthlyCreditLimit)}',
+                color,
+              ),
+            if (_isPlan) ...[
+              _cfpInfoRow(
+                theme,
+                Icons.price_change_outlined,
+                'Order range',
+                () {
+                  final min = sub.minOrderValue;
+                  final max = sub.maxOrderValue;
+                  if (min == null && max == null) return 'No limit';
+                  final fmt = NumberFormat('#,##0.##');
+                  final minStr = min != null ? '₱${fmt.format(min)}' : null;
+                  final maxStr = max != null ? '₱${fmt.format(max)}' : null;
+                  if (minStr != null && maxStr != null)
+                    return '$minStr – $maxStr';
+                  return minStr ?? maxStr ?? 'No limit';
+                }(),
+                color,
+              ),
+              _cfpInfoRow(
+                theme,
+                Icons.date_range_outlined,
+                'Schedule window',
+                (() {
+                  final now = DateTime.now();
+                  final start = now.add(const Duration(days: 30));
+                  final end = now.add(
+                    Duration(days: sub.scheduleWindowDays ?? 365),
+                  );
+                  return '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
+                })(),
+                color,
+              ),
+            ],
+            if (!_isPlan &&
+                (sub.monthlyCreditLimit == null || sub.monthlyCreditLimit == 0))
+              Text(
+                'Enjoy premium benefits with your active plan.',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color.withValues(alpha: 0.7),
+                ),
+              ),
           ],
         ),
       );

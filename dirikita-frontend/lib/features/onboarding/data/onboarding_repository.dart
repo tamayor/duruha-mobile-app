@@ -15,9 +15,25 @@ class OnboardingRepository {
       String? consumerId;
 
       if (roleStr == 'FARMER') {
-        farmerId = await _generateFarmerId();
+        // Check if already exists
+        final existing = await supabase
+            .from('user_farmers')
+            .select('farmer_id')
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle();
+
+        farmerId = existing?['farmer_id'] ?? await _generateFarmerId();
       } else if (roleStr == 'CONSUMER') {
-        consumerId = await _generateConsumerId();
+        // Check if already exists
+        final existing = await supabase
+            .from('user_consumers')
+            .select('consumer_id')
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle();
+
+        consumerId = existing?['consumer_id'] ?? await _generateConsumerId();
       }
 
       // 1. Prepare Base User Data
@@ -25,7 +41,6 @@ class OnboardingRepository {
         'role': roleStr,
         'name': data['basicInfo']?['name'],
         'phone': data['basicInfo']?['phone'],
-        'barangay': data['basicInfo']?['barangay'],
         'city': data['basicInfo']?['city'],
         'province': data['basicInfo']?['province'],
         'postal_code': data['basicInfo']?['postalCode'],
@@ -38,6 +53,7 @@ class OnboardingRepository {
                 data['basicInfo']?['longitude'] != null
             ? 'POINT(${data['basicInfo']['longitude']} ${data['basicInfo']['latitude']})'
             : null,
+        'address_id': data['basicInfo']?['addressId'],
       };
 
       // 2. Update Base Users Table
@@ -72,7 +88,6 @@ class OnboardingRepository {
           'consumer_id': consumerId,
           'consumer_segment': consumerData['segment'],
           'cooking_frequency': consumerData['cookingFreq'],
-          'quality_preferences': consumerData['qualityPrefs'],
           'fav_produce': consumerData['demands'],
         });
       }

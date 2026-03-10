@@ -1,5 +1,6 @@
 import 'package:duruha/supabase_config.dart';
 import 'package:flutter/material.dart';
+import 'package:duruha/core/helpers/duruha_color_helper.dart';
 import 'package:duruha/core/widgets/badge/duruha_delivery_status_badge.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
@@ -37,9 +38,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   final _repo = OrdersRepository();
 
   bool _compactProduce = true;
-  bool _compactGroup = false;
+  bool _compactGroup = true;
   final Set<int> _produceManualToggles = {};
   final Set<String> _groupManualToggles = {};
+
+  // Tracks the mutable note JSON string for in-screen edits.
+  late String _currentNote;
+
+  // Tracks per-produce notes (cop.note) keyed by copId, populated from SQL.
+  final Map<String, String> _produceNotes = {};
 
   @override
   void initState() {
@@ -47,17 +54,28 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     // HitPayService listener is now initialized globally in main.dart
     if (widget.match != null) {
       _match = widget.match!;
+      _currentNote = _match.note ?? '';
+      _populateProduceNotes(_match);
       if (_isSummaryMatch(_match)) _fetchFullDetails(_match.offerOrderMatchId);
     } else if (widget.orderId != null) {
       _isLoading = true;
+      _currentNote = '';
       _fetchFullDetails(widget.orderId!);
     } else {
       _hasError = true;
+      _currentNote = '';
+    }
+  }
+
+  void _populateProduceNotes(ConsumerOrderMatch match) {
+    for (final item in match.produceItems) {
+      final key = item.copId ?? 'produce-${item.itemIndex}';
+      _produceNotes[key] = item.note ?? '';
     }
   }
 
   bool _isSummaryMatch(ConsumerOrderMatch match) =>
-      match.produceItems.isNotEmpty &&
+      match.produceItems.isEmpty ||
       match.produceItems.every((item) => item.varieties.isEmpty);
 
   Future<void> _fetchFullDetails(String orderId) async {
@@ -67,6 +85,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       if (mounted) {
         setState(() {
           _match = fullMatch;
+          _currentNote = fullMatch.note ?? '';
+          _populateProduceNotes(fullMatch);
           _isLoading = false;
         });
       }
@@ -84,8 +104,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   // ─── helpers ──────────────────────────────────────────────────────────────
 
   double _selectionSubtotal(VarietySelection vg, bool isPriceLock) {
-    if (vg.deliveryStatus == 'CANCELLED') return 0.0;
-    double unitPrice = vg.variablePrice ?? 0.0;
+    double unitPrice = vg.dtcPrice ?? 0.0;
     if (vg.finalPrice != null && vg.finalPrice! > 0) {
       unitPrice = vg.finalPrice!;
     } else if (isPriceLock && vg.priceLock != null) {
@@ -153,19 +172,22 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     }
 
     return PopScope(
-      canPop: widget.action != 'new',
+      canPop:
+          widget.action != 'new' ||
+          _match.paymentMethod.toLowerCase() == 'cash',
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         // Navigation is disabled for new orders
       },
       child: DuruhaScaffold(
         appBarTitle: "Order Details",
-        showBackButton: widget.action != 'new',
+        showBackButton: true,
         appBarActions: [
-          if (widget.action == 'new')
+          if (widget.action == 'new' &&
+              _match.paymentMethod.toLowerCase() != 'cash')
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              color: Colors.redAccent,
+              color: cs.error,
               onPressed: () => _handleDelete(context),
             ),
           // ── Cancel Order popup ──
@@ -177,7 +199,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               tooltip: 'Order Actions',
               showLabel: false,
               showBackground: false,
-              icon: Icon(Icons.more_vert, color: cs.error),
+              icon: Icon(Icons.more_vert, color: cs.onError),
               iconColor: cs.error,
               onSelected: (item) {
                 if (item == 'Cancel Order') _handleCancelOrder(context);
@@ -212,19 +234,17 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           ),
           const SizedBox(width: 8),
         ],
-        onBackPressed: widget.action == 'new'
-            ? null
-            : () => Navigator.pop(context),
+        onBackPressed: () => Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/consumer/manage', (route) => false),
         floatingActionButton:
-            widget.action == 'new' ||
-                _match.paymentMethod == 'Not Paid' ||
-                _match.paymentMethod.isEmpty
+            (widget.action == 'new' && _match.paymentMethod.isEmpty ||
+                _match.paymentMethod.toLowerCase() == 'not paid' &&
+                    _match.isActive)
             ? FloatingActionButton.extended(
                 onPressed: () => _showPaymentSelectionDialog(),
-                icon: const Icon(Icons.payment),
                 label: const Text("Pay Now"),
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
+                icon: const Icon(Icons.payment),
               )
             : null,
         body: SingleChildScrollView(
@@ -233,10 +253,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Payment Success Banner ───────────────────────────────────────
-              if (widget.action == 'payment-success') ...[
+              if (widget.action == 'payment-success')
                 _paymentSuccessBanner(theme, cs),
-                const SizedBox(height: 24),
-              ],
+              const SizedBox(height: 24),
               // ── Order Fulfillment Details (shown only for new orders) ──────────
               if (widget.placeOrderResult != null) ...[
                 _fulfillmentBanner(theme, cs, widget.placeOrderResult!),
@@ -303,26 +322,117 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   "ACTIVE",
                   style: t.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    color: DuruhaColorHelper.completedLight,
                   ),
                 )
               : Text(
                   "INACTIVE",
                   style: t.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.red,
+                    color: cs.error,
                   ),
                 ),
           icon: Icons.info_outline,
         ),
-        if (_match.note != null && _match.note!.isNotEmpty)
+        if (_match.isPlan)
           _row(
             t,
-            "Note",
-            Text(_match.note!),
-            icon: Icons.note_outlined,
+            "Mode",
+            _tag(
+              t,
+              "📅 PLAN ORDER",
+              cs.secondaryContainer,
+              cs.onSecondaryContainer,
+              bold: true,
+            ),
+            icon: Icons.auto_awesome_outlined,
+          ),
+        if (_match.stats != null) ...[
+          const Divider(height: 20),
+          _row(
+            t,
+            "Linked Items",
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _tag(
+                  t,
+                  "${_match.stats!.paidCount} Paid",
+                  DuruhaColorHelper.completedLight,
+                  Colors.white,
+                  small: true,
+                  bold: true,
+                ),
+                const SizedBox(width: 4),
+                _tag(
+                  t,
+                  "${_match.stats!.unpaidCount} Unpaid",
+                  cs.error,
+                  Colors.white,
+                  small: true,
+                  bold: true,
+                ),
+              ],
+            ),
+            icon: Icons.check_circle_outline,
             small: true,
           ),
+          if (_match.stats!.statusCounts.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _match.stats!.statusCounts.entries.map((e) {
+                  return _tag(
+                    t,
+                    "${e.value} ${e.key}",
+                    _statusColor(e.key, t),
+                    Colors.white,
+                    small: true,
+                    bold: true,
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+        const Divider(height: 16),
+        InkWell(
+          onTap: () => _match.isActive ? _editOrderNote(context) : null,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.note_outlined, size: 15, color: cs.onPrimary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _currentNote.isNotEmpty
+                      ? Text(
+                          _currentNote,
+                          style: t.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        )
+                      : Text(
+                          'Add order note...',
+                          style: t.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                ),
+                Icon(
+                  _match.isActive ? Icons.edit_outlined : Icons.lock_outlined,
+                  size: 13,
+                  color: _match.isActive ? cs.onSecondary : cs.error,
+                ),
+              ],
+            ),
+          ),
+        ),
         if (_match.paymentMethod.isNotEmpty)
           _row(
             t,
@@ -330,6 +440,41 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             Text(_match.paymentMethod),
             icon: Icons.account_balance_wallet_outlined,
             small: true,
+          ),
+        if (_match.cpsId != null)
+          InkWell(
+            onTap: () => Navigator.pushNamed(
+              context,
+              '/consumer/subscriptions/plan_details',
+              arguments: _match.cpsId,
+            ),
+            child: _row(
+              t,
+              "Subscription Plan",
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "View Plan",
+                    style: t.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSecondaryContainer,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
+                      decorationColor: cs.onSecondaryContainer,
+                      fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.open_in_new,
+                    size: 14,
+                    color: cs.onSecondaryContainer,
+                  ),
+                ],
+              ),
+              icon: Icons.card_membership_outlined,
+              small: true,
+            ),
           ),
       ],
     ),
@@ -356,7 +501,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               .where(
                 (item) =>
                     _match.isPlan ||
-                    item.varieties.fold(0.0, (s, v) => s + v.quantity) > 0,
+                    item.varieties.fold(
+                          0.0,
+                          (s, v) => s + v.allocatedQuantity,
+                        ) >
+                        0 ||
+                    item.varieties.isNotEmpty,
               )
               .toList()
               .asMap()
@@ -381,7 +531,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     ColorScheme cs,
     ProduceItem item,
     bool isLastItem,
-    int idx,
+    int idx, // filtered list position (for display only)
   ) {
     return Theme(
       data: t.copyWith(
@@ -390,7 +540,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         highlightColor: Colors.transparent,
       ),
       child: ExpansionTile(
-        initiallyExpanded: true,
+        initiallyExpanded: false,
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
         leading: Row(
           mainAxisSize: MainAxisSize.min,
@@ -398,12 +548,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             Text(
               "#${item.itemIndex + 1}",
               style: t.textTheme.labelSmall?.copyWith(
-                color: item.isDone ? Colors.green : cs.onSurfaceVariant,
+                color: item.isDone
+                    ? DuruhaColorHelper.completedLight
+                    : cs.onSurfaceVariant,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(width: 8),
-            Icon(Icons.folder_open_outlined, color: cs.primary, size: 22),
+            Icon(Icons.folder_open_outlined, color: cs.onSecondary, size: 22),
           ],
         ),
         title: Text(
@@ -413,54 +565,94 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             color: cs.onSurface,
           ),
         ),
-        subtitle: Row(
-          children: [
-            Text(
-              "${item.varieties.fold(0.0, (s, v) => s + v.quantity).toStringAsFixed(0)} kg total",
-              style: t.textTheme.labelSmall?.copyWith(
-                color: cs.onSurfaceVariant,
+        subtitle: _match.isActive
+            ? Row(
+                children: [
+                  Builder(
+                    builder: (context) {
+                      final requested = item.varieties.fold(
+                        0.0,
+                        (s, v) => s + v.quantity,
+                      );
+                      final allocated = item.varieties.fold(
+                        0.0,
+                        (s, v) => s + v.allocatedQuantity,
+                      );
+                      final isPending = allocated == 0 && !_match.isPlan;
+                      return Text(
+                        isPending
+                            ? "${requested.toStringAsFixed(0)} kg (pending)"
+                            : allocated < requested
+                            ? "${allocated.toStringAsFixed(0)}/${requested.toStringAsFixed(0)} kg"
+                            : "${requested.toStringAsFixed(0)} kg",
+                        style: t.textTheme.labelSmall?.copyWith(
+                          color: isPending
+                              ? DuruhaColorHelper.pendingLight
+                              : cs.onSurfaceVariant,
+                        ),
+                      );
+                    },
+                  ),
+                  if (item.isDone) ...[
+                    const SizedBox(width: 8),
+                    _tag(
+                      t,
+                      "DONE",
+                      DuruhaColorHelper.getColor(context, "COMPLETED"),
+                      Colors.white,
+                      small: true,
+                      bold: true,
+                    ),
+                  ],
+                ],
+              )
+            : Text(
+                "Archived",
+                style: t.textTheme.labelSmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
-            ),
-            if (item.isDone) ...[
-              const SizedBox(width: 8),
-              _tag(
-                t,
-                "DONE",
-                Colors.green,
-                Colors.white,
-                small: true,
-                bold: true,
-              ),
-            ],
-          ],
-        ),
         children: [
           Container(
             padding: const EdgeInsets.only(left: 36, right: 16, bottom: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: item.varieties.expand((group) {
-                return group.varietyGroups.where((v) => v.quantity > 0).map((
-                  v,
-                ) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6.0),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () {
-                        final key = _produceKeys[idx];
-                        if (key != null && key.currentContext != null) {
-                          Scrollable.ensureVisible(
-                            key.currentContext!,
-                            duration: const Duration(milliseconds: 500),
-                            curve: Curves.easeInOut,
-                          );
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(6.0),
+              children: item.varieties.map((group) {
+                // ── Group header ─────────────────────────────────────────────
+                final groupHeader = Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.group_work,
+                        size: 14,
+                        color: cs.onSecondary.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "#${group.index + 1}",
+                        style: t.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Price label badge from SQL
+                      _priceLabelTag(t, cs, group.priceLabel ?? "-"),
+                    ],
+                  ),
+                );
+
+                // ── Any-variety group with no allocations yet (pending) ──────
+                // varietyGroups is empty only when all cov rows were OPEN (filtered by SQL)
+                if (group.isAny && group.varietyGroups.isEmpty) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      groupHeader,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6.0),
                         child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
                               Icons.subdirectory_arrow_right,
@@ -468,79 +660,173 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                               color: cs.outline,
                             ),
                             const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        v.name ?? 'Any',
-                                        style: t.textTheme.bodySmall?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: cs.onSurface,
-                                        ),
-                                      ),
-                                      Text(
-                                        "${v.quantity.toStringAsFixed(0)} kg",
-                                        style: t.textTheme.labelSmall?.copyWith(
-                                          color: cs.onSurfaceVariant,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: [
-                                      Opacity(
-                                        opacity:
-                                            (v.deliveryStatus == 'CANCELLED' &&
-                                                !v.isPaid)
-                                            ? 0.4
-                                            : 1.0,
-                                        child: _tag(
-                                          t,
-                                          v.isPaid ? 'PAID' : 'UNPAID',
-                                          v.isPaid ? Colors.green : Colors.red,
-                                          Colors.white,
-                                          small: true,
-                                          bold: true,
-                                        ),
-                                      ),
-                                      if (v.deliveryStatus != null)
-                                        _tag(
-                                          t,
-                                          v.deliveryStatus!,
-                                          _statusColor(v.deliveryStatus, t),
-                                          Colors.white,
-                                          small: true,
-                                          bold: true,
-                                        )
-                                      else
-                                        _tag(
-                                          t,
-                                          "PENDING MATCH",
-                                          Colors.orange,
-                                          Colors.white,
-                                          small: true,
-                                          bold: true,
-                                        ),
-                                    ],
-                                  ),
-                                ],
+                            Text(
+                              '∞ Any Variety',
+                              style: t.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${group.quantity.toStringAsFixed(0)} kg',
+                              style: t.textTheme.labelSmall?.copyWith(
+                                color: DuruhaColorHelper.pendingLight,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                    ],
                   );
-                });
+                }
+
+                // ── Specific or partially-matched any-variety group ──────────
+                // varietyGroups contains only non-OPEN rows (MATCHED/PLEDGED/DENIED/SKIPPED)
+                final displayItems = group.varietyGroups;
+                if (displayItems.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    groupHeader,
+                    // Items in this group
+                    ...displayItems.map((v) {
+                      final String selType = v.selectionType.toUpperCase();
+                      final bool isMatched = selType == 'MATCHED';
+                      final bool isPledged = selType == 'PLEDGED';
+                      final bool isSkipped = selType == 'SKIPPED';
+                      final bool isDenied = selType == 'DENIED';
+                      final bool lowOpacity = isSkipped || isDenied;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6.0),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () {
+                            final key = _produceKeys[idx];
+                            if (key != null && key.currentContext != null) {
+                              Scrollable.ensureVisible(
+                                key.currentContext!,
+                                duration: const Duration(milliseconds: 500),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(6.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.subdirectory_arrow_right,
+                                  size: 16,
+                                  color: cs.outline,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Opacity(
+                                            opacity: lowOpacity ? 0.4 : 1.0,
+                                            child: Text(
+                                              v.name ??
+                                                  (group.isAny
+                                                      ? 'Any Variety'
+                                                      : 'Any'),
+                                              style: t.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: cs.onSurface,
+                                                  ),
+                                            ),
+                                          ),
+                                          Text(
+                                            (isMatched || isPledged)
+                                                ? "${v.quantity.toStringAsFixed(0)} kg"
+                                                : "—",
+                                            style: t.textTheme.labelSmall
+                                                ?.copyWith(
+                                                  color: cs.onSurfaceVariant,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          if (isMatched) ...[
+                                            Opacity(
+                                              opacity:
+                                                  (v.deliveryStatus ==
+                                                          'CANCELLED' &&
+                                                      !v.isPaid)
+                                                  ? 0.4
+                                                  : 1.0,
+                                              child: _tag(
+                                                t,
+                                                v.isPaid ? 'PAID' : 'UNPAID',
+                                                v.isPaid
+                                                    ? DuruhaColorHelper
+                                                          .completedLight
+                                                    : cs.errorContainer,
+                                                Colors.white,
+                                                small: true,
+                                                bold: true,
+                                              ),
+                                            ),
+                                            if (v.deliveryStatus != null)
+                                              _tag(
+                                                t,
+                                                v.deliveryStatus!,
+                                                _statusColor(
+                                                  v.deliveryStatus,
+                                                  t,
+                                                ),
+                                                Colors.white,
+                                                small: true,
+                                                bold: true,
+                                              )
+                                            else
+                                              _tag(
+                                                t,
+                                                "PENDING MATCH",
+                                                DuruhaColorHelper.pendingLight,
+                                                Colors.white,
+                                                small: true,
+                                                bold: true,
+                                              ),
+                                          ] else
+                                            _selectionTypeTag(
+                                              t,
+                                              cs,
+                                              v.selectionType,
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
+                );
               }).toList(),
             ),
           ),
@@ -577,7 +863,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             return gs + (vg.deliveryFee ?? 0);
           }),
     );
-    final double subtotal = total + item.effectiveQualityFee + delivery;
+    final double subtotal = total + delivery;
     final bool tentative = !item.isPriceFinalized;
 
     final bool isProduceCollapsed =
@@ -617,12 +903,32 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                             "#${item.itemIndex + 1}",
                             style: t.textTheme.labelSmall?.copyWith(
                               color: item.isDone
-                                  ? Colors.green
+                                  ? DuruhaColorHelper.completedLight
                                   : cs.onSurfaceVariant,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(width: 8),
+                          if (item.produceImageUrl.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 12.0),
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: cs.outlineVariant.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                  image: DecorationImage(
+                                    image: NetworkImage(item.produceImageUrl),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -652,7 +958,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                               child: _tag(
                                 t,
                                 "DONE",
-                                Colors.green,
+                                DuruhaColorHelper.completedLight,
                                 Colors.white,
                                 small: true,
                                 bold: true,
@@ -666,41 +972,27 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                           ),
                         ],
                       ),
-                      if (item.qualityFee > 0) ...[
-                        const SizedBox(height: 4),
-                        _row(
-                          t,
-                          "Quality Fee",
-                          Text(
-                            DuruhaFormatter.formatCurrency(
-                              item.effectiveQualityFee,
-                            ),
-                            style: t.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: cs.onTertiary,
-                              decoration: item.isCancelled
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                          small: true,
-                        ),
-                      ],
                     ],
                   ),
                 ),
                 Positioned(
                   left: -10,
                   top: -10,
-                  child: Icon(
-                    isProduceCollapsed ? Icons.expand_more : Icons.expand_less,
-                    size: 18,
-                    color: cs.onSurfaceVariant,
+                  child: Center(
+                    child: Icon(
+                      isProduceCollapsed
+                          ? Icons.expand_more
+                          : Icons.expand_less,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+          // ── Per-produce note ──
+          _produceNoteRow(ctx, t, cs, item),
           if (!isProduceCollapsed) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -709,7 +1001,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   const SizedBox(height: 12),
                   // variety groups
                   ...item.varieties.asMap().entries.map(
-                    (e) => _varGroupCard(ctx, t, cs, item, e.value, e.key, idx),
+                    (e) => _varGroupCard(
+                      ctx,
+                      t,
+                      cs,
+                      item,
+                      e.value,
+                      e.key,
+                      item.itemIndex,
+                      item.copId,
+                    ),
                   ),
                 ],
               ),
@@ -738,7 +1039,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          "(${DuruhaFormatter.formatCurrency(total)} variety) + (${DuruhaFormatter.formatCurrency(delivery)} shipping) + (${DuruhaFormatter.formatCurrency(item.effectiveQualityFee)} quality)",
+                          "(${DuruhaFormatter.formatCurrency(total)} variety) + (${DuruhaFormatter.formatCurrency(delivery)} shipping)",
                           style: t.textTheme.labelSmall?.copyWith(
                             color: cs.onSecondary,
                             fontSize: 10,
@@ -748,7 +1049,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                           Text(
                             "Pending market updates",
                             style: t.textTheme.labelSmall?.copyWith(
-                              color: Colors.orange[800],
+                              color: DuruhaColorHelper.pendingLight,
                               fontStyle: FontStyle.italic,
                             ),
                           ),
@@ -772,6 +1073,57 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
+  // ─── per-produce note row ─────────────────────────────────────────────────
+
+  Widget _produceNoteRow(
+    BuildContext ctx,
+    ThemeData t,
+    ColorScheme cs,
+    ProduceItem item,
+  ) {
+    final noteKey = item.copId ?? 'produce-${item.itemIndex}';
+    final existingNote = _produceNotes[noteKey] ?? '';
+
+    return InkWell(
+      onTap: () => _match.isActive
+          ? _editProduceNote(ctx, item, noteKey, existingNote)
+          : null,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.edit_note_rounded, size: 14, color: cs.onSecondary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: existingNote.isNotEmpty
+                  ? Text(
+                      existingNote,
+                      style: t.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    )
+                  : Text(
+                      'Add note...',
+                      style: t.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+            ),
+            Icon(
+              _match.isActive ? Icons.edit_outlined : Icons.lock_outlined,
+              size: 13,
+              color: _match.isActive ? cs.onSecondary : cs.error,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── variety group card ───────────────────────────────────────────────────
   // Each covg becomes its own bordered card with metadata tags at the top
 
@@ -783,10 +1135,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     ProduceVariety group,
     int idx,
     int produceIdx,
+    String? copId,
   ) {
-    final bool isPriceLock = group.isPriceLock;
+    final bool isPriceLock =
+        group.isPriceLock || group.varietyGroups.any((v) => v.isPriceLock);
     final bool isAny = group.isAny;
-    final bool isPlan = group.cfpsId != null;
+    final bool isPlan = _match.isPlan;
+    final double subtotal = group.varietySubtotal(item.isPriceLock);
 
     final String groupKey = '${produceIdx}_$idx';
     final bool isGroupExpanded =
@@ -875,11 +1230,29 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                                 ),
                               // flexible
                               if (isAny)
-                                _tag(
-                                  t,
-                                  "∞ Any Variety",
-                                  cs.surface,
-                                  cs.onTertiary,
+                                Builder(
+                                  builder: (context) {
+                                    final matchedNames = group.varietyGroups
+                                        .where(
+                                          (v) =>
+                                              v.selectionType.toUpperCase() ==
+                                                  'MATCHED' ||
+                                              v.selectionType.toUpperCase() ==
+                                                  'PLEDGED',
+                                        )
+                                        .map((v) => v.name ?? 'Any Variety')
+                                        .toSet()
+                                        .join(', ');
+
+                                    return _tag(
+                                      t,
+                                      matchedNames.isNotEmpty
+                                          ? "∞ $matchedNames"
+                                          : "∞ Any Variety",
+                                      cs.surface,
+                                      cs.onTertiary,
+                                    );
+                                  },
                                 ),
                               // algo picked label
                               if (!isAny && !isPriceLock && !isPlan)
@@ -889,24 +1262,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                                   cs.surfaceContainerHighest,
                                   cs.onSurface,
                                 ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                "${idx + 1}",
-                                style: t.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color:
-                                      group.varietyGroups.isNotEmpty &&
-                                          group.varietyGroups.every(
-                                            (v) => v.isPaid,
-                                          )
-                                      ? Colors.green
-                                      : cs.onSurfaceVariant,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
                             ],
                           ),
                         ],
@@ -933,6 +1288,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                               ),
                             ],
                           ),
+                          if (subtotal > 0)
+                            Text(
+                              "${isPlan ? '~' : ''}${DuruhaFormatter.formatCurrency(subtotal)}",
+                              style: t.textTheme.labelSmall?.copyWith(
+                                color: cs.onSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 9,
+                              ),
+                            ),
                         ],
                       ),
                     ],
@@ -940,12 +1304,28 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 ),
               ),
               Positioned(
-                left: -13,
+                left: -16,
                 top: -13,
-                child: Icon(
-                  isGroupExpanded ? Icons.expand_less : Icons.expand_more,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
+                child: Column(
+                  children: [
+                    Icon(
+                      isGroupExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    Text(
+                      "${idx + 1}",
+                      style: t.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color:
+                            group.varietyGroups.isNotEmpty &&
+                                group.varietyGroups.every((v) => v.isPaid)
+                            ? DuruhaColorHelper.completedLight
+                            : cs.onSurfaceVariant,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -980,12 +1360,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     VarietySelection v,
     bool unchosen,
   ) {
-    final bool isPriceLock = group.isPriceLock;
+    final bool isPriceLock = group.isPriceLock || v.isPriceLock;
     final bool hasDelivery = v.deliveryStatus != null;
-    final bool finalized = v.finalPrice != null;
-    final bool isPlan = group.cfpsId != null;
+    final bool isPlan = _match.isPlan;
 
     final bool cancelled = v.deliveryStatus == 'CANCELLED';
+    final String selType = v.selectionType.toUpperCase();
+    final bool skipped = selType == 'SKIPPED';
+    final bool denied = selType == 'DENIED';
     final bool cancellable =
         !cancelled &&
         !unchosen &&
@@ -996,6 +1378,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     // Display name: null name on a plan row = Any Variety (assigned later)
     final String displayName = v.name ?? (isPlan ? 'Any Variety' : 'Any');
 
+    final bool showUnitPrice = !isPlan && v.isPriceLock && v.finalPrice != null;
+
     final cardContent = Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: EdgeInsets.only(
@@ -1005,12 +1389,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         bottom: 10,
       ),
       decoration: BoxDecoration(
-        color: unchosen
+        color: (unchosen || skipped)
             ? cs.surfaceContainerHighest.withValues(alpha: 0.3)
             : cs.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: unchosen
+          color: (unchosen || skipped)
               ? cs.outlineVariant.withValues(alpha: 0.2)
               : cs.outlineVariant.withValues(alpha: 0.5),
         ),
@@ -1027,14 +1411,35 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    DuruhaTextEmphasis(
-                      text: displayName,
-                      mainSize: 18,
-                      mainColor: cs.onPrimary,
-                      breaker: "()",
-                      mainWeight: FontWeight.bold,
-                      subSize: 10,
-                      subColor: cs.onSecondary,
+                    Opacity(
+                      opacity: (skipped || denied) ? 0.4 : 1.0,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              DuruhaTextEmphasis(
+                                text: displayName,
+                                mainSize: 18,
+                                mainColor: cs.onPrimary,
+                                breaker: "()",
+                                mainWeight: FontWeight.bold,
+                                subSize: 10,
+                                subColor: cs.onSecondary,
+                              ),
+                            ],
+                          ),
+                          if (showUnitPrice)
+                            Text(
+                              "Price Locked @ ${DuruhaFormatter.formatCurrency(v.finalPrice!)}",
+                              style: t.textTheme.labelSmall?.copyWith(
+                                color: cs.onSecondary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                     if (unchosen && !isPlan) ...[
                       const SizedBox(width: 6),
@@ -1068,7 +1473,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             ),
           ),
 
-          if (!unchosen) ...[
+          if (!unchosen && !skipped && !denied) ...[
             const SizedBox(height: 6),
 
             // qty
@@ -1087,49 +1492,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               ),
             ),
 
-            // ── Plan rows: skip pricing, show fulfillment note ──
-            if (isPlan) ...[
+            // ── pricing block — driven by SQL price_label ──
+            ...[
               const SizedBox(height: 6),
-              _statusNote(
-                t,
-                Icons.event_repeat_rounded,
-                'Price determined at fulfillment',
-                cs.onSurfaceVariant,
-              ),
-              if (hasDelivery) ...[
-                const SizedBox(height: 8),
-                _deliveryBlock(ctx, t, cs, v),
-              ],
-            ] else ...[
-              const SizedBox(height: 6),
-              // ── pricing block ──
               Opacity(
                 opacity: cancelled ? 0.5 : 1.0,
-                child: isPriceLock
-                    ? _priceLockBlock(ctx, t, cs, group, v)
-                    : finalized
-                    ? _statusNote(
-                        t,
-                        Icons.check_circle_outline,
-                        "Final: ${DuruhaFormatter.formatCurrency(v.finalPrice!)}",
-                        Colors.green,
-                        style: TextStyle(
-                          decoration: cancelled
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      )
-                    : _statusNote(
-                        t,
-                        Icons.help_outline,
-                        "Tentative: ${DuruhaFormatter.formatCurrency(v.variablePrice ?? 0)}",
-                        Colors.orange,
-                        style: TextStyle(
-                          decoration: cancelled
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      ),
+                child: _pricingNote(ctx, t, cs, group, v, cancelled),
               ),
 
               // ── delivery block ──
@@ -1142,7 +1510,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   t,
                   Icons.search,
                   "Searching for match...",
-                  Colors.orange,
+                  DuruhaColorHelper.pendingLight,
                 ),
               ],
             ],
@@ -1158,7 +1526,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         "PAID",
                         style: t.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                          color: DuruhaColorHelper.completedLight,
                           decoration: cancelled
                               ? TextDecoration.lineThrough
                               : null,
@@ -1168,7 +1536,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         "UNPAID",
                         style: t.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.red,
+                          color: cs.error,
                           decoration: cancelled
                               ? TextDecoration.lineThrough
                               : null,
@@ -1188,7 +1556,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
 
     return Opacity(
-      opacity: unchosen ? 0.30 : 1.0,
+      opacity: (unchosen || skipped) ? 0.30 : 1.0,
       child: cancellable
           ? Stack(
               clipBehavior: Clip.none,
@@ -1228,57 +1596,49 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
-  // ─── price lock block ─────────────────────────────────────────────────────
+  // ─── pricing note — driven by SQL price_label ─────────────────────────────
 
-  Widget _priceLockBlock(
+  Widget _pricingNote(
     BuildContext ctx,
     ThemeData t,
     ColorScheme cs,
     ProduceVariety group,
     VarietySelection v,
+    bool cancelled,
   ) {
-    final bool isPriceLock = group.isPriceLock;
+    final TextDecoration? strikethrough = cancelled
+        ? TextDecoration.lineThrough
+        : null;
 
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: cs.primaryContainer.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        children: [
-          // price lock subscription link
-          if (isPriceLock && group.cplsId != null) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                DuruhaInkwell(
-                  variation: InkwellVariation.subtle,
-                  onTap: () => Navigator.pushNamed(
-                    ctx,
-                    '/consumer/subscriptions/pricelock_details',
-                    arguments: group.cplsId,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.lock_clock, size: 12, color: cs.onTertiary),
-                      const SizedBox(width: 4),
-                      Text(
-                        "Price lock enabled →",
-                        style: t.textTheme.labelSmall?.copyWith(
-                          color: cs.onTertiary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    switch (v.priceLabel?.toLowerCase()) {
+      case 'plan':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _statusNote(
+              t,
+              Icons.event_repeat_rounded,
+              'Price determined at fulfillment',
+              cs.onSurfaceVariant,
             ),
+            if (v.deliveryStatus != null) ...[
+              const SizedBox(height: 8),
+              _deliveryBlock(ctx, t, cs, v),
+            ],
           ],
-          const Divider(height: 12),
-          Row(
+        );
+
+      case 'price_lock':
+      case 'final' when (group.isPriceLock || v.isPriceLock):
+        // Price-lock block: market price struck through, locked price highlighted
+        return Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: cs.primaryContainer.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+          ),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Column(
@@ -1291,7 +1651,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     ),
                   ),
                   Text(
-                    DuruhaFormatter.formatCurrency(v.variablePrice ?? 0),
+                    DuruhaFormatter.formatCurrency(v.dtcPrice ?? 0),
                     style: t.textTheme.bodySmall?.copyWith(
                       decoration: TextDecoration.lineThrough,
                       color: cs.onSecondary,
@@ -1299,12 +1659,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   ),
                 ],
               ),
-
               Column(
-                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    "Locked",
+                    "🔒 Locked",
                     style: t.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w900,
                       color: cs.onPrimary,
@@ -1317,15 +1676,42 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     style: t.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w900,
                       color: cs.onPrimary,
+                      decoration: strikethrough,
                     ),
                   ),
                 ],
               ),
             ],
           ),
-        ],
-      ),
-    );
+        );
+
+      case 'final':
+        return _statusNote(
+          t,
+          Icons.check_circle_outline,
+          "Final: ${DuruhaFormatter.formatCurrency(v.finalPrice ?? 0)}",
+          DuruhaColorHelper.completedLight,
+          style: TextStyle(decoration: strikethrough),
+        );
+
+      case 'tentative':
+        return _statusNote(
+          t,
+          Icons.help_outline,
+          "Tentative: ${DuruhaFormatter.formatCurrency(v.dtcPrice ?? 0)}",
+          DuruhaColorHelper.pendingLight,
+          style: TextStyle(decoration: strikethrough),
+        );
+
+      case 'pending':
+      default:
+        return _statusNote(
+          t,
+          Icons.search,
+          "Searching for match...",
+          DuruhaColorHelper.pendingLight,
+        );
+    }
   }
 
   // ─── delivery block ───────────────────────────────────────────────────────
@@ -1372,7 +1758,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               t,
               "Dispatch",
               v.deliveryStatus == 'CANCELLED'
-                  ? const Text('x')
+                  ? Text(
+                      'Not included',
+                      style: t.textTheme.labelSmall?.copyWith(
+                        color: cs.onSecondary,
+                      ),
+                    )
                   : _formatDate(v.dispatchDate),
               icon: Icons.schedule,
               small: true,
@@ -1383,9 +1774,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               t,
               "Delivery Fee",
               Text(
-                v.deliveryStatus == 'CANCELLED'
-                    ? DuruhaFormatter.formatCurrency(0.0)
-                    : DuruhaFormatter.formatCurrency(v.deliveryFee!),
+                DuruhaFormatter.formatCurrency(v.deliveryFee ?? 0.0),
                 style: TextStyle(
                   decoration: v.deliveryStatus == 'CANCELLED'
                       ? TextDecoration.lineThrough
@@ -1394,8 +1783,76 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               ),
               small: true,
             ),
+          if (v.farmerLocation != null || v.consumerLocation != null) ...[
+            const SizedBox(height: 8),
+            const Divider(height: 1, thickness: 0.5),
+            const SizedBox(height: 8),
+            _locationRow(
+              t,
+              cs,
+              icon: Icons.agriculture_outlined,
+              label: "From (Farmer)",
+              address: v.farmerLocation,
+            ),
+            if (v.consumerLocation != null) const SizedBox(height: 6),
+            // _locationRow(
+            //   t,
+            //   cs,
+            //   icon: Icons.home_outlined,
+            //   label: "To (You)",
+            //   address: v.consumerLocation,
+            // ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _locationRow(
+    ThemeData t,
+    ColorScheme cs, {
+    required IconData icon,
+    required String label,
+    required DeliveryAddress? address,
+  }) {
+    if (address == null) return const SizedBox.shrink();
+    final line = address.displayLine;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 12, color: cs.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: t.textTheme.labelSmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 9,
+                ),
+              ),
+              Text(
+                line.isNotEmpty ? line : '—',
+                style: t.textTheme.labelSmall?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (address.landmark != null && address.landmark!.isNotEmpty)
+                Text(
+                  'Near: ${address.landmark}',
+                  style: t.textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 10,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1410,10 +1867,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         fg = cs.onTertiary;
         label = "MATCHED";
         break;
-      case 'FULFILLED':
-        bg = Colors.green;
+      case 'PLEDGED':
+        bg = DuruhaColorHelper.completedLight;
         fg = Colors.white;
-        label = "FULFILLED";
+        label = "PLEDGED";
         break;
       case 'SKIPPED':
         bg = cs.surfaceContainerHighest;
@@ -1440,6 +1897,58 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     return _tag(t, label, bg, fg, small: true, bold: true);
   }
 
+  /// Badge for the SQL-computed price_label on a variety group.
+  Widget _priceLabelTag(ThemeData t, ColorScheme cs, String label) {
+    switch (label.toLowerCase()) {
+      case 'final':
+        return _tag(
+          t,
+          'FINAL',
+          DuruhaColorHelper.completedLight,
+          Colors.white,
+          small: true,
+          bold: true,
+        );
+      case 'price_lock':
+        return _tag(
+          t,
+          '🔒 LOCKED',
+          cs.primaryContainer,
+          cs.onPrimaryContainer,
+          small: true,
+          bold: true,
+        );
+      case 'tentative':
+        return _tag(
+          t,
+          'TENTATIVE',
+          DuruhaColorHelper.pendingLight,
+          Colors.white,
+          small: true,
+          bold: true,
+        );
+      case 'plan':
+        return _tag(
+          t,
+          '📅 PLAN',
+          cs.secondaryContainer,
+          cs.onSecondaryContainer,
+          small: true,
+          bold: true,
+        );
+      case 'pending':
+      default:
+        return _tag(
+          t,
+          'PENDING',
+          cs.surfaceContainerHighest,
+          cs.onSurfaceVariant,
+          small: true,
+          bold: true,
+        );
+    }
+  }
+
   // ─── grand total ──────────────────────────────────────────────────────────
 
   Widget _grandTotal(ThemeData t, ColorScheme cs) {
@@ -1457,7 +1966,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                tentative ? "Tentative Total" : "Grand Total",
+                tentative ? "Tentative" : "Grand Total",
                 style: t.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: cs.onPrimary,
@@ -1467,7 +1976,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 Text(
                   "Awaiting final pricing",
                   style: t.textTheme.labelSmall?.copyWith(
-                    color: Colors.orange[800],
+                    color: DuruhaColorHelper.pendingLight,
                   ),
                 ),
             ],
@@ -1600,8 +2109,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final bool fullSuccess = result.success && result.failed == 0;
     final bool partial = result.matched > 0 && result.failed > 0;
     final Color bannerColor = fullSuccess
-        ? Colors.green
-        : (partial ? Colors.orange : cs.error);
+        ? DuruhaColorHelper.completedLight
+        : (partial ? DuruhaColorHelper.pendingLight : cs.error);
     final IconData bannerIcon = fullSuccess
         ? Icons.check_circle_rounded
         : (partial ? Icons.warning_amber_rounded : Icons.cancel_rounded);
@@ -1639,14 +2148,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                           t,
                           "${result.matched}",
                           "Matched",
-                          Colors.green,
+                          DuruhaColorHelper.completedLight,
                         ),
                         const SizedBox(width: 16),
                         _miniStat(
                           t,
                           "${result.failed}",
                           "Failed",
-                          result.failed > 0 ? Colors.orange : cs.onSecondary,
+                          result.failed > 0
+                              ? DuruhaColorHelper.pendingLight
+                              : cs.onSecondary,
                         ),
                       ],
                     ),
@@ -1698,15 +2209,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Colors.green.withValues(alpha: 0.1),
-            Colors.teal.withValues(alpha: 0.08),
+            DuruhaColorHelper.completedLight.withValues(alpha: 0.1),
+            cs.secondary.withValues(alpha: 0.08),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.green.withValues(alpha: 0.3),
+          color: DuruhaColorHelper.completedLight.withValues(alpha: 0.3),
           width: 1.5,
         ),
       ),
@@ -1716,12 +2227,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.2),
+              color: DuruhaColorHelper.completedLight.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.check_circle_rounded,
-              color: Colors.green,
+              color: DuruhaColorHelper.completedLight,
               size: 28,
             ),
           ),
@@ -1734,21 +2245,23 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   "Thank you for supporting",
                   style: t.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
+                    color: DuruhaColorHelper.completedLight,
                   ),
                 ),
                 Text(
                   "the mission!",
                   style: t.textTheme.bodyLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
+                    color: DuruhaColorHelper.completedLight,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  "Your payment has been received.\nSee you with the harvest! 🌾",
+                  _match.paymentMethod.toLowerCase() == 'cash'
+                      ? "We'll collect payment upon delivery.\nSee you with the harvest! 🌾"
+                      : "Your payment has been received.\nSee you with the harvest! 🌾",
                   style: t.textTheme.bodySmall?.copyWith(
-                    color: Colors.green[600],
+                    color: DuruhaColorHelper.completedLight,
                     height: 1.4,
                   ),
                 ),
@@ -1896,6 +2409,92 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     'READY_FOR_QC',
   ];
 
+  // ─── note editing ─────────────────────────────────────────────────────────
+
+  Future<void> _editOrderNote(BuildContext context) async {
+    final controller = TextEditingController(text: _currentNote);
+
+    final confirmed = await DuruhaDialog.show(
+      context: context,
+      title: 'Order Note',
+      message: 'Add delivery instructions or special requests for this order.',
+      icon: Icons.note_outlined,
+      confirmText: 'Save',
+      extraContentBuilder: (_) => TextField(
+        controller: controller,
+        maxLines: 4,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: 'Delivery instructions, gift message…',
+          border: OutlineInputBorder(),
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final newNote = controller.text.trim();
+
+    try {
+      await _repo.updateOrderNote(_match.order.orderId, newNote);
+      if (mounted) {
+        setState(() => _currentNote = newNote);
+        DuruhaSnackBar.showSuccess(context, 'Note updated');
+      }
+    } catch (e) {
+      if (mounted) {
+        DuruhaSnackBar.showError(context, 'Failed to update note: $e');
+      }
+    }
+  }
+
+  Future<void> _editProduceNote(
+    BuildContext context,
+    ProduceItem item,
+    String noteKey,
+    String currentNoteText,
+  ) async {
+    if (item.copId == null) return;
+    final controller = TextEditingController(text: currentNoteText);
+
+    final confirmed = await DuruhaDialog.show(
+      context: context,
+      title: 'Note for ${item.produceEnglishName}',
+      message: 'Add a special request or note for this produce item.',
+      icon: Icons.edit_note_rounded,
+      confirmText: 'Save',
+      extraContentBuilder: (_) => TextField(
+        controller: controller,
+        maxLines: 4,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: 'Special requests for this item…',
+          border: OutlineInputBorder(),
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final newText = controller.text.trim();
+
+    try {
+      await _repo.updateOrderItemNote(
+        _match.order.orderId,
+        item.copId!,
+        newText,
+      );
+      if (mounted) {
+        setState(() => _produceNotes[noteKey] = newText);
+        DuruhaSnackBar.showSuccess(context, 'Note updated');
+      }
+    } catch (e) {
+      if (mounted) {
+        DuruhaSnackBar.showError(context, 'Failed to update note: $e');
+      }
+    }
+  }
+
   // ─── actions ──────────────────────────────────────────────────────────────
 
   Future<void> _handleCancelOrder(BuildContext context) async {
@@ -1970,7 +2569,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     String selectedMethod = 'Cash on Delivery';
     final paymentOptions = ['Cash on Delivery', 'Pay Now', 'None of the Above'];
     final Map<String, IconData> paymentIcons = {
-      'Cash on Delivery': Icons.local_shipping_outlined,
+      'Pay on Delivery': Icons.local_shipping_outlined,
       'Pay Now': Icons.credit_card,
       'None of the Above': Icons.block,
     };
@@ -2029,7 +2628,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               'Payment method updated to Cash on Delivery',
             );
             // Refresh the order details
-            _fetchFullDetails(_match.order.orderId);
+            await _fetchFullDetails(_match.order.orderId);
           }
         } catch (e) {
           if (mounted) {

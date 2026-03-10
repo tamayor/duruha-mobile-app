@@ -10,7 +10,6 @@ class FarmerProfile extends UserProfile {
     required super.name,
     super.email,
     required super.phone,
-    required super.barangay,
     required super.city,
     required super.landmark,
     required super.province,
@@ -19,6 +18,9 @@ class FarmerProfile extends UserProfile {
     super.latitude,
     super.longitude,
     super.dialect,
+    super.addressId,
+    super.addressLine1,
+    super.addressLine2,
     required this.farmerId,
     required this.farmerAlias,
     required this.landArea,
@@ -52,7 +54,6 @@ class FarmerProfile extends UserProfile {
       name: user.name,
       email: user.email,
       phone: user.phone,
-      barangay: user.barangay,
       city: user.city,
       province: user.province,
       postalCode: user.postalCode,
@@ -61,6 +62,9 @@ class FarmerProfile extends UserProfile {
       latitude: user.latitude,
       longitude: user.longitude,
       dialect: user.dialect,
+      addressId: user.addressId,
+      addressLine1: user.addressLine1,
+      addressLine2: user.addressLine2,
       farmerId: json['farmer_id'] as String? ?? '',
       farmerAlias: json['farmer_alias'] as String? ?? '',
       landArea: json['land_area'] != null
@@ -100,7 +104,6 @@ class FarmerProfile extends UserProfile {
       name: user.name,
       email: user.email,
       phone: user.phone,
-      barangay: user.barangay,
       city: user.city,
       province: user.province,
       postalCode: user.postalCode,
@@ -143,7 +146,6 @@ class FarmerProfile extends UserProfile {
     String? name,
     String? email,
     String? phone,
-    String? barangay,
     String? city,
     String? province,
     String? landmark,
@@ -163,6 +165,9 @@ class FarmerProfile extends UserProfile {
     int? trustScore,
     int? cropPoints,
     List<String>? unlockedBadgeIds,
+    String? addressId,
+    String? addressLine1,
+    String? addressLine2,
   }) {
     return FarmerProfile(
       id: id ?? this.id,
@@ -170,7 +175,6 @@ class FarmerProfile extends UserProfile {
       name: name ?? this.name,
       email: email ?? this.email,
       phone: phone ?? this.phone,
-      barangay: barangay ?? this.barangay,
       city: city ?? this.city,
       province: province ?? this.province,
       landmark: landmark ?? this.landmark,
@@ -179,6 +183,9 @@ class FarmerProfile extends UserProfile {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       dialect: dialect ?? this.dialect,
+      addressId: addressId ?? this.addressId,
+      addressLine1: addressLine1 ?? this.addressLine1,
+      addressLine2: addressLine2 ?? this.addressLine2,
       farmerId: farmerId ?? this.farmerId,
       farmerAlias: farmerAlias ?? this.farmerAlias,
       landArea: landArea ?? this.landArea,
@@ -198,4 +205,5 @@ abstract class FarmerProfileRepository {
   Future<FarmerProfile> getFarmerProfile(String farmerId);
   Future<String> uploadProfileImage(File file); // Returns the URL
   Future<void> updateProfile(FarmerProfile profile);
+  Future<String?> deleteAddress(String userId, String addressId);
 }

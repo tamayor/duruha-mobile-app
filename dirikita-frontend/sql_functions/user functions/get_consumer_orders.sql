@@ -2,7 +2,11 @@ CREATE OR REPLACE FUNCTION public.get_consumer_orders(
         p_limit INT DEFAULT 10,
         p_cursor TIMESTAMPTZ DEFAULT NULL,
         p_is_active BOOL DEFAULT TRUE,
-        p_is_plan BOOLEAN DEFAULT NULL
+        p_is_order BOOL DEFAULT TRUE,
+        -- TRUE = include regular orders, FALSE = exclude
+        p_is_plan BOOL DEFAULT TRUE,
+        -- TRUE = include plans, FALSE = exclude
+        p_has_payment_method BOOL DEFAULT NULL -- NULL = no filter, TRUE = has payment method, FALSE = payment method is null
     ) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_result JSON;
 v_consumer_id TEXT;
@@ -24,14 +28,39 @@ FROM consumer_orders co
 WHERE co.consumer_id = v_consumer_id
     AND co.is_active = p_is_active
     AND (
-        p_is_plan IS NULL
-        OR p_is_plan = (
-            EXISTS (
+        p_has_payment_method IS NULL
+        OR (
+            p_has_payment_method = TRUE
+            AND co.payment_method IS NOT NULL
+        )
+        OR (
+            p_has_payment_method = FALSE
+            AND co.payment_method IS NULL
+        )
+    )
+    AND (
+        (
+            p_is_plan = TRUE
+            AND EXISTS (
                 SELECT 1
                 FROM consumer_orders_produce cop_pl
                     JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
+                    JOIN consumer_orders_variety cov_pl ON cov_pl.covg_id = covg_pl.covg_id
                 WHERE cop_pl.order_id = co.order_id
-                    AND covg_pl.cfps_id IS NOT NULL
+                    AND covg_pl.cps_id IS NOT NULL
+                    AND cov_pl.selection_type IN ('OPEN', 'DENIED', 'PLEDGED')
+            )
+        )
+        OR (
+            p_is_order = TRUE
+            AND NOT EXISTS (
+                SELECT 1
+                FROM consumer_orders_produce cop_pl
+                    JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
+                    JOIN consumer_orders_variety cov_pl ON cov_pl.covg_id = covg_pl.covg_id
+                WHERE cop_pl.order_id = co.order_id
+                    AND covg_pl.cps_id IS NOT NULL
+                    AND cov_pl.selection_type IN ('OPEN', 'DENIED', 'PLEDGED')
             )
         )
     );
@@ -41,24 +70,49 @@ FROM consumer_orders co
 WHERE co.consumer_id = v_consumer_id
     AND co.is_active = p_is_active
     AND (
-        p_is_plan IS NULL
-        OR p_is_plan = (
-            EXISTS (
-                SELECT 1
-                FROM consumer_orders_produce cop_pl
-                    JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
-                WHERE cop_pl.order_id = co.order_id
-                    AND covg_pl.cfps_id IS NOT NULL
-            )
-        )
-    )
-    AND (
         p_cursor IS NULL
         OR co.created_at < p_cursor
     )
+    AND (
+        p_has_payment_method IS NULL
+        OR (
+            p_has_payment_method = TRUE
+            AND co.payment_method IS NOT NULL
+        )
+        OR (
+            p_has_payment_method = FALSE
+            AND co.payment_method IS NULL
+        )
+    )
+    AND (
+        (
+            p_is_plan = TRUE
+            AND EXISTS (
+                SELECT 1
+                FROM consumer_orders_produce cop_pl
+                    JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
+                    JOIN consumer_orders_variety cov_pl ON cov_pl.covg_id = covg_pl.covg_id
+                WHERE cop_pl.order_id = co.order_id
+                    AND covg_pl.cps_id IS NOT NULL
+                    AND cov_pl.selection_type IN ('OPEN', 'DENIED', 'PLEDGED')
+            )
+        )
+        OR (
+            p_is_order = TRUE
+            AND NOT EXISTS (
+                SELECT 1
+                FROM consumer_orders_produce cop_pl
+                    JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
+                    JOIN consumer_orders_variety cov_pl ON cov_pl.covg_id = covg_pl.covg_id
+                WHERE cop_pl.order_id = co.order_id
+                    AND covg_pl.cps_id IS NOT NULL
+                    AND cov_pl.selection_type IN ('OPEN', 'DENIED', 'PLEDGED')
+            )
+        )
+    )
 ORDER BY co.created_at DESC OFFSET p_limit
 LIMIT 1;
--- 4. Build paginated orders array with Stats
+-- 4. Build paginated orders
 SELECT json_build_object(
         'pagination',
         json_build_object(
@@ -85,30 +139,41 @@ SELECT json_build_object(
                                 co.is_active,
                                 'created_at',
                                 co.created_at,
-                                -- is_plan: true if any covg in this order has a cfps_id
+                                'payment_method',
+                                co.payment_method,
                                 'is_plan',
-                                v_sub_is_plan,
-                                -- Status and Payment Statistics Aggregation
+                                EXISTS (
+                                    SELECT 1
+                                    FROM consumer_orders_produce cop_pl
+                                        JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
+                                        JOIN consumer_orders_variety cov_pl ON cov_pl.covg_id = covg_pl.covg_id
+                                    WHERE cop_pl.order_id = co.order_id
+                                        AND covg_pl.cps_id IS NOT NULL
+                                        AND cov_pl.selection_type IN ('OPEN', 'DENIED', 'PLEDGED')
+                                ),
                                 'stats',
                                 (
                                     SELECT json_build_object(
                                             'status',
-                                            (
-                                                SELECT jsonb_object_agg(status, count)
-                                                FROM (
-                                                        SELECT oom.delivery_status::TEXT as status,
-                                                            COUNT(*) as count
-                                                        FROM consumer_orders_produce cop_s
-                                                            JOIN consumer_orders_variety_group covg_s ON covg_s.cop_id = cop_s.cop_id
-                                                            JOIN consumer_orders_variety cov_s ON cov_s.covg_id = covg_s.covg_id
-                                                            JOIN offer_order_match oom ON oom.cov_id = cov_s.cov_id
-                                                        WHERE cop_s.order_id = co.order_id
-                                                        GROUP BY oom.delivery_status
-                                                    ) s
+                                            COALESCE(
+                                                (
+                                                    SELECT jsonb_object_agg(status, count)
+                                                    FROM (
+                                                            SELECT oom.delivery_status::TEXT AS status,
+                                                                COUNT(DISTINCT covg_s.covg_id) AS count
+                                                            FROM consumer_orders_produce cop_s
+                                                                JOIN consumer_orders_variety_group covg_s ON covg_s.cop_id = cop_s.cop_id
+                                                                JOIN consumer_orders_variety cov_s ON cov_s.covg_id = covg_s.covg_id
+                                                                JOIN offer_order_match oom ON oom.cov_id = cov_s.cov_id
+                                                            WHERE cop_s.order_id = co.order_id
+                                                            GROUP BY oom.delivery_status
+                                                        ) s
+                                                ),
+                                                '{}'::jsonb
                                             ),
                                             'paid',
                                             (
-                                                SELECT COUNT(*)
+                                                SELECT COUNT(DISTINCT covg_p.covg_id)
                                                 FROM consumer_orders_produce cop_p
                                                     JOIN consumer_orders_variety_group covg_p ON covg_p.cop_id = cop_p.cop_id
                                                     JOIN consumer_orders_variety cov_p ON cov_p.covg_id = covg_p.covg_id
@@ -118,7 +183,7 @@ SELECT json_build_object(
                                             ),
                                             'unpaid',
                                             (
-                                                SELECT COUNT(*)
+                                                SELECT COUNT(DISTINCT covg_u.covg_id)
                                                 FROM consumer_orders_produce cop_u
                                                     JOIN consumer_orders_variety_group covg_u ON covg_u.cop_id = cop_u.cop_id
                                                     JOIN consumer_orders_variety cov_u ON cov_u.covg_id = covg_u.covg_id
@@ -147,26 +212,49 @@ SELECT json_build_object(
                                     WHERE cop.order_id = co.order_id
                                 )
                             ) AS rows
-                        FROM (
-                                SELECT *,
-                                    EXISTS (
+                        FROM consumer_orders co
+                        WHERE co.consumer_id = v_consumer_id
+                            AND co.is_active = p_is_active
+                            AND (
+                                p_cursor IS NULL
+                                OR co.created_at < p_cursor
+                            )
+                            AND (
+                                p_has_payment_method IS NULL
+                                OR (
+                                    p_has_payment_method = TRUE
+                                    AND co.payment_method IS NOT NULL
+                                )
+                                OR (
+                                    p_has_payment_method = FALSE
+                                    AND co.payment_method IS NULL
+                                )
+                            )
+                            AND (
+                                (
+                                    p_is_plan = TRUE
+                                    AND EXISTS (
                                         SELECT 1
                                         FROM consumer_orders_produce cop_pl
                                             JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
-                                        WHERE cop_pl.order_id = co_base.order_id
-                                            AND covg_pl.cfps_id IS NOT NULL
-                                    ) AS v_sub_is_plan
-                                FROM consumer_orders co_base
-                                WHERE co_base.consumer_id = v_consumer_id
-                                    AND co_base.is_active = p_is_active
-                                    AND (
-                                        p_cursor IS NULL
-                                        OR co_base.created_at < p_cursor
+                                            JOIN consumer_orders_variety cov_pl ON cov_pl.covg_id = covg_pl.covg_id
+                                        WHERE cop_pl.order_id = co.order_id
+                                            AND covg_pl.cps_id IS NOT NULL
+                                            AND cov_pl.selection_type IN ('OPEN', 'DENIED', 'PLEDGED')
                                     )
-                            ) co
-                        WHERE (
-                                p_is_plan IS NULL
-                                OR p_is_plan = v_sub_is_plan
+                                )
+                                OR (
+                                    p_is_order = TRUE
+                                    AND NOT EXISTS (
+                                        SELECT 1
+                                        FROM consumer_orders_produce cop_pl
+                                            JOIN consumer_orders_variety_group covg_pl ON covg_pl.cop_id = cop_pl.cop_id
+                                            JOIN consumer_orders_variety cov_pl ON cov_pl.covg_id = covg_pl.covg_id
+                                        WHERE cop_pl.order_id = co.order_id
+                                            AND covg_pl.cps_id IS NOT NULL
+                                            AND cov_pl.selection_type IN ('OPEN', 'DENIED', 'PLEDGED')
+                                    )
+                                )
                             )
                         ORDER BY co.created_at DESC
                         LIMIT p_limit

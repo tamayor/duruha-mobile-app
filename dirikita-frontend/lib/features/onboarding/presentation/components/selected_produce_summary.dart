@@ -1,3 +1,4 @@
+import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/shared/produce/domain/produce_basic_info.dart';
 import 'package:flutter/material.dart';
 
@@ -128,32 +129,9 @@ class SelectedProduceSummary extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: ElevatedButton(
+                child: DuruhaButton(
+                  text: 'LOCK IT IN',
                   onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 64),
-                    backgroundColor: theme.colorScheme.secondary,
-                    foregroundColor: theme.colorScheme.onSecondary,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "LOCK IT IN",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -206,7 +184,7 @@ class SelectedProduceSummary extends StatelessWidget {
           ),
           IconButton(
             onPressed: () => onRemoveItem(produce.id),
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
           ),
         ],
       ),

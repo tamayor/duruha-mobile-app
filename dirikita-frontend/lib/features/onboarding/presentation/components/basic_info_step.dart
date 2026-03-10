@@ -6,7 +6,6 @@ class BasicInfoStep extends StatelessWidget {
   final TextEditingController phoneController;
   final TextEditingController telephoneController;
   final TextEditingController streetAddressController;
-  final TextEditingController barangayController;
   final TextEditingController cityController;
   final TextEditingController provinceController;
   final TextEditingController postalCodeController;
@@ -34,7 +33,6 @@ class BasicInfoStep extends StatelessWidget {
     required this.phoneController,
     required this.telephoneController,
     required this.streetAddressController,
-    required this.barangayController,
     required this.cityController,
     required this.provinceController,
     required this.postalCodeController,
@@ -95,11 +93,6 @@ class BasicInfoStep extends StatelessWidget {
                       controller: streetAddressController,
                       label: "House No., Street Name, Subdivision",
                       icon: Icons.home_outlined,
-                    ),
-                    DuruhaTextField(
-                      controller: barangayController,
-                      label: "Barangay",
-                      icon: Icons.holiday_village_outlined,
                     ),
                     DuruhaTextField(
                       controller: cityController,

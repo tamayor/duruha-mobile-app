@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/domain/pledge_model.dart';
 import 'crop_selection_state.dart';
-import 'widgets/pledge_form.dart';
 // import '../data/transaction_demand_repository.dart';
 import 'widgets/offer_form.dart';
 import '../data/transaction_draft_service.dart';
@@ -455,45 +454,19 @@ class _TransactionCreateScreenState extends State<TransactionCreateScreen> {
                   ? "Enter harvest date and quantities"
                   : "Enter availability and quantities",
               children: [
-                if (widget.mode == 'pledge')
-                  PledgeForm(
-                    produce: produce,
-                    state: _cropStates[produce.id]!,
-                    onDatesChanged: (dates, demandMap) {
-                      final state = _cropStates[produce.id]!;
-                      setState(() {
-                        state.selectedHarvestDates = dates;
-                        state.dateSpecificDemand =
-                            demandMap; // Preserve the demand map!
-                        // Update controller for simple display if needed, though PledgeForm handles its own input now
-                        if (dates.length == 1) {
-                          state.dateController.text = DateFormat(
-                            'MMM dd, yyyy',
-                          ).format(dates.first);
-                        } else {
-                          state.dateController.text =
-                              "${dates.length} dates selected";
-                        }
-                      });
-                      // _fetchAggregateDemand(produce.id, dates); // Removed
-                      _saveDraft(produce.id);
-                    },
-                    onStateChanged: () => _saveDraft(produce.id),
-                  )
-                else
-                  OfferForm(
-                    produce: produce,
-                    state: _cropStates[produce.id]!,
-                    onAvailableDatePicked: (date) {
-                      // Deprecated, OfferForm handles its own variety dates
-                      _saveDraft(produce.id);
-                    },
-                    onDisposalDatePicked: (date) {
-                      // Deprecated
-                      _saveDraft(produce.id);
-                    },
-                    onStateChanged: () => _saveDraft(produce.id),
-                  ),
+                OfferForm(
+                  produce: produce,
+                  state: _cropStates[produce.id]!,
+                  onAvailableDatePicked: (date) {
+                    // Deprecated, OfferForm handles its own variety dates
+                    _saveDraft(produce.id);
+                  },
+                  onDisposalDatePicked: (date) {
+                    // Deprecated
+                    _saveDraft(produce.id);
+                  },
+                  onStateChanged: () => _saveDraft(produce.id),
+                ),
               ],
             ),
           ),

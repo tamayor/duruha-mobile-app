@@ -121,7 +121,8 @@ class _ProfileBody extends StatelessWidget {
     final joinedLabel = DateFormat('MMM yyyy').format(joinedAt);
 
     final locationParts = [
-      profile.barangay,
+      profile.addressLine1,
+      profile.addressLine2,
       profile.city,
       profile.province,
     ].where((p) => p != null && p.isNotEmpty).join(', ');

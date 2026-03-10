@@ -20,10 +20,16 @@ SELECT fo.farmer_id,
     jsonb_build_object(
         'is_price_locked',
         fo.is_price_locked,
-        'fpls_id',
-        fo.fpls_id,
-        'fpls_status',
-        fpls.status,
+        'fps_id',
+        fo.fps_id,
+        'fps_status',
+        fps.status,
+        'fps_plan_code',
+        fpc.plan_code,
+        'fps_plan_name',
+        fpc.plan_name,
+        'fps_price_lock_enabled',
+        fpc.price_lock_enabled,
         'remaining_price_lock_credit',
         fo.remaining_price_lock_credit,
         'total_price_lock_credit',
@@ -33,18 +39,19 @@ SELECT fo.farmer_id,
         'remaining_quantity',
         fo.remaining_quantity,
         'payment_method',
-        fo.payment_method -- Moved from allocation to offer meta
+        null
     ) INTO v_offer_farmer_id,
     v_offer_meta
 FROM farmer_offers fo
-    LEFT JOIN farmer_price_lock_subscriptions fpls ON fpls.fpls_id = fo.fpls_id
+    LEFT JOIN farmer_plan_subscriptions fps ON fps.fps_id = fo.fps_id
+    LEFT JOIN farmer_plan_configs fpc ON fpc.fpc_id = fps.plan_config_id
 WHERE fo.offer_id = p_offer_id;
 IF v_offer_farmer_id IS NULL THEN RAISE EXCEPTION 'Offer not found';
 END IF;
 -- 4. Verify ownership
 IF v_farmer_id <> v_offer_farmer_id THEN RAISE EXCEPTION 'Access denied: you do not own this offer';
 END IF;
--- 5. Build orders array (payment_method removed from foa join)
+-- 5. Build orders array
 SELECT COALESCE(
         jsonb_agg(
             jsonb_build_object(
@@ -58,8 +65,8 @@ SELECT COALESCE(
                 foa.price_lock,
                 'final_price',
                 foa.final_price,
-                'variable_farmer_price',
-                foa.variable_farmer_price,
+                'ftd_price',
+                foa.ftd_price,
                 'order_at',
                 foa.created_at,
                 'date_needed',
@@ -76,8 +83,44 @@ SELECT COALESCE(
                 oom.updated_at,
                 'quality',
                 cop.quality,
-                'fpls_id',
-                foa.fpls_id
+                'produce_note',
+                cop.note,
+                'fps_id',
+                foa.fps_id,
+                -- Allocation-level fps (may differ from offer-level fps)
+                'foa_fps_id',
+                foa.fps_id,
+                'foa_fps_status',
+                alloc_fps.status,
+                'foa_fps_plan_code',
+                alloc_fpc.plan_code,
+                'foa_fps_plan_name',
+                alloc_fpc.plan_name,
+                -- Consumer delivery address
+                'consumer_address',
+                CASE
+                    WHEN ua.address_id IS NOT NULL THEN jsonb_build_object(
+                        'address_id',
+                        ua.address_id,
+                        'address_line_1',
+                        ua.address_line_1,
+                        'address_line_2',
+                        ua.address_line_2,
+                        'city',
+                        ua.city,
+                        'province',
+                        ua.province,
+                        'region',
+                        ua.region,
+                        'postal_code',
+                        ua.postal_code,
+                        'landmark',
+                        ua.landmark,
+                        'country',
+                        ua.country
+                    )
+                    ELSE NULL
+                END
             )
             ORDER BY oom.created_at DESC
         ),
@@ -88,7 +131,10 @@ FROM offer_order_match oom
     JOIN consumer_orders_variety cov ON cov.cov_id = oom.cov_id
     JOIN consumer_orders_variety_group covg ON covg.covg_id = cov.covg_id
     JOIN consumer_orders_produce cop ON cop.cop_id = covg.cop_id
-    LEFT JOIN carriers c ON c.id = oom.carrier_id
+    LEFT JOIN user_carriers c ON c.carrier_id = oom.carrier_id
+    LEFT JOIN users_addresses ua ON ua.address_id = oom.consumer_address
+    LEFT JOIN farmer_plan_subscriptions alloc_fps ON alloc_fps.fps_id = foa.fps_id
+    LEFT JOIN farmer_plan_configs alloc_fpc ON alloc_fpc.fpc_id = alloc_fps.plan_config_id
 WHERE foa.offer_id = p_offer_id;
 -- 6. Build summary totals
 SELECT jsonb_build_object(
@@ -102,7 +148,7 @@ SELECT jsonb_build_object(
                         'PREPARING',
                         'READY_FOR_QC',
                         'QC_PASSED'
-                    ) THEN foa.variable_farmer_price
+                    ) THEN foa.ftd_price
                     ELSE 0
                 END
             ),

@@ -12,8 +12,8 @@
 --
 -- Credit restoration (both modes, only when foa_id is set):
 --   farmer_offers.remaining_quantity          += foa.quantity
---   farmer_price_lock_subscriptions.credit    += foa.price_lock × qty   (if fpls_id set)
---   consumer_price_lock_subscriptions.credits += cov.price_lock × qty   (if covg.cpls_id set)
+--   farmer_price_lock_subscriptions.credit    += foa.price_lock × qty   (if fps_id set)
+--   consumer_plan_subscriptions.credits       += cov.price_lock × qty   (if covg.cps_id set)
 --
 -- Returns:
 --   { success, mode, order_id, scope, affected, message }
@@ -75,10 +75,10 @@ SELECT oom.oom_id,
     oom.foa_id,
     foa.offer_id,
     foa.quantity AS foa_qty,
-    foa.fpls_id,
+    foa.fps_id,
     foa.price_lock AS f_plock,
     cov.price_lock AS c_plock,
-    covg.cpls_id
+    covg.cps_id
 FROM offer_order_match oom
     JOIN consumer_orders_variety cov ON cov.cov_id = oom.cov_id
     JOIN consumer_orders_variety_group covg ON covg.covg_id = cov.covg_id
@@ -101,28 +101,30 @@ SET remaining_quantity = remaining_quantity + v_rec.foa_qty,
     updated_at = now()
 WHERE offer_id = v_rec.offer_id;
 -- Restore Farmer Credits
-IF v_rec.fpls_id IS NOT NULL THEN
+IF v_rec.fps_id IS NOT NULL THEN
 UPDATE farmer_price_lock_subscriptions
 SET remaining_price_lock_credit = remaining_price_lock_credit + (v_rec.f_plock * v_rec.foa_qty)
-WHERE fpls_id = v_rec.fpls_id;
+WHERE fps_id = v_rec.fps_id;
 END IF;
 -- Restore Consumer Credits
-IF v_rec.cpls_id IS NOT NULL THEN
-UPDATE consumer_price_lock_subscriptions
+IF v_rec.cps_id IS NOT NULL THEN
+UPDATE consumer_plan_subscriptions
 SET remaining_credits = remaining_credits + (v_rec.c_plock * v_rec.foa_qty),
     updated_at = now()
-WHERE cpls_id = v_rec.cpls_id;
+WHERE cps_id = v_rec.cps_id;
 END IF;
 END IF;
--- Mode Selection
+-- Mode Selection & Allocation Handling
 IF p_mode = 'cancel' THEN
 UPDATE offer_order_match
 SET delivery_status = 'CANCELLED',
     updated_at = now()
 WHERE oom_id = v_rec.oom_id;
+-- Note: FOA record is kept intact (preserving its original quantity) for audit.
+-- The stock is already returned to farmer_offers in the previous common block.
 -- Deselect variety if no other non-cancelled oom exists for this cov
 UPDATE consumer_orders_variety
-SET is_selected = false
+SET selection_type = 'CANCELLED'
 WHERE cov_id = v_rec.cov_id
     AND NOT EXISTS (
         SELECT 1
@@ -130,10 +132,9 @@ WHERE cov_id = v_rec.cov_id
         WHERE cov_id = v_rec.cov_id
             AND delivery_status != 'CANCELLED'
     );
-ELSE
+ELSE -- Delete Mode: Hard delete everything
 DELETE FROM offer_order_match
 WHERE oom_id = v_rec.oom_id;
--- Only delete foa if it existed
 IF v_rec.foa_id IS NOT NULL THEN
 DELETE FROM farmer_offers_allocations
 WHERE foa_id = v_rec.foa_id;

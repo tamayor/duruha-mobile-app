@@ -1,5 +1,4 @@
 import 'package:duruha/shared/user/presentation/faq_general.dart';
-import 'package:duruha/core/widgets/duruha_bottom_sheet.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:flutter/material.dart';
 

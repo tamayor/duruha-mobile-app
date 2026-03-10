@@ -12,7 +12,7 @@ v_data JSONB;
 v_page_limit INTEGER := 10;
 v_total_count BIGINT;
 BEGIN -- 1. Get user role and first dialect
-SELECT role::TEXT,
+SELECT UPPER(role::TEXT),
     dialect [1] INTO v_user_role,
     v_user_dialect
 FROM public.users

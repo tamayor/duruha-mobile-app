@@ -29,6 +29,24 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
   }
 
   @override
+  Future<String?> deleteAddress(String userId, String addressId) async {
+    try {
+      final response = await supabase.rpc(
+        'manage_profile',
+        params: {
+          'p_user_id': userId,
+          'p_mode': 'delete_address',
+          'p_data': {'address_id': addressId},
+        },
+      );
+      final result = Map<String, dynamic>.from(response as Map);
+      return result['new_active_address_id'] as String?;
+    } catch (e) {
+      throw Exception('Failed to delete address: $e');
+    }
+  }
+
+  @override
   Future<void> updateProfile(ConsumerProfile profile) async {
     try {
       final payload = {
@@ -36,7 +54,8 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
         'name': profile.name,
         'email': profile.email,
         'phone': profile.phone,
-        'barangay': profile.barangay,
+        'address_line_1': profile.addressLine1,
+        'address_line_2': profile.addressLine2,
         'city': profile.city,
         'province': profile.province,
         'postal_code': profile.postalCode,
@@ -45,6 +64,7 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
         'dialect': profile.dialect,
         if (profile.latitude != null) 'latitude': profile.latitude,
         if (profile.longitude != null) 'longitude': profile.longitude,
+        'address_id': profile.addressId,
 
         // Consumer-specific fields
         'consumer_id': profile.consumerId,

@@ -23,33 +23,12 @@ class AuthRepository {
         throw Exception("Auth failed: No user found in response.");
       }
 
-      // 2. Query public.users table for the full profile
-      final response = await supabase
-          .from('users')
-          .select('*, user_farmers(farmer_id), user_consumers(consumer_id)')
-          .eq('id', user.id)
-          .maybeSingle();
+      // 2. Fetch and Sync Profile (Centralized)
+      final userProfile = await SessionService.syncProfile(user.id);
 
-      if (response == null) {
+      if (userProfile == null) {
         throw Exception("User profile not found in database.");
       }
-
-      final userData = Map<String, dynamic>.from(response);
-
-      // Flatten joined IDs
-      if (response['user_farmers'] != null &&
-          (response['user_farmers'] as List).isNotEmpty) {
-        userData['farmer_id'] = response['user_farmers'][0]['farmer_id'];
-      }
-      if (response['user_consumers'] != null &&
-          (response['user_consumers'] as List).isNotEmpty) {
-        userData['consumer_id'] = response['user_consumers'][0]['consumer_id'];
-      }
-
-      final userProfile = UserProfile.fromJson(userData);
-
-      // Save Session Locally
-      await SessionService.saveUser(userProfile);
 
       debugPrint("✅ [AUTH API] Login Success. User ID: ${userProfile.id}");
 
@@ -59,7 +38,7 @@ class AuthRepository {
       );
     } catch (e) {
       debugPrint("❌ [AUTH API] Login Error: $e");
-      throw Exception("Login failed: ${e.toString()}");
+      throw _handleException(e, "Login failed");
     }
   }
 
@@ -75,7 +54,7 @@ class AuthRepository {
       debugPrint("✅ [AUTH API] OTP Sent to: $email");
     } catch (e) {
       debugPrint("❌ [AUTH API] Send OTP Error: $e");
-      throw Exception("Failed to send OTP: ${e.toString()}");
+      throw _handleException(e, "Failed to send OTP");
     }
   }
 
@@ -97,37 +76,11 @@ class AuthRepository {
         throw Exception("Verification failed: No user found.");
       }
 
-      // Query public.users table for the profile
-      final response = await supabase
-          .from('users')
-          .select('*, user_farmers(farmer_id), user_consumers(consumer_id)')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      Map<String, dynamic> userData;
-      if (response == null) {
-        // Create initial profile if it doesn't exist
-        userData = {'id': user.id, 'email': email, 'name': email.split('@')[0]};
-        await supabase.from('users').upsert(userData);
-      } else {
-        userData = Map<String, dynamic>.from(response);
+      // Sync Profile (Centralized)
+      final userProfile = await SessionService.syncProfile(user.id);
+      if (userProfile == null) {
+        throw Exception("Verification failed: Profile not found.");
       }
-
-      // Flatten joined IDs if they exist
-      if (response != null) {
-        if (response['user_farmers'] != null &&
-            (response['user_farmers'] as List).isNotEmpty) {
-          userData['farmer_id'] = response['user_farmers'][0]['farmer_id'];
-        }
-        if (response['user_consumers'] != null &&
-            (response['user_consumers'] as List).isNotEmpty) {
-          userData['consumer_id'] =
-              response['user_consumers'][0]['consumer_id'];
-        }
-      }
-
-      final userProfile = UserProfile.fromJson(userData);
-      await SessionService.saveUser(userProfile);
 
       debugPrint(
         "✅ [AUTH API] Verification Success. User ID: ${userProfile.id}",
@@ -139,7 +92,7 @@ class AuthRepository {
       );
     } catch (e) {
       debugPrint("❌ [AUTH API] Verify OTP Error: $e");
-      throw Exception("Verification failed: ${e.toString()}");
+      throw _handleException(e, "Verification failed");
     }
   }
 
@@ -153,7 +106,7 @@ class AuthRepository {
       debugPrint("✅ [AUTH API] Password Reset Email Sent to: $email");
     } catch (e) {
       debugPrint("❌ [AUTH API] Reset Password Error: $e");
-      throw Exception("Failed to send reset email: ${e.toString()}");
+      throw _handleException(e, "Failed to send reset email");
     }
   }
 
@@ -177,7 +130,7 @@ class AuthRepository {
       debugPrint("✅ [AUTH API] Password Updated Successfully");
     } catch (e) {
       debugPrint("❌ [AUTH API] Update Password Error: $e");
-      throw Exception("Failed to update password: ${e.toString()}");
+      throw _handleException(e, "Failed to update password");
     }
   }
 
@@ -198,7 +151,6 @@ class AuthRepository {
       final updatedFields = {
         'name': data['basicInfo']?['name'] ?? currentUser.name,
         'phone': data['basicInfo']?['phone'] ?? currentUser.phone,
-        'barangay': data['basicInfo']?['barangay'] ?? currentUser.barangay,
         'city': data['basicInfo']?['city'] ?? currentUser.city,
         'province': data['basicInfo']?['province'] ?? currentUser.province,
         'postal_code':
@@ -207,6 +159,7 @@ class AuthRepository {
         'dialect':
             (data['basicInfo']?['dialects'] as List?)?.cast<String>() ??
             currentUser.dialect,
+        'address_id': data['addressId'] ?? currentUser.addressId,
       };
 
       // Update in Supabase users table
@@ -223,8 +176,18 @@ class AuthRepository {
       return updatedUser;
     } catch (e) {
       debugPrint("❌ [AUTH API] Update Profile Error: $e");
-      throw Exception("Failed to update profile: ${e.toString()}");
+      throw _handleException(e, "Failed to update profile");
     }
+  }
+
+  Exception _handleException(dynamic e, String fallbackPrefix) {
+    if (e is AuthException) {
+      return Exception(e.message);
+    }
+    if (e is PostgrestException) {
+      return Exception(e.message);
+    }
+    return Exception("$fallbackPrefix: ${e.toString()}");
   }
 
   Future<void> submitKyc(String userId, Map<String, dynamic> data) async {
