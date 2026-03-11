@@ -73,10 +73,13 @@ class DuruhaColorHelper {
     switch (value.toLowerCase()) {
       // Descriptive scale
       case 'low':
+      case 'saver':
         return isDark ? lowDark : lowLight;
       case 'medium':
+      case 'regular':
         return isDark ? mediumDark : mediumLight;
       case 'high':
+      case 'select':
         return isDark ? highDark : highLight;
 
       // Numeric scale
@@ -101,38 +104,27 @@ class DuruhaColorHelper {
       case '0':
         return isDark ? zeroDark : zeroLight;
 
-      // Type / variety
-      case 'hybrid':
-        return isDark ? hybridDark : hybridLight;
-      case 'native':
-        return isDark ? nativeDark : nativeLight;
-
       // Neutral
       case 'neutral':
+      case 'paused':
+      case 'pending':
+      case 'inactive':
         return isDark ? neutralDark : neutralLight;
 
       // Common statuses
       case 'completed':
-        return isDark ? completedDark : completedLight;
-      case 'pending':
-        return isDark ? pendingDark : pendingLight;
-      case 'cancelled':
-        return isDark ? cancelledDark : cancelledLight;
-
-      // Subscription statuses
       case 'active':
-        return isDark ? const Color(0xFF4ADE80) : const Color(0xFF15803D);
-      case 'inactive':
-        return isDark ? const Color(0xFFA3A3A3) : const Color(0xFF525252);
+        return isDark ? completedDark : completedLight;
+      case 'cancelled':
       case 'expired':
-        return isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E);
-      case 'paused':
-        return isDark ? const Color(0xFF93C5FD) : const Color(0xFF1D4ED8);
+        return isDark ? cancelledDark : cancelledLight;
 
       // Market type
       case 'national':
+      case 'hybrid':
         return isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
       case 'local':
+      case 'native':
         return isDark ? const Color(0xFFA3E635) : const Color(0xFF4D7C0F);
 
       default:

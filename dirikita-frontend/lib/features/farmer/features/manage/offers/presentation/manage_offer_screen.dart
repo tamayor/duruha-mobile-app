@@ -112,7 +112,7 @@ class _ManageOfferContentState extends State<_ManageOfferContent> {
 
   void _onTabChanged() {
     final ctrl = _tabController;
-    if (ctrl == null || ctrl.indexIsChanging) return;
+    if (ctrl == null || ctrl.indexIsChanging || !mounted) return;
     _load(ctrl.index);
   }
 
@@ -134,6 +134,7 @@ class _ManageOfferContentState extends State<_ManageOfferContent> {
   // ── Data ───────────────────────────────────────────────────────────────────
 
   Future<void> _load(int tab) async {
+    if (!mounted) return;
     setState(() {
       _loading[tab] = true;
       _offers[tab] = [];
@@ -159,7 +160,7 @@ class _ManageOfferContentState extends State<_ManageOfferContent> {
   }
 
   Future<void> _loadMore(int tab) async {
-    if (_loadingMore[tab] || !_hasMore[tab]) return;
+    if (_loadingMore[tab] || !_hasMore[tab] || !mounted) return;
     setState(() => _loadingMore[tab] = true);
 
     final result = await _repo.fetchOffers(

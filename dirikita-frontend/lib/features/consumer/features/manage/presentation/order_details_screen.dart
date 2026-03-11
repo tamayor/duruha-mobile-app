@@ -896,7 +896,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // produce name + quality badge
                       Row(
                         children: [
                           Text(
@@ -967,7 +966,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                           DuruhaStatusBadge(
                             label: item.quality,
                             strikethrough: item.isCancelled,
-                            color: cs.onSecondary,
+                            color: DuruhaColorHelper.getColor(
+                              context,
+                              item.quality,
+                            ),
                             isOutlined: true,
                           ),
                         ],

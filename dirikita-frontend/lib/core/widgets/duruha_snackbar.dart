@@ -38,7 +38,7 @@ class DuruhaSnackBar {
         icon = Icons.error_outline_rounded;
         break;
       case DuruhaSnackBarType.warning:
-        backgroundColor = Colors.orange.shade800;
+        backgroundColor = const Color.fromARGB(255, 239, 60, 0);
         foregroundColor = Colors.white;
         icon = Icons.warning_amber_rounded;
         break;

@@ -10,33 +10,8 @@ import 'package:duruha/features/farmer/features/manage/offers/domain/offer_model
 import 'package:duruha/features/farmer/features/subscription/pricelock/presentation/farmer_price_lock_subscription_details_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:duruha/core/helpers/duruha_color_helper.dart';
 import 'package:intl/intl.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Layout & UX improvements summary:
-//
-//  1. AppBar title simplified – show a cleaner "Offer • XXXXXXXX" format.
-//  2. Status badge elevated to a prominent chip with colour-coded background.
-//  3. Overview tab sections now separated by a consistent _SectionDivider +
-//     labelled headers, making each group visually distinct at a glance.
-//  4. Metric tiles use a subtle left-border accent for quick scanning.
-//  5. Reservation progress block is tightened: percentage, labels, and bar are
-//     all vertically aligned in a single card.
-//  6. Availability timeline replaced by a two-column layout with a centred
-//     progress pill and a coloured status badge (not just plain text).
-//  7. Deactivate button moved below a clear divider so it doesn't feel
-//     attached to the content above it.
-//  8. Orders tab — "Order Overview" summary uses a consistent 3-column grid
-//     with coloured dot indicators per quality tier.
-//  9. Each order row now has a subtle card elevation + a numbered index badge
-//     for fast identification in long lists.
-// 10. Dispatch badge is wrapped in a small outlined pill so it always looks
-//     tappable / actionable regardless of whether a date is set.
-// 11. Status scroller has a wider tappable surface and a subtle arrow caret
-//     to clarify it is interactive.
-// 12. Bulk-action dialog and dispatch-date dialog: order list items now show
-//     their index number (1-based) for unambiguous referencing.
-// ─────────────────────────────────────────────────────────────────────────────
 
 class OfferDetailScreen extends StatefulWidget {
   final HarvestOffer offer;
@@ -56,64 +31,56 @@ class OfferDetailScreen extends StatefulWidget {
 
 class _OfferDetailScreenState extends State<OfferDetailScreen> {
   final ManageOfferRepository _repository = ManageOfferRepository();
-  late HarvestOffer _offer;
-  late List<FarmerOfferOrder> _orders;
-  Map<String, dynamic>? _summaryData;
-  final Map<String, String> _originalStatuses = {};
-  bool _isLoadingOrders = false;
-  bool _hasChanges = false; // Tracks if parent needs to refresh
 
-  // ── Short offer ID helper ─────────────────────────────────────────────────
+  // Single source of truth for all offer data (offer + orders + summary).
+  OfferDetail? _detail;
+  final Map<String, String> _originalStatuses = {};
+  bool _isLoading = false;
+  bool _hasChanges = false;
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  HarvestOffer get _offer => _detail?.offer ?? widget.offer;
+  List<FarmerOfferOrder> get _orders => _detail?.orders ?? widget.offer.orders;
+
   String get _shortId {
     final id = _offer.offerId;
     return (id.length > 8 ? id.substring(0, 8) : id).toUpperCase();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _offer = widget.offer;
-    _orders = _offer.orders;
-    _updateOriginalStatuses();
-    _fetchOrders();
-  }
-
   void _updateOriginalStatuses() {
-    for (var o in _orders) {
+    for (final o in _orders) {
       _originalStatuses[o.offerOrderMatchId] =
           o.deliveryStatus ?? DeliveryStatus.pending;
     }
   }
 
-  Future<void> _fetchOrders({bool showLoading = true}) async {
-    if (showLoading && mounted) {
-      setState(() => _isLoadingOrders = true);
-    }
-    final response = await _repository.fetchOrdersByOfferId(_offer.offerId);
+  @override
+  void initState() {
+    super.initState();
+    _updateOriginalStatuses();
+    _fetchDetail();
+  }
+
+  // ── Data fetching ─────────────────────────────────────────────────────────
+
+  Future<void> _fetchDetail({bool showLoading = true}) async {
+    if (showLoading && mounted) setState(() => _isLoading = true);
+
+    final result = await _repository.fetchOfferDetail(_offer.offerId);
+
     if (mounted) {
       setState(() {
-        _orders = response.orders;
-        _summaryData = response.summary;
-        _updateOriginalStatuses();
-        _isLoadingOrders = false;
+        if (result != null) {
+          _detail = result;
+          _hasChanges = true;
+          _updateOriginalStatuses();
+        }
+        _isLoading = false;
       });
     }
   }
 
-  Future<void> _refreshOfferData() async {
-    // Refresh both offer details and orders
-    final updatedOffer = await _repository.fetchOfferById(_offer.offerId);
-
-    // We also want to refresh orders to get the latest summary/counts
-    await _fetchOrders(showLoading: false);
-
-    if (mounted && updatedOffer != null) {
-      setState(() {
-        _offer = updatedOffer;
-        _hasChanges = true; // Mark as changed
-      });
-    }
-  }
+  // ── Dialogs / actions ─────────────────────────────────────────────────────
 
   Future<void> _showUpdateOfferDialog() async {
     final quantityController = TextEditingController();
@@ -122,9 +89,9 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
 
     final confirmed = await DuruhaDialog.show(
       context: context,
-      title: "Edit Offer",
-      message: "Adjust quantity or update the harvest schedule.",
-      confirmText: "UPDATE",
+      title: 'Edit Offer',
+      message: 'Adjust quantity or update the harvest schedule.',
+      confirmText: 'UPDATE',
       icon: Icons.edit_calendar_rounded,
       extraContentBuilder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => Column(
@@ -132,7 +99,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             DuruhaTextField(
-              label: "Quantity (e.g. +10 or -5)",
+              label: 'Quantity (e.g. +10 or -5)',
               icon: Icons.add_chart_rounded,
               controller: quantityController,
               keyboardType: const TextInputType.numberWithOptions(
@@ -145,22 +112,19 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   return 'Please enter a quantity';
                 }
                 final n = double.tryParse(value);
-                if (n == null) {
-                  return 'Quantity must be a number';
-                } else if (n == 0) {
-                  return 'Quantity must not be zero';
-                }
+                if (n == null) return 'Quantity must be a number';
+                if (n == 0) return 'Quantity must not be zero';
                 return null;
               },
             ),
             const SizedBox(height: 16),
             const Text(
-              "Schedule",
+              'Schedule',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text("From: ${DuruhaFormatter.formatDate(fromDate)}"),
+              title: Text('From: ${DuruhaFormatter.formatDate(fromDate)}'),
               trailing: const Icon(Icons.calendar_today_outlined, size: 20),
               onTap: () async {
                 final now = DateTime.now();
@@ -173,14 +137,12 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   firstDate: DateTime(2020),
                   lastDate: DateTime(2100),
                 );
-                if (picked != null) {
-                  setDialogState(() => fromDate = picked);
-                }
+                if (picked != null) setDialogState(() => fromDate = picked);
               },
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text("To: ${DuruhaFormatter.formatDate(toDate)}"),
+              title: Text('To: ${DuruhaFormatter.formatDate(toDate)}'),
               trailing: const Icon(Icons.calendar_today_outlined, size: 20),
               onTap: () async {
                 final now = DateTime.now();
@@ -193,9 +155,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   firstDate: DateTime(2020),
                   lastDate: DateTime(2100),
                 );
-                if (picked != null) {
-                  setDialogState(() => toDate = picked);
-                }
+                if (picked != null) setDialogState(() => toDate = picked);
               },
             ),
           ],
@@ -204,6 +164,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
       final delta = double.tryParse(quantityController.text) ?? 0;
       final updatePayload = <String, dynamic>{};
       if (delta != 0) updatePayload['quantity'] = delta;
@@ -213,7 +174,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       if (toDate != _offer.availableTo) {
         updatePayload['available_to'] = toDate.toIso8601String();
       }
-
       if (updatePayload.isEmpty) return;
 
       final message = await _repository.updateOfferStatus(
@@ -222,19 +182,17 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         update: updatePayload,
       );
 
-      if (mounted) {
-        if (message != null && !message.startsWith("Error:")) {
-          DuruhaSnackBar.showSuccess(context, message);
-          _refreshOfferData(); // Refresh both offer and orders
-        } else {
-          final errorMsg = message?.startsWith("Error:") == true
-              ? message!.replaceFirst("Error:", "").trim()
-              : message;
-          DuruhaSnackBar.showError(
-            context,
-            errorMsg ?? "Failed to update offer",
-          );
-        }
+      if (!mounted) return;
+      if (message != null && !message.startsWith('Error:')) {
+        DuruhaSnackBar.showSuccess(context, message);
+        _fetchDetail(showLoading: false);
+      } else {
+        DuruhaSnackBar.showError(
+          context,
+          message?.startsWith('Error:') == true
+              ? message!.replaceFirst('Error:', '').trim()
+              : message ?? 'Failed to update offer',
+        );
       }
     }
   }
@@ -246,23 +204,19 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         (_offer.totalPriceLockCredit == null ||
             _offer.remainingPriceLockCredit == _offer.totalPriceLockCredit);
 
-    String actionText = mode == 'activate'
-        ? "Reactivate"
-        : (isDeletable ? "Delete" : "Deactivate");
-    String warningMsg = "";
+    final String actionText = mode == 'activate'
+        ? 'Reactivate'
+        : (isDeletable ? 'Delete' : 'Deactivate');
 
-    if (mode == 'activate') {
-      warningMsg =
-          "This will make the offer visible to buyers again. It will use the remaining quantity (${_offer.remainingQuantity}).";
-    } else {
-      warningMsg = isDeletable
-          ? "This will permanently remove the offer. Any price lock credits used will be returned to your subscription."
-          : "This will hide the offer from the market.\n Reserved quantities will remain, but no new orders can be placed. \n\nPrice lock credits already utilized will NOT be returned. Reactivate later if you want to use the remaining credits.";
-    }
+    final String warningMsg = mode == 'activate'
+        ? 'This will make the offer visible to buyers again with ${_offer.remainingQuantity} units available.'
+        : isDeletable
+        ? 'This will permanently remove the offer. Any price lock credits used will be returned to your subscription.'
+        : 'This will hide the offer from the market.\n Reserved quantities will remain, but no new orders can be placed. \n\nPrice lock credits already utilized will NOT be returned. Reactivate later if you want to use the remaining credits.';
 
     final confirmed = await DuruhaDialog.show(
       context: context,
-      title: "$actionText Offer?",
+      title: '$actionText Offer?',
       message: warningMsg,
       confirmText: actionText.toUpperCase(),
       isDanger: mode != 'activate',
@@ -275,27 +229,26 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
       final message = await _repository.updateOfferStatus(
         offerId: _offer.offerId,
         mode: mode,
       );
-      if (mounted) {
-        if (message != null && !message.startsWith("Error:")) {
-          DuruhaSnackBar.showSuccess(context, message);
-          if (mode == 'delete' && isDeletable) {
-            Navigator.pop(context, true);
-          } else {
-            _refreshOfferData();
-          }
+      if (!mounted) return;
+      if (message != null && !message.startsWith('Error:')) {
+        DuruhaSnackBar.showSuccess(context, message);
+        if (mode == 'delete' && isDeletable) {
+          Navigator.pop(context, true);
         } else {
-          final errorMsg = message?.startsWith("Error:") == true
-              ? message!.replaceFirst("Error:", "").trim()
-              : message;
-          DuruhaSnackBar.showError(
-            context,
-            errorMsg ?? "Failed to ${actionText.toLowerCase()} offer",
-          );
+          _fetchDetail(showLoading: false);
         }
+      } else {
+        DuruhaSnackBar.showError(
+          context,
+          message?.startsWith('Error:') == true
+              ? message!.replaceFirst('Error:', '').trim()
+              : message ?? 'Failed to ${actionText.toLowerCase()} offer',
+        );
       }
     }
   }
@@ -308,7 +261,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         _offer.remainingQuantity == _offer.quantity &&
         (_offer.totalPriceLockCredit == null ||
             _offer.remainingPriceLockCredit == _offer.totalPriceLockCredit);
-    final actionText = isDeletable ? "Delete" : "Deactivate";
+    final actionText = isDeletable ? 'Delete' : 'Deactivate';
 
     final editableOrders = _orders
         .where(
@@ -317,6 +270,13 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           ),
         )
         .toList();
+
+    final canReactivate =
+        !_offer.isActive &&
+        _offer.remainingQuantity == _offer.quantity &&
+        _offer.remainingQuantity > 0 &&
+        (_offer.isPriceLocked == false ||
+            _detail?.fpsStatus?.toUpperCase() == 'ACTIVE');
 
     return PopScope(
       canPop: false,
@@ -329,8 +289,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         initialIndex: 1,
         child: DuruhaScaffold(
           onBackPressed: () => Navigator.pop(context, _hasChanges),
-          // ── Cleaner title: short ID clearly separated from the label
-          appBarTitle: "Offer · $_shortId",
+          appBarTitle: 'Offer · $_shortId',
           appBarActions: [
             if (_offer.isActive)
               Padding(
@@ -340,12 +299,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     'edit',
                     if (editableOrders.isNotEmpty) 'update_all_status',
                     if (_orders.isNotEmpty) 'set_dispatch_all',
-                    if (_offer.isActive)
-                      'deactivate'
-                    else if (_offer.remainingQuantity > 0 &&
-                        (_offer.isPriceLocked == false ||
-                            _summaryData?['fps_status'] == 'ACTIVE'))
-                      'reactivate',
+                    'deactivate',
                   ],
                   tooltip: 'Actions',
                   icon: const Icon(Icons.more_vert),
@@ -356,19 +310,12 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     switch (value) {
                       case 'edit':
                         _showUpdateOfferDialog();
-                        break;
                       case 'update_all_status':
                         _showBulkUpdateDialog(context, editableOrders);
-                        break;
                       case 'set_dispatch_all':
                         _showSetDispatchDateDialog(context, _orders);
-                        break;
                       case 'deactivate':
                         _handleOfferStatusChange('delete');
-                        break;
-                      case 'reactivate':
-                        _handleOfferStatusChange('activate');
-                        break;
                     }
                   },
                   labelBuilder: (value) => switch (value) {
@@ -376,7 +323,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     'update_all_status' => 'Update All Orders',
                     'set_dispatch_all' => 'Set Dispatch Date (All)',
                     'deactivate' => '$actionText Offer',
-                    'reactivate' => 'Reactivate Offer',
                     _ => value,
                   },
                   itemIcons: {
@@ -386,14 +332,10 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     'deactivate': isDeletable
                         ? Icons.delete_forever
                         : Icons.warning_amber_rounded,
-                    'reactivate': Icons.play_circle_outline,
                   },
                 ),
               ),
-            if (!_offer.isActive &&
-                _offer.remainingQuantity > 0 &&
-                (_offer.isPriceLocked == false ||
-                    _summaryData?['fps_status'] == 'ACTIVE'))
+            if (canReactivate)
               Padding(
                 padding: const EdgeInsets.only(right: 8.0),
                 child: IconButton(
@@ -406,8 +348,8 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           body: DuruhaScrollHideWrapper(
             bar: DuruhaTabBar(
               tabs: const [
-                Tab(text: "OVERVIEW"),
-                Tab(text: "ORDERS"),
+                Tab(text: 'OVERVIEW'),
+                Tab(text: 'ORDERS'),
               ],
             ),
             body: TabBarView(
@@ -465,61 +407,57 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         ? (_offer.reservedQty / _offer.quantity).clamp(0.0, 1.0)
         : 0.0;
 
+    final canReactivate =
+        _offer.remainingQuantity > 0 &&
+        (_offer.isPriceLocked == false ||
+            _detail?.fpsStatus?.toUpperCase() == 'ACTIVE');
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── 1. Header band: status chip + offer ID ─────────────────────
           _buildOfferHeaderBand(theme),
           const SizedBox(height: 16),
 
-          if (_summaryData != null) ...[
+          if (_detail != null) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: DuruhaSectionContainer(
-                title: "SUMMARY",
+                title: 'SUMMARY',
                 padding: const EdgeInsets.all(16),
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _buildSummaryStat(
-                        "Total Qty",
-                        "${_summaryData!['quantity'] ?? 0} kg",
+                        'Total Qty',
+                        '${_offer.quantity} kg',
                         theme,
                       ),
                       _buildSummaryStat(
-                        "Remaining",
-                        "${_summaryData!['remaining_quantity'] ?? 0} kg",
+                        'Remaining',
+                        '${_offer.remainingQuantity} kg',
                         theme,
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _buildSummaryStat(
-                        "Active Value",
-                        DuruhaFormatter.formatCurrency(
-                          (_summaryData!['active_total'] as num?)?.toDouble() ??
-                              0,
-                        ),
+                        'Active Value',
+                        DuruhaFormatter.formatCurrency(_detail!.activeTotal),
                         theme,
                       ),
                       const Spacer(),
                     ],
                   ),
-                  if (_summaryData!['is_price_locked'] == true) ...[
-                    _buildPriceLockSection(theme),
-                  ],
+                  if (_offer.isPriceLocked) ...[_buildPriceLockSection(theme)],
                 ],
               ),
             ),
             const SizedBox(height: 16),
           ],
 
-          // ── 2. Produce identity ────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
             child: Column(
@@ -542,33 +480,27 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                // Produce ID as a subtle monospace chip
                 _buildIdChip(
                   theme,
-                  label: "PRODUCE",
+                  label: 'PRODUCE',
                   id: widget.produce.produceId,
                 ),
               ],
             ),
           ),
 
-          _SectionDivider(label: "RESERVATION PROGRESS", theme: theme),
-
-          // ── 4. Reservation progress ────────────────────────────────────
+          _SectionDivider(label: 'RESERVATION PROGRESS', theme: theme),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: _buildReservationCard(theme, reserveProgress),
           ),
 
-          _SectionDivider(label: "OFFER AVAILABILITY", theme: theme),
-
-          // ── 5. Availability timeline ───────────────────────────────────
+          _SectionDivider(label: 'OFFER AVAILABILITY', theme: theme),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: _buildAvailabilityCard(theme, now, timeProgress),
           ),
 
-          // ── 6. Status Action (visually separated) ──────────────────
           const SizedBox(height: 32),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -579,20 +511,18 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
             child: _offer.isActive
                 ? (isDeletable
                       ? DuruhaButton(
-                          text: "Delete Offer",
+                          text: 'Delete Offer',
                           backgroundColor: Colors.red,
                           onPressed: () => _handleOfferStatusChange('delete'),
                         )
                       : DuruhaButton(
-                          text: "Deactivate Offer",
+                          text: 'Deactivate Offer',
                           onPressed: () => _handleOfferStatusChange('delete'),
                           isOutline: true,
                         ))
-                : (_offer.remainingQuantity > 0 &&
-                          (_offer.isPriceLocked == false ||
-                              _summaryData?['fps_status'] == 'ACTIVE')
+                : (canReactivate
                       ? DuruhaButton(
-                          text: "Reactivate Offer",
+                          text: 'Reactivate Offer',
                           backgroundColor: theme.colorScheme.tertiary,
                           onPressed: () => _handleOfferStatusChange('activate'),
                         )
@@ -606,7 +536,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   }
 
   Widget _buildPriceLockSection(ThemeData theme) {
-    final String status = "${_summaryData!['fps_status']}".toUpperCase();
+    final String status = (_detail?.fpsStatus ?? '').toUpperCase();
     final bool isActive = status == 'ACTIVE';
 
     return Column(
@@ -615,32 +545,33 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         const SizedBox(height: 12),
         const Divider(),
         const SizedBox(height: 16),
-
-        // Section Header with Status Badge
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              "Price Lock Subscription",
+              'Price Lock Subscription',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.onSurface,
               ),
             ),
-            _buildStatusBadge(theme, status, isActive),
+            _buildStatusBadge(
+              theme,
+              status.isEmpty ? 'UNKNOWN' : status,
+              isActive,
+            ),
           ],
         ),
         const SizedBox(height: 12),
-
-        // Subscription Content Card
         DuruhaInkwell(
           variation: InkwellVariation.brand,
           onTap: () {
+            if (_detail?.fpsId == null) return;
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => FarmerPriceLockSubscriptionDetailsScreen(
-                  fplsId: _summaryData!['fps_id'],
+                  fplsId: _detail!.fpsId!,
                 ),
               ),
             );
@@ -655,16 +586,13 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
               ),
             ),
             child: IntrinsicHeight(
-              // Allows the VerticalDivider to know its height
               child: Row(
                 children: [
                   Expanded(
                     child: _buildSummaryStat(
-                      "Total Credit",
+                      'Total Credit',
                       DuruhaFormatter.formatCurrency(
-                        (_summaryData!['total_price_lock_credit'] as num?)
-                                ?.toDouble() ??
-                            0,
+                        _offer.totalPriceLockCredit ?? 0,
                       ),
                       theme,
                     ),
@@ -678,11 +606,9 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildSummaryStat(
-                      "Remaining",
+                      'Remaining',
                       DuruhaFormatter.formatCurrency(
-                        (_summaryData!['remaining_price_lock_credit'] as num?)
-                                ?.toDouble() ??
-                            0,
+                        _offer.remainingPriceLockCredit ?? 0,
                       ),
                       theme,
                     ),
@@ -721,9 +647,8 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     );
   }
 
-  /// Top coloured band showing active/expired status + offer ID.
   Widget _buildOfferHeaderBand(ThemeData theme) {
-    final isActive = widget.isActive;
+    final isActive = _offer.isActive;
     final bandColor = isActive
         ? theme.colorScheme.tertiaryContainer
         : theme.colorScheme.surfaceContainerHigh;
@@ -738,7 +663,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Status pill
           Row(
             children: [
               Icon(
@@ -750,7 +674,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                isActive ? "ACTIVE OFFER" : "OFFER EXPIRED",
+                isActive ? 'ACTIVE OFFER' : 'OFFER EXPIRED',
                 style: TextStyle(
                   color: labelColor,
                   fontWeight: FontWeight.bold,
@@ -760,14 +684,12 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
               ),
             ],
           ),
-          // Offer ID chip
-          _buildIdChip(theme, label: "OFFER", id: _offer.offerId),
+          _buildIdChip(theme, label: 'OFFER', id: _offer.offerId),
         ],
       ),
     );
   }
 
-  /// Small monospace ID chip used for both offer ID and produce ID.
   Widget _buildIdChip(
     ThemeData theme, {
     required String label,
@@ -781,7 +703,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        "$label · $shortId",
+        '$label · $shortId',
         style: TextStyle(
           fontFamily: 'Courier',
           fontSize: 10,
@@ -793,23 +715,21 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     );
   }
 
-  /// Reservation progress card with aligned stats and progress bar.
   Widget _buildReservationCard(ThemeData theme, double reserveProgress) {
     final pct = (reserveProgress * 100).toInt();
     return DuruhaSectionContainer(
       children: [
-        // Percentage + remaining label
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              "$pct% Reserved",
+              '$pct% Reserved',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             Text(
-              "${DuruhaFormatter.formatNumber(_offer.remainingQuantity)} kg remaining",
+              '${DuruhaFormatter.formatNumber(_offer.remainingQuantity)} kg remaining',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -824,21 +744,20 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           color: theme.colorScheme.onTertiary,
         ),
         const SizedBox(height: 10),
-        // Target / reserved row
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _buildProgressLegendItem(
               theme,
               icon: Icons.inventory_2_outlined,
-              label: "Target",
-              value: "${DuruhaFormatter.formatNumber(_offer.quantity)} kg",
+              label: 'Target',
+              value: '${DuruhaFormatter.formatNumber(_offer.quantity)} kg',
             ),
             _buildProgressLegendItem(
               theme,
               icon: Icons.bookmark_added_outlined,
-              label: "Reserved",
-              value: "${DuruhaFormatter.formatNumber(_offer.reservedQty)} kg",
+              label: 'Reserved',
+              value: '${DuruhaFormatter.formatNumber(_offer.reservedQty)} kg',
               alignRight: true,
             ),
           ],
@@ -886,18 +805,16 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     );
   }
 
-  /// Availability card: dates, timeline bar, and coloured status badge.
   Widget _buildAvailabilityCard(
     ThemeData theme,
     DateTime now,
     double timeProgress,
   ) {
     final timelineStatus = _getTimelineStatus(_offer, now);
-    // Colour based on urgency
     Color statusColor;
-    if (timelineStatus.contains("expired")) {
+    if (timelineStatus.contains('expired')) {
       statusColor = theme.colorScheme.error;
-    } else if (timelineStatus.contains("remaining") &&
+    } else if (timelineStatus.contains('remaining') &&
         _offer.availableTo.difference(now).inDays <= 3) {
       statusColor = Colors.orange;
     } else {
@@ -909,10 +826,10 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildDateColumn(context, "Start Date", _offer.availableFrom),
+            _buildDateColumn(context, 'Start Date', _offer.availableFrom),
             _buildDateColumn(
               context,
-              "End Date",
+              'End Date',
               _offer.availableTo,
               isEnd: true,
             ),
@@ -928,7 +845,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           color: theme.colorScheme.onSurfaceVariant,
         ),
         const SizedBox(height: 10),
-        // Coloured status badge centred below the bar
         Center(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -959,8 +875,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     final pendingPaymentCount = _orders.where((o) {
       final isUnpaid = !o.farmerIsPaid;
       final status = o.deliveryStatus?.toUpperCase();
-      final isPendingStatus = DeliveryStatus.farmerEditable.contains(status);
-      return isUnpaid && isPendingStatus;
+      return isUnpaid && DeliveryStatus.farmerEditable.contains(status);
     }).length;
 
     final needsDispatchOrders = _orders.where((o) {
@@ -969,11 +884,10 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       return o.needsDispatchSetup && !isCancelled;
     }).toList();
 
-    // Quality totals
     double saverKg = 0, regularKg = 0, selectKg = 0;
     final Map<String, int> statusCounts = {};
 
-    for (var o in _orders) {
+    for (final o in _orders) {
       if ((o.deliveryStatus ?? '').toUpperCase() == DeliveryStatus.cancelled) {
         continue;
       }
@@ -1018,7 +932,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     ),
                   ),
                   Text(
-                    "${DuruhaFormatter.formatCompactNumber(kg)} kg",
+                    '${DuruhaFormatter.formatCompactNumber(kg)} kg',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -1036,7 +950,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Dispatch Alert Banner ─────────────────────────────────────
+          // ── Dispatch Alert Banner ───────────────────────────────────────
           if (needsDispatchOrders.isNotEmpty) ...[
             DuruhaInkwell(
               onTap: () =>
@@ -1058,7 +972,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "${needsDispatchOrders.length} order${needsDispatchOrders.length > 1 ? 's' : ''} need dispatch date",
+                            '${needsDispatchOrders.length} order${needsDispatchOrders.length > 1 ? 's' : ''} need dispatch date',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 11,
@@ -1068,7 +982,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                           SizedBox(
                             width: 160,
                             child: DuruhaGlidingIconBadge(
-                              text: "SET DISPATCH DATE",
+                              text: 'SET DISPATCH DATE',
                               icon: Icons.local_shipping_rounded,
                               baseColor: Colors.white38,
                               highlightColor: Colors.amberAccent,
@@ -1088,21 +1002,29 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
             const SizedBox(height: 12),
           ],
 
-          // ── Order Overview summary ───────────────────────────────────
+          // ── Order Overview ──────────────────────────────────────────────
           if (_orders.isNotEmpty) ...[
             DuruhaSectionContainer(
-              title: "Overview",
+              title: 'Overview',
               padding: const EdgeInsets.all(14),
               children: [
                 Row(
                   children: [
-                    buildQualityStat("Saver", saverKg, tierDots['Saver']!),
                     buildQualityStat(
-                      "Regular",
-                      regularKg,
-                      tierDots['Regular']!,
+                      'Saver',
+                      saverKg,
+                      DuruhaColorHelper.getColor(context, 'saver'),
                     ),
-                    buildQualityStat("Select", selectKg, tierDots['Select']!),
+                    buildQualityStat(
+                      'Regular',
+                      regularKg,
+                      DuruhaColorHelper.getColor(context, 'regular'),
+                    ),
+                    buildQualityStat(
+                      'Select',
+                      selectKg,
+                      DuruhaColorHelper.getColor(context, 'select'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -1139,7 +1061,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                             ),
                           ),
                           Text(
-                            "${e.key}  ${e.value}",
+                            '${e.key}  ${e.value}',
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: chipColor,
@@ -1171,7 +1093,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          "$pendingPaymentCount order${pendingPaymentCount > 1 ? 's' : ''} pending payment",
+                          '$pendingPaymentCount order${pendingPaymentCount > 1 ? 's' : ''} pending payment',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onErrorContainer,
                             fontWeight: FontWeight.bold,
@@ -1186,12 +1108,39 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
             const SizedBox(height: 14),
           ],
 
-          // ── Orders list ──────────────────────────────────────────────
+          // ── Financials summary ──────────────────────────────────────────
+          if (_detail != null) ...[
+            DuruhaSectionContainer(
+              title: 'Financials',
+              padding: const EdgeInsets.all(14),
+              children: [
+                Row(
+                  children: [
+                    _buildSummaryStat(
+                      'Active Value',
+                      DuruhaFormatter.formatCurrency(_detail!.activeTotal),
+                      theme,
+                    ),
+                    _buildSummaryStat(
+                      'Total Earnings',
+                      DuruhaFormatter.formatCurrency(
+                        _detail!.farmerTotalEarnings,
+                      ),
+                      theme,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ── Orders list ─────────────────────────────────────────────────
           DuruhaSectionContainer(
-            title: "Scheduled Orders",
+            title: 'Scheduled Orders',
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
             children: [
-              if (_isLoadingOrders)
+              if (_isLoading)
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(20),
@@ -1224,19 +1173,15 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
       decoration: BoxDecoration(
-        // Adding a very subtle dash-style border or light fill
-        // makes the empty section feel intentional
         color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-          style: BorderStyle.solid,
         ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 1. Enhanced Icon with a "background circle"
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1244,17 +1189,14 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons
-                  .calendar_today_outlined, // Changed to a slightly softer icon
+              Icons.calendar_today_outlined,
               size: 32,
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 16),
-
-          // 2. Primary Message
           Text(
-            "No orders scheduled yet",
+            'No orders scheduled yet',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.onErrorContainer,
@@ -1262,10 +1204,8 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
             ),
           ),
           const SizedBox(height: 4),
-
-          // 3. Helpful Hint (Secondary Text)
           Text(
-            "New orders will appear here once customers start reserving your produce.",
+            'New orders will appear here once customers start reserving your produce.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -1286,9 +1226,9 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
 
     await DuruhaDialog.show(
       context: context,
-      title: "Update ${editableOrders.length} Orders",
-      message: "Set a new status for all editable orders in this offer.",
-      confirmText: "UPDATE STATUS",
+      title: 'Update ${editableOrders.length} Orders',
+      message: 'Set a new status for all editable orders in this offer.',
+      confirmText: 'UPDATE STATUS',
       icon: Icons.edit_note_rounded,
       extraContentBuilder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => Column(
@@ -1296,7 +1236,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DuruhaSelectionChipGroup(
-              title: "Delivery Status",
+              title: 'Delivery Status',
               options: DeliveryStatus.farmerEditable,
               selectedValues: [selectedStatus],
               onToggle: (status) =>
@@ -1309,29 +1249,32 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           ],
         ),
       ),
-      confirmColor: Theme.of(context).colorScheme.primary,
     ).then((confirmed) async {
       if (confirmed == true) {
-        setState(() => _isLoadingOrders = true);
+        if (!mounted) return;
+        setState(() => _isLoading = true);
         final orderIds = editableOrders
             .map((e) => e.offerOrderMatchId)
             .toList();
-        final success = await _repository.updateOrdersDeliveryStatus(
-          orderIds,
-          selectedStatus,
-          null,
+        final result = await _repository.updateOfferOrders(
+          offerId: _offer.offerId,
+          orderIds: orderIds,
+          deliveryStatus: selectedStatus,
         );
-        if (!context.mounted) return;
-        if (success) {
+        if (!mounted || !context.mounted) return;
+        final isError = result == null || result.startsWith('Error');
+        if (!isError) {
           DuruhaSnackBar.showSuccess(
             context,
-            "Successfully updated ${orderIds.length} orders.",
+            'Successfully updated ${orderIds.length} orders.',
           );
-          setState(() => _isLoadingOrders = false);
-          _fetchOrders(showLoading: false);
+          _fetchDetail(showLoading: false);
         } else {
-          DuruhaSnackBar.showError(context, "Failed to update orders.");
-          setState(() => _isLoadingOrders = false);
+          DuruhaSnackBar.showError(
+            context,
+            result ?? 'Failed to update orders.',
+          );
+          setState(() => _isLoading = false);
         }
       }
     });
@@ -1345,21 +1288,17 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     DateTime? initialDateRaw = targetOrders.length == 1
         ? targetOrders.first.dispatchAt
         : null;
-
-    // Year 2100 is a database placeholder for "unset" dates.
-    // If we pass it to showDatePicker, it will crash if it exceeds lastDate.
     if (initialDateRaw != null && initialDateRaw.year >= 2100) {
       initialDateRaw = null;
     }
-
     DateTime? selectedDispatchAt = initialDateRaw;
 
     await DuruhaDialog.show(
       context: context,
-      title: "Set Dispatch Date",
+      title: 'Set Dispatch Date',
       message:
-          "Update dispatch date for ${targetOrders.length == 1 ? 'this order' : '${targetOrders.length} orders'}:",
-      confirmText: "SET DATE",
+          'Update dispatch date for ${targetOrders.length == 1 ? 'this order' : '${targetOrders.length} orders'}:',
+      confirmText: 'SET DATE',
       icon: Icons.calendar_today_rounded,
       extraContentBuilder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => Column(
@@ -1376,7 +1315,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     final order = entry.value;
                     final displayName =
                         order.consumerName ??
-                        "Reserved (${DuruhaRandomNameGenerator.generate(idSeed: idx.toString())})";
+                        'Reserved (${DuruhaRandomNameGenerator.generate(idSeed: idx.toString())})';
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 4.0),
                       child: Row(
@@ -1391,7 +1330,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                               shape: BoxShape.circle,
                             ),
                             child: Text(
-                              "${idx + 1}",
+                              '${idx + 1}',
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
@@ -1448,7 +1387,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     const SizedBox(width: 12),
                     Text(
                       selectedDispatchAt == null
-                          ? "Select Date"
+                          ? 'Select Date'
                           : DuruhaFormatter.formatDate(selectedDispatchAt!),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -1463,23 +1402,28 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       ),
     ).then((confirmed) async {
       if (confirmed == true && selectedDispatchAt != null) {
-        setState(() => _isLoadingOrders = true);
+        if (!mounted) return;
+        setState(() => _isLoading = true);
         final orderIds = targetOrders.map((e) => e.offerOrderMatchId).toList();
-        final success = await _repository.updateOrdersDeliveryStatus(
-          orderIds,
-          null,
-          selectedDispatchAt,
+        final result = await _repository.updateOfferOrders(
+          offerId: _offer.offerId,
+          orderIds: orderIds,
+          dispatchAt: selectedDispatchAt,
         );
-        if (!context.mounted) return;
-        if (success) {
+        if (!mounted || !context.mounted) return;
+        final isError = result == null || result.startsWith('Error');
+        if (!isError) {
           DuruhaSnackBar.showSuccess(
             context,
-            "Successfully set dispatch date for ${orderIds.length} orders.",
+            'Successfully set dispatch date for ${orderIds.length} orders.',
           );
-          _fetchOrders(showLoading: false);
+          _fetchDetail(showLoading: false);
         } else {
-          DuruhaSnackBar.showError(context, "Failed to set dispatch date.");
-          setState(() => _isLoadingOrders = false);
+          DuruhaSnackBar.showError(
+            context,
+            result ?? 'Failed to set dispatch date.',
+          );
+          setState(() => _isLoading = false);
         }
       }
     });
@@ -1493,28 +1437,41 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     if (orderIndex == -1) return;
     final oldOrder = _orders[orderIndex];
 
+    // Optimistic update
     setState(() {
-      _orders[orderIndex] = oldOrder.copyWith(deliveryStatus: newStatus);
+      final updated = List<FarmerOfferOrder>.from(_orders);
+      updated[orderIndex] = oldOrder.copyWith(deliveryStatus: newStatus);
+      _detail = _detail?.copyWithOrders(orders: updated);
     });
 
-    final success = await _repository.updateOrderDeliveryStatus(
-      orderId,
-      newStatus,
+    final result = await _repository.updateOfferOrders(
+      offerId: _offer.offerId,
+      orderIds: [orderId],
+      deliveryStatus: newStatus,
     );
     if (!mounted) return;
 
-    if (success) {
+    final isError = result == null || result.startsWith('Error');
+    if (!isError) {
       _originalStatuses[orderId] = newStatus;
       DuruhaSnackBar.showSuccess(
         context,
-        "Status → ${newStatus.replaceAll('_', ' ')}",
+        'Status → ${newStatus.replaceAll('_', ' ')}',
       );
-      _fetchOrders(showLoading: false);
+      _fetchDetail(showLoading: false);
     } else {
-      setState(() {
-        _orders[orderIndex] = oldOrder;
-      });
-      DuruhaSnackBar.showError(context, "Failed to update status");
+      // Revert optimistic update
+      final currentIndex = _orders.indexWhere(
+        (o) => o.offerOrderMatchId == orderId,
+      );
+      if (currentIndex != -1) {
+        setState(() {
+          final reverted = List<FarmerOfferOrder>.from(_orders);
+          reverted[currentIndex] = oldOrder;
+          _detail = _detail?.copyWithOrders(orders: reverted);
+        });
+      }
+      DuruhaSnackBar.showError(context, result ?? 'Failed to update status');
     }
   }
 
@@ -1526,25 +1483,15 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     if (newStatus == order.deliveryStatus) return;
     final confirmed = await DuruhaDialog.show(
       context: context,
-      title: "Change Status?",
+      title: 'Change Status?',
       message:
-          "Update order to ${newStatus.replaceAll('_', ' ').toUpperCase()}?",
-      confirmText: "UPDATE",
+          'Update order to ${newStatus.replaceAll('_', ' ').toUpperCase()}?',
+      confirmText: 'UPDATE',
       confirmColor: DeliveryStatus.getStatusColor(newStatus),
     );
     if (confirmed != true) return;
 
     final orderId = order.offerOrderMatchId;
-    final orderIndex = _orders.indexWhere(
-      (o) => o.offerOrderMatchId == orderId,
-    );
-    if (orderIndex != -1) {
-      setState(() {
-        _orders[orderIndex] = _orders[orderIndex].copyWith(
-          deliveryStatus: newStatus,
-        );
-      });
-    }
     if (_originalStatuses[orderId] != newStatus) {
       await _updateStatus(orderId, newStatus);
     }
@@ -1561,12 +1508,12 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     final statusColor = DeliveryStatus.getStatusColor(currentStatus);
     final displayName =
         order.consumerName ??
-        "Reserved (${DuruhaRandomNameGenerator.generate(idSeed: (orderNumber - 1).toString())})";
+        'Reserved (${DuruhaRandomNameGenerator.generate(idSeed: (orderNumber - 1).toString())})';
 
     final bool isCancelled =
         currentStatus.toUpperCase() == DeliveryStatus.cancelled;
 
-    final widget = Container(
+    final card = Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
@@ -1580,7 +1527,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header: index + name + quality ───────────────────────────
+          // Header: index + name + quality
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -1600,7 +1547,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: Text(
-                    "$orderNumber",
+                    '$orderNumber',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -1635,17 +1582,16 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Dates row ───────────────────────────────────────────
+                // Dates row
                 Row(
                   children: [
                     _buildCompactDateTile(
                       theme,
-                      label: "NEEDED BY",
+                      label: 'NEEDED BY',
                       date: order.dateNeeded ?? order.createdAt,
                       icon: Icons.event_available_outlined,
                     ),
                     const SizedBox(width: 12),
-                    // Dispatch tile / gliding badge
                     Expanded(
                       child: isCancelled
                           ? Container(
@@ -1676,7 +1622,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        "DISPATCH",
+                                        'DISPATCH',
                                         style: TextStyle(
                                           fontSize: 9,
                                           fontWeight: FontWeight.w700,
@@ -1687,7 +1633,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                                         ),
                                       ),
                                       Text(
-                                        "NOT INCLUDED",
+                                        'NOT INCLUDED',
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
@@ -1714,7 +1660,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: DuruhaGlidingIconBadge(
-                                  text: "SET DISPATCH",
+                                  text: 'SET DISPATCH',
                                   icon: Icons.local_shipping_rounded,
                                   baseColor: Colors.white38,
                                   highlightColor: Colors.amberAccent,
@@ -1723,7 +1669,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                             )
                           : _buildCompactDateTile(
                               theme,
-                              label: "DISPATCH",
+                              label: 'DISPATCH',
                               date: order.dispatchAt!,
                               icon: Icons.local_shipping_outlined,
                               onTap: () =>
@@ -1732,15 +1678,20 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                     ),
                   ],
                 ),
-
+                Align(
+                  alignment: Alignment.center,
+                  child: Text(
+                    "Please Dispatch by ${order.dateNeeded?.difference(DateTime.now().add(const Duration(days: 2))).inDays} days",
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 10),
-
-                // ── Status scroller ─────────────────────────────────────
                 _buildStatusScroller(context, order),
-
                 const SizedBox(height: 10),
 
-                // ── Financials row ──────────────────────────────────────
+                // Financials row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -1758,8 +1709,8 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                           ),
                         ),
                         Text(
-                          "${DuruhaFormatter.formatNumber(order.quantity)} kg"
-                          "${order.price > 0 ? ' @ ${DuruhaFormatter.formatCurrency(order.price)}' : ''}",
+                          '${DuruhaFormatter.formatNumber(order.quantity)} kg'
+                          '${order.price > 0 ? ' @ ${DuruhaFormatter.formatCurrency(order.price)}' : ''}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -1770,7 +1721,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   ],
                 ),
 
-                // ── Carrier ─────────────────────────────────────────────
                 if (order.carrierName != null) ...[
                   const SizedBox(height: 8),
                   Row(
@@ -1791,7 +1741,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   ),
                 ],
 
-                // ── Delivery address ────────────────────────────────────
                 if (order.consumerAddress != null) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -1825,13 +1774,12 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                               if (order.consumerAddress!.addressLine1 != null &&
                                   order.consumerAddress!.addressLine2 != null)
                                 Text(
-                                  "${order.consumerAddress!.addressLine1} ${order.consumerAddress!.addressLine2}",
+                                  '${order.consumerAddress!.addressLine1} ${order.consumerAddress!.addressLine2}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     fontWeight: FontWeight.w600,
                                     color: theme.colorScheme.onSurface,
                                   ),
                                 ),
-
                               Text(
                                 [
                                       order.consumerAddress!.city,
@@ -1848,7 +1796,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                               if (order.consumerAddress!.landmark != null &&
                                   order.consumerAddress!.landmark!.isNotEmpty)
                                 Text(
-                                  "Near: ${order.consumerAddress!.landmark}",
+                                  'Near: ${order.consumerAddress!.landmark}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                     fontSize: 10,
@@ -1863,7 +1811,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   ),
                 ],
 
-                // ── Produce note ────────────────────────────────────────
                 if (order.produceNote != null &&
                     order.produceNote!.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -1900,10 +1847,10 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     if (isCancelled) {
       return Opacity(
         opacity: 0.75,
-        child: AbsorbPointer(absorbing: true, child: widget),
+        child: AbsorbPointer(absorbing: true, child: card),
       );
     }
-    return widget;
+    return card;
   }
 
   Widget _buildCompactDateTile(
@@ -1913,7 +1860,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     required IconData icon,
     VoidCallback? onTap,
   }) {
-    final widget = Container(
+    final tile = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
@@ -1952,17 +1899,19 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         ],
       ),
     );
-    if (onTap != null) {
-      return DuruhaInkwell(onTap: onTap, child: widget);
-    }
-    return widget;
+    if (onTap != null) return DuruhaInkwell(onTap: onTap, child: tile);
+    return tile;
   }
 
   Color _qualityColor(String quality) {
     final q = quality.toLowerCase();
-    if (q.contains('saver')) return Colors.green;
-    if (q.contains('select') || q.contains('premium')) return Colors.amber;
-    return Colors.blue;
+    if (q.contains('saver')) {
+      return DuruhaColorHelper.getColor(context, 'saver');
+    }
+    if (q.contains('select') || q.contains('premium')) {
+      return DuruhaColorHelper.getColor(context, 'select');
+    }
+    return DuruhaColorHelper.getColor(context, 'regular');
   }
 
   Widget _buildMiniChip(ThemeData theme, String label, Color color) {
@@ -1985,8 +1934,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     );
   }
 
-  // ── Small widgets ─────────────────────────────────────────────────────────
-
   Widget _buildPaymentChip(bool isPaid) {
     final color = isPaid ? Colors.green : Colors.orange;
     return Container(
@@ -2006,7 +1953,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
           ),
           const SizedBox(width: 4),
           Text(
-            isPaid ? "PAID" : "INCOMING",
+            isPaid ? 'PAID' : 'INCOMING',
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,
@@ -2018,12 +1965,10 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
     );
   }
 
-  /// Status dropdown – wider hit area and proper inkwell effect.
   Widget _buildStatusScroller(BuildContext context, FarmerOfferOrder order) {
     final theme = Theme.of(context);
     final currentStatus = order.deliveryStatus ?? DeliveryStatus.pending;
     final statusColor = DeliveryStatus.getStatusColor(currentStatus);
-
     final bool isCancelled =
         currentStatus.toUpperCase() == DeliveryStatus.cancelled;
 
@@ -2036,7 +1981,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       child: DuruhaPopupMenu<String>(
         items: isCancelled ? [] : DeliveryStatus.farmerEditable,
         selectedValue: currentStatus,
-        isTextOnly: true, // Bypass default internal styling
+        isTextOnly: true,
         onSelected: (newStatus) =>
             _handleOrderDeliveryStatusChange(context, order, newStatus),
         labelBuilder: (s) => s.replaceAll('_', ' ').toUpperCase(),
@@ -2060,7 +2005,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // Caret hint
               if (!isCancelled)
                 Icon(
                   Icons.unfold_more_rounded,
@@ -2073,10 +2017,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
       ),
     );
   }
-
-  // ── Static helper widgets ─────────────────────────────────────────────────
-
-  /// Metric tile with a coloured left-border accent for quick visual scanning.
 
   Widget _buildDateColumn(
     BuildContext context,
@@ -2100,7 +2040,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          isInfinity ? "Supply Lasts" : DateFormat('MMM d, yyyy').format(date),
+          isInfinity ? 'Supply Lasts' : DateFormat('MMM d, yyyy').format(date),
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -2112,12 +2052,12 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   String _getTimelineStatus(HarvestOffer offer, DateTime now) {
     if (now.isBefore(offer.availableFrom)) {
       final days = offer.availableFrom.difference(now).inDays;
-      return days == 0 ? "Starting tomorrow" : "Starting in $days days";
+      return days == 0 ? 'Starting tomorrow' : 'Starting in $days days';
     }
-    if (offer.availableTo.year >= 2100) return "Available until supply lasts";
-    if (now.isAfter(offer.availableTo)) return "Offer has expired";
+    if (offer.availableTo.year >= 2100) return 'Available until supply lasts';
+    if (now.isAfter(offer.availableTo)) return 'Offer has expired';
     final daysLeft = offer.availableTo.difference(now).inDays;
-    return "$daysLeft day${daysLeft != 1 ? 's' : ''} remaining";
+    return '$daysLeft day${daysLeft != 1 ? 's' : ''} remaining';
   }
 
   IconData _getStatusIcon(String status) => switch (status.toLowerCase()) {
@@ -2132,7 +2072,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _SectionDivider
-// A lightweight labelled horizontal rule used between overview sections.
 // ─────────────────────────────────────────────────────────────────────────────
 class _SectionDivider extends StatelessWidget {
   final String label;

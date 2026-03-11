@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION public.get_farmer_offer_orders(p_offer_id uuid) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
+CREATE OR REPLACE FUNCTION public.get_farmer_offer_by_id(p_offer_id uuid) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
 DECLARE v_user_id uuid;
 v_farmer_id text;
 v_offer_farmer_id text;
@@ -15,11 +15,23 @@ FROM user_farmers uf
 WHERE uf.user_id = v_user_id;
 IF v_farmer_id IS NULL THEN RAISE EXCEPTION 'No farmer profile found for this user';
 END IF;
--- 3. Get farmer_id of the offer + offer meta (including payment_method)
+-- 3. Get farmer_id of the offer + full offer meta
 SELECT fo.farmer_id,
     jsonb_build_object(
+        'offer_id',
+        fo.offer_id,
+        'variety_name',
+        pv.variety_name,
+        'is_active',
+        fo.is_active,
+        'available_from',
+        fo.available_from,
+        'available_to',
+        fo.available_to,
+        'created_at',
+        fo.created_at,
         'is_price_locked',
-        fo.is_price_locked,
+        COALESCE(fo.is_price_locked, false),
         'fps_id',
         fo.fps_id,
         'fps_status',
@@ -37,12 +49,11 @@ SELECT fo.farmer_id,
         'quantity',
         fo.quantity,
         'remaining_quantity',
-        fo.remaining_quantity,
-        'payment_method',
-        null
+        fo.remaining_quantity
     ) INTO v_offer_farmer_id,
     v_offer_meta
 FROM farmer_offers fo
+    JOIN produce_varieties pv ON pv.variety_id = fo.variety_id
     LEFT JOIN farmer_plan_subscriptions fps ON fps.fps_id = fo.fps_id
     LEFT JOIN farmer_plan_configs fpc ON fpc.fpc_id = fps.plan_config_id
 WHERE fo.offer_id = p_offer_id;
@@ -85,9 +96,12 @@ SELECT COALESCE(
                 cop.quality,
                 'produce_note',
                 cop.note,
+                'consumer_id',
+                uc.consumer_id,
+                'consumer_name',
+                u.name,
                 'fps_id',
                 foa.fps_id,
-                -- Allocation-level fps (may differ from offer-level fps)
                 'foa_fps_id',
                 foa.fps_id,
                 'foa_fps_status',
@@ -96,7 +110,6 @@ SELECT COALESCE(
                 alloc_fpc.plan_code,
                 'foa_fps_plan_name',
                 alloc_fpc.plan_name,
-                -- Consumer delivery address
                 'consumer_address',
                 CASE
                     WHEN ua.address_id IS NOT NULL THEN jsonb_build_object(
@@ -131,6 +144,9 @@ FROM offer_order_match oom
     JOIN consumer_orders_variety cov ON cov.cov_id = oom.cov_id
     JOIN consumer_orders_variety_group covg ON covg.covg_id = cov.covg_id
     JOIN consumer_orders_produce cop ON cop.cop_id = covg.cop_id
+    JOIN consumer_orders co ON co.order_id = cop.order_id
+    JOIN user_consumers uc ON uc.consumer_id = co.consumer_id
+    JOIN users u ON u.id = uc.user_id
     LEFT JOIN user_carriers c ON c.carrier_id = oom.carrier_id
     LEFT JOIN users_addresses ua ON ua.address_id = oom.consumer_address
     LEFT JOIN farmer_plan_subscriptions alloc_fps ON alloc_fps.fps_id = foa.fps_id
@@ -174,7 +190,7 @@ SELECT jsonb_build_object(
         COALESCE(
             SUM(
                 CASE
-                    WHEN foa.is_paid = true THEN foa.final_price
+                    WHEN foa.is_paid = true THEN foa.final_price * foa.quantity
                     ELSE 0
                 END
             ),

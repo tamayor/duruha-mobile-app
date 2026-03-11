@@ -67,7 +67,7 @@ class DeliveryStatus {
       case readyForQc:
         return Colors.orange;
       case qcPassed:
-        return Colors.orange;
+        return Colors.yellow[700]!;
       case pending:
         return Colors.grey;
       case accepted:

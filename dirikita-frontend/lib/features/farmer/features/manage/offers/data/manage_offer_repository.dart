@@ -18,44 +18,44 @@ enum OfferSort {
 
 extension OfferSortExt on OfferSort {
   String get param => switch (this) {
-        OfferSort.dateDesc => 'date_desc',
-        OfferSort.dateAsc => 'date_asc',
-        OfferSort.reservedDesc => 'reserved_desc',
-        OfferSort.reservedAsc => 'reserved_asc',
-        OfferSort.availFromAsc => 'avail_from_asc',
-        OfferSort.availFromDesc => 'avail_from_desc',
-        OfferSort.availToAsc => 'avail_to_asc',
-        OfferSort.availToDesc => 'avail_to_desc',
-      };
+    OfferSort.dateDesc => 'date_desc',
+    OfferSort.dateAsc => 'date_asc',
+    OfferSort.reservedDesc => 'reserved_desc',
+    OfferSort.reservedAsc => 'reserved_asc',
+    OfferSort.availFromAsc => 'avail_from_asc',
+    OfferSort.availFromDesc => 'avail_from_desc',
+    OfferSort.availToAsc => 'avail_to_asc',
+    OfferSort.availToDesc => 'avail_to_desc',
+  };
 
   String get label => switch (this) {
-        OfferSort.dateDesc => 'Created — newest first',
-        OfferSort.dateAsc => 'Created — oldest first',
-        OfferSort.reservedDesc => 'Reserved — most first',
-        OfferSort.reservedAsc => 'Reserved — least first',
-        OfferSort.availFromAsc => 'Start date — earliest first',
-        OfferSort.availFromDesc => 'Start date — latest first',
-        OfferSort.availToAsc => 'End date — earliest first',
-        OfferSort.availToDesc => 'End date — latest first',
-      };
+    OfferSort.reservedDesc => 'Reserved — most first',
+    OfferSort.reservedAsc => 'Reserved — least first',
+    OfferSort.dateDesc => 'Created — newest first',
+    OfferSort.dateAsc => 'Created — oldest first',
+    OfferSort.availFromAsc => 'Start date — earliest first',
+    OfferSort.availFromDesc => 'Start date — latest first',
+    OfferSort.availToAsc => 'End date — earliest first',
+    OfferSort.availToDesc => 'End date — latest first',
+  };
 
   /// Whether the cursor value for this sort is a timestamp field.
   bool get cursorIsTimestamp => switch (this) {
-        OfferSort.reservedDesc || OfferSort.reservedAsc => false,
-        _ => true,
-      };
+    OfferSort.reservedDesc || OfferSort.reservedAsc => false,
+    _ => true,
+  };
 
   /// Extract the cursor value string from the last offer for this sort.
   String? cursorVal(FlatOffer last) => switch (this) {
-        OfferSort.dateDesc || OfferSort.dateAsc =>
-          last.offer.createdAt.toIso8601String(),
-        OfferSort.reservedDesc || OfferSort.reservedAsc =>
-          last.offer.reservedQty.toString(),
-        OfferSort.availFromAsc || OfferSort.availFromDesc =>
-          last.offer.availableFrom.toIso8601String(),
-        OfferSort.availToAsc || OfferSort.availToDesc =>
-          last.offer.availableTo.toIso8601String(),
-      };
+    OfferSort.dateDesc ||
+    OfferSort.dateAsc => last.offer.createdAt.toIso8601String(),
+    OfferSort.reservedDesc ||
+    OfferSort.reservedAsc => last.offer.reservedQty.toString(),
+    OfferSort.availFromAsc ||
+    OfferSort.availFromDesc => last.offer.availableFrom.toIso8601String(),
+    OfferSort.availToAsc ||
+    OfferSort.availToDesc => last.offer.availableTo.toIso8601String(),
+  };
 }
 
 class ManageOfferRepository {
@@ -104,148 +104,61 @@ class ManageOfferRepository {
     }
   }
 
-  /// Fetches orders associated with a specific harvest offer ID, along with metadata/summary.
-  Future<({List<FarmerOfferOrder> orders, Map<String, dynamic>? summary})>
-  fetchOrdersByOfferId(String offerId) async {
+  /// Fetches full offer detail (offer fields + orders + summary) in one RPC call.
+  /// This replaces the previous fetchOrdersByOfferId + fetchOfferById pair.
+  Future<OfferDetail?> fetchOfferDetail(String offerId) async {
     try {
-      debugPrint("offerId: $offerId");
       final response = await supabase.rpc(
-        'get_farmer_offer_orders',
+        'get_farmer_offer_by_id',
         params: {'p_offer_id': offerId},
       );
-
-      // debugPrint("RPC raw response type: ${response.runtimeType}");
-      // debugPrint("RPC raw response: $response");
 
       Map<String, dynamic>? data;
       if (response is String) {
         final decoded = jsonDecode(response);
-        if (decoded is Map) {
-          data = Map<String, dynamic>.from(decoded);
-        }
+        if (decoded is Map) data = Map<String, dynamic>.from(decoded);
       } else if (response is Map) {
         data = Map<String, dynamic>.from(response);
       }
 
-      if (data == null || data['orders'] == null) {
-        debugPrint("No orders found in data.");
-        return (orders: <FarmerOfferOrder>[], summary: null);
-      }
-
-      final ordersRaw = data['orders'] as List;
-      debugPrint("orders amount: ${ordersRaw.length}");
-      final ordersList = ordersRaw
-          .map((row) => FarmerOfferOrder.fromJson(row as Map<String, dynamic>))
-          .toList();
-
-      data.remove('orders'); // The remaining data is the summary.
-
-      return (orders: ordersList, summary: data);
+      if (data == null) return null;
+      return OfferDetail.fromJson(data);
     } catch (e, st) {
-      debugPrint("❌ [API ERROR] fetchOrdersByOfferId: $e\n$st");
-      return (orders: <FarmerOfferOrder>[], summary: null);
-    }
-  }
-
-  /// Updates the delivery status of a specific order.
-  Future<bool> updateOrderDeliveryStatus(
-    String orderItemId,
-    String status,
-  ) async {
-    try {
-      debugPrint("orderId: $orderItemId");
-      await supabase
-          .from('offer_order_match_items')
-          .update({'delivery_status': status})
-          .eq('id', orderItemId);
-      return true;
-    } catch (e) {
-      // ignore: avoid_print
-      print("❌ [API ERROR] updateOrderDeliveryStatus: $e");
-      return false;
-    }
-  }
-
-  /// Updates the delivery status of multiple orders.
-  Future<bool> updateOrdersDeliveryStatus(
-    List<String> orderIds,
-    String? status,
-    DateTime? dispatchAt,
-  ) async {
-    try {
-      final updateData = <String, dynamic>{'delivery_status': status};
-      if (dispatchAt != null) {
-        updateData['dispatch_at'] = dispatchAt.toIso8601String();
-      }
-
-      await supabase
-          .from('farmer_offer_orders')
-          .update(updateData)
-          .inFilter('id', orderIds);
-      return true;
-    } catch (e) {
-      // ignore: avoid_print
-      print("❌ [API ERROR] updateOrdersDeliveryStatus: $e");
-      return false;
-    }
-  }
-
-  /// Updates the dispatch date of multiple orders.
-  Future<bool> updateOrdersDispatchDate(
-    List<String> orderIds,
-    DateTime dispatchAt,
-  ) async {
-    try {
-      await supabase
-          .from('farmer_offer_orders')
-          .update({'dispatch_at': dispatchAt.toIso8601String()})
-          .inFilter('id', orderIds);
-      return true;
-    } catch (e) {
-      // ignore: avoid_print
-      print("❌ [API ERROR] updateOrdersDispatchDate: $e");
-      return false;
-    }
-  }
-
-  /// Fetches a single offer by ID via a direct database query.
-  Future<HarvestOffer?> fetchOfferById(String offerId) async {
-    try {
-      final response = await supabase
-          .from('farmer_offers')
-          .select('''
-            *,
-            farmer_price_lock_subscriptions(
-              status
-            ),
-            produce_varieties (
-              variety_name
-            )
-          ''')
-          .eq('offer_id', offerId)
-          .single();
-
-      // Construct a JSON map compatible with HarvestOffer.fromJson
-      final Map<String, dynamic> offerData = Map<String, dynamic>.from(
-        response,
-      );
-
-      // Flatten the fpls_status from the joined table
-      if (offerData['farmer_price_lock_subscriptions'] != null) {
-        offerData['fpls_status'] =
-            offerData['farmer_price_lock_subscriptions']['status'];
-      }
-
-      // Flatten the variety_name from the joined table
-      if (offerData['produce_varieties'] != null) {
-        offerData['variety_name'] =
-            offerData['produce_varieties']['variety_name'];
-      }
-
-      return HarvestOffer.fromJson(offerData);
-    } catch (e) {
-      debugPrint('❌ [API ERROR] fetchOfferById: $e');
+      debugPrint('❌ [API ERROR] fetchOfferDetail: $e\n$st');
       return null;
+    }
+  }
+
+  /// Updates offer orders' delivery status and/or dispatch date via the RPC.
+  /// Works for a single order or bulk — pass one or more [orderIds].
+  /// At least one of [deliveryStatus] or [dispatchAt] must be provided.
+  /// Returns the message from the database, or an error string.
+  Future<String?> updateOfferOrders({
+    required String offerId,
+    required List<String> orderIds,
+    String? deliveryStatus,
+    DateTime? dispatchAt,
+  }) async {
+    assert(
+      deliveryStatus != null || dispatchAt != null,
+      'At least one of deliveryStatus or dispatchAt must be provided.',
+    );
+    try {
+      final response = await supabase.rpc(
+        'update_farmer_offer_details',
+        params: {
+          'p_offer_id': offerId,
+          'p_mode': 'update_orders',
+          'p_order_ids': orderIds,
+          if (deliveryStatus != null) 'p_delivery_status': deliveryStatus,
+          if (dispatchAt != null) 'p_dispatch_at': dispatchAt.toIso8601String(),
+        },
+      );
+      return response as String?;
+    } catch (e) {
+      debugPrint('❌ [API ERROR] updateOfferOrders: $e');
+      if (e is PostgrestException) return 'Error: ${e.message}';
+      return 'Error: $e';
     }
   }
 
@@ -258,7 +171,7 @@ class ManageOfferRepository {
   }) async {
     try {
       final response = await supabase.rpc(
-        'update_farmer_offer_status',
+        'update_farmer_offer_details',
         params: {
           'p_offer_id': offerId,
           'p_mode': mode,
@@ -267,11 +180,11 @@ class ManageOfferRepository {
       );
       return response as String?;
     } catch (e) {
-      debugPrint("❌ [API ERROR] updateOfferStatus ($mode): $e");
+      debugPrint('❌ [API ERROR] updateOfferStatus ($mode): $e');
       if (e is PostgrestException) {
-        return "Error: ${e.message}";
+        return 'Error: ${e.message}';
       }
-      return "Error: $e";
+      return 'Error: $e';
     }
   }
 }
