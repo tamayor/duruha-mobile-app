@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:duruha/supabase_config.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
 
@@ -6,11 +5,11 @@ import 'package:duruha/features/farmer/features/profile/domain/profile_model.dar
 /// Handles both GET and UPDATE operations for farmers.
 class FarmerProfileRepositoryImpl implements FarmerProfileRepository {
   @override
-  Future<FarmerProfile> getFarmerProfile(String userId) async {
+  Future<FarmerProfile> getFarmerProfile() async {
     try {
       final response = await supabase.rpc(
         'manage_profile',
-        params: {'p_user_id': userId, 'p_mode': 'get'},
+        params: {'p_mode': 'get'},
       );
 
       return FarmerProfile.fromJson(Map<String, dynamic>.from(response as Map));
@@ -20,19 +19,11 @@ class FarmerProfileRepositoryImpl implements FarmerProfileRepository {
   }
 
   @override
-  Future<String> uploadProfileImage(File file) async {
-    // Mock implementation – replace with Supabase Storage upload
-    await Future.delayed(const Duration(seconds: 2));
-    return 'https://i.pravatar.cc/300?img=${DateTime.now().millisecond % 70}';
-  }
-
-  @override
-  Future<String?> deleteAddress(String userId, String addressId) async {
+  Future<String?> deleteAddress(String addressId) async {
     try {
       final response = await supabase.rpc(
         'manage_profile',
         params: {
-          'p_user_id': userId,
           'p_mode': 'delete_address',
           'p_data': {'address_id': addressId},
         },
@@ -56,7 +47,9 @@ class FarmerProfileRepositoryImpl implements FarmerProfileRepository {
         'address_line_2': profile.addressLine2,
         'city': profile.city,
         'province': profile.province,
+        'region': profile.region,
         'postal_code': profile.postalCode,
+        'country': profile.country,
         'landmark': profile.landmark,
         'image_url': profile.imageUrl,
         'dialect': profile.dialect,
@@ -78,7 +71,6 @@ class FarmerProfileRepositoryImpl implements FarmerProfileRepository {
       await supabase.rpc(
         'manage_profile',
         params: {
-          'p_user_id': profile.id,
           'p_mode': 'update',
           'p_data': payload,
         },

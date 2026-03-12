@@ -1,17 +1,16 @@
-import 'dart:io';
-
+import 'package:duruha/core/helpers/duruha_color_helper.dart';
+import 'package:duruha/core/widgets/duruha_user_profile.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
 import 'package:duruha/features/consumer/features/profile/domain/profile_model.dart';
-import 'package:duruha/shared/user/presentation/faq_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:duruha/features/consumer/shared/presentation/consumer_loading_screen.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/consumer/shared/presentation/navigation.dart';
 import 'package:duruha/features/consumer/features/profile/data/profile_repository.dart';
 import 'package:duruha/features/consumer/features/subscription/data/consumer_plan_repository.dart';
 import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/features/consumer/features/profile/presentation/edit_profile_screen.dart';
+import 'package:duruha/core/widgets/duruha_chat_widget.dart';
 
 class ConsumerProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -23,6 +22,7 @@ class ConsumerProfileScreen extends StatefulWidget {
 }
 
 class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
+  final _repo = ConsumerProfileRepositoryImpl();
   late Future<ConsumerProfile> _profileFuture;
   late Future<String?> _tierNameFuture;
 
@@ -34,11 +34,7 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
   }
 
   Future<ConsumerProfile> _loadProfile() async {
-    final userId = await SessionService.getUserId();
-    if (userId == null) {
-      throw Exception('User is not logged in');
-    }
-    return ConsumerProfileRepositoryImpl().getConsumerProfile(userId);
+    return _repo.getConsumerProfile();
   }
 
   Future<String?> _loadTierName() async {
@@ -48,384 +44,454 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
     return plan?.qualityLevel;
   }
 
+  void _refresh() {
+    setState(() {
+      _profileFuture = _loadProfile();
+      _tierNameFuture = _loadTierName();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return DuruhaScaffold(
       appBarTitle: 'My Profile',
-      bottomNavigationBar: ConsumerNavigation(currentRoute: '/profile'),
+      bottomNavigationBar: const ConsumerNavigation(currentRoute: '/profile'),
       body: FutureBuilder<ConsumerProfile>(
         future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const ConsumerLoadingScreen();
-          } else if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          } else if (!snapshot.hasData) {
-            return const Center(child: Text("Profile not found"));
+          }
+          if (snapshot.hasError) {
+            return _ErrorState(
+              error: snapshot.error.toString(),
+              onRetry: _refresh,
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: Text('Profile not found'));
           }
 
           final profile = snapshot.data!;
-          final displayName = profile.name;
-          const displayRole = 'Consumer';
-          final displayLocation =
-              "${profile.addressLine1}, ${profile.addressLine2}\n${profile.city}, ${profile.province}";
-          final displayLandmark = profile.landmark;
-
-          return Stack(
-            children: [
-              SingleChildScrollView(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: DuruhaSectionContainer(
-                        children: [
-                          Row(
-                            children: [
-                              Stack(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 50,
-                                    backgroundColor:
-                                        theme.colorScheme.primaryContainer,
-                                    backgroundImage:
-                                        profile.imageUrl != null &&
-                                            profile.imageUrl!.isNotEmpty
-                                        ? NetworkImage(profile.imageUrl!)
-                                        : null,
-                                    child:
-                                        profile.imageUrl == null ||
-                                            profile.imageUrl!.isEmpty
-                                        ? Text(
-                                            displayName.isNotEmpty
-                                                ? displayName[0].toUpperCase()
-                                                : '?',
-                                            style: TextStyle(
-                                              fontSize: 40,
-                                              fontWeight: FontWeight.bold,
-                                              color: theme
-                                                  .colorScheme
-                                                  .onPrimaryContainer,
-                                            ),
-                                          )
-                                        : null,
-                                  ),
-                                  Positioned(
-                                    bottom: 0,
-                                    right: 0,
-                                    child: DuruhaInkwell(
-                                      onTap: () => _pickAndUploadImage(profile),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.primary,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: theme.colorScheme.surface,
-                                            width: 2,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          Icons.camera_alt,
-                                          size: 16,
-                                          color: theme.colorScheme.onPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 16),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    displayName,
-                                    style: theme.textTheme.headlineMedium
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          theme.colorScheme.secondaryContainer,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      displayRole.toUpperCase(),
-                                      style: TextStyle(
-                                        color: theme
-                                            .colorScheme
-                                            .onSecondaryContainer,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 15),
-                          Text(
-                            displayLocation,
-                            textAlign: TextAlign.start,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            displayLandmark ?? '',
-                            textAlign: TextAlign.start,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // --- OVERVIEW CARD ---
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: _buildDetailsCard(context, profile),
-                    ),
-
-                    const SizedBox(height: 32),
-                    const DuruhaThemeToggleButton(),
-                    // --- MENU OPTIONS ---
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.person_outline,
-                      title: "Edit Profile",
-                      onTap: () async {
-                        final updatedProfile =
-                            await Navigator.push<ConsumerProfile>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    EditProfileScreen(profile: profile),
-                              ),
-                            );
-
-                        if (updatedProfile != null) {
-                          if (!mounted) return;
-                          setState(() {
-                            _profileFuture = Future.value(updatedProfile);
-                          });
-                        }
-                      },
-                    ),
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.payments_outlined,
-                      title: "Subscriptions",
-                      onTap: () {
-                        Navigator.pushNamed(context, '/consumer/subscriptions');
-                      },
-                    ),
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.shopping_bag_outlined,
-                      title: "My Orders",
-                      onTap: () {
-                        Navigator.pushNamed(context, '/consumer/manage');
-                      },
-                    ),
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.favorite_border,
-                      title: "My Favorites",
-                      onTap: () {
-                        Navigator.pushNamed(context, '/consumer/shop');
-                      },
-                    ),
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.help_outline,
-                      title: "Help & Support",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const FaqScreen()),
-                        );
-                      },
-                    ),
-                    const Divider(height: 48),
-                    _buildMenuOption(
-                      context,
-                      icon: Icons.logout,
-                      title: "Log Out",
-                      isDestructive: true,
-                      onTap: () {
-                        Navigator.pushNamedAndRemoveUntil(
-                          context,
-                          '/',
-                          (r) => false,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ],
+          return FutureBuilder<String?>(
+            future: _tierNameFuture,
+            builder: (context, tierSnapshot) {
+              final tierName = tierSnapshot.data ?? 'Saver';
+              return _ProfileBody(
+                profile: profile,
+                tierName: tierName,
+                onImageUpdated: (updated) {
+                  if (mounted) {
+                    setState(() {
+                      _profileFuture = Future.value(updated);
+                    });
+                  }
+                },
+                onProfileUpdated: (updated) {
+                  if (mounted) {
+                    setState(() {
+                      _profileFuture = Future.value(updated);
+                    });
+                  }
+                },
+                repo: _repo,
+              );
+            },
           );
         },
       ),
     );
   }
+}
 
-  Widget _buildDetailsCard(BuildContext context, ConsumerProfile profile) {
+// ─── Profile Body ─────────────────────────────────────────────────────────────
+
+class _ProfileBody extends StatelessWidget {
+  final ConsumerProfile profile;
+  final String tierName;
+  final ValueChanged<ConsumerProfile> onImageUpdated;
+  final ValueChanged<ConsumerProfile> onProfileUpdated;
+  final ConsumerProfileRepositoryImpl repo;
+
+  const _ProfileBody({
+    required this.profile,
+    required this.tierName,
+    required this.onImageUpdated,
+    required this.onProfileUpdated,
+    required this.repo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
-    return FutureBuilder<String?>(
-      future: _tierNameFuture,
-      builder: (context, tierSnapshot) {
-        final tierName = tierSnapshot.data ?? 'Saver';
-        return _buildDetailsCardContent(context, profile, theme, tierName);
-      },
+    final joinedAt =
+        DateTime.now(); // Assume now since no joinedAt property inside ConsumerProfile models
+    final joinedLabel = DateFormat('MMM yyyy').format(joinedAt);
+
+    final locationParts = [
+      profile.addressLine1,
+      profile.addressLine2,
+      profile.city,
+      profile.province,
+    ].where((p) => p != null && p.isNotEmpty).join(', ');
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Hero Header ─────────────────────────────────────────────────
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Avatar + camera button
+                    DuruhaUserProfile(
+                      imageUrl: profile.imageUrl,
+                      userName: profile.name,
+                      radius: 44.0,
+                      allowUpload: true,
+                      bucketName: 'avatars',
+                      onImageUploaded: (url) {
+                        onImageUpdated(profile.copyWith(imageUrl: url));
+                        repo.updateProfile(profile.copyWith(imageUrl: url));
+                        SessionService.saveUser(
+                          profile.copyWith(imageUrl: url),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profile.name,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _RoleBadge(
+                            label: 'Consumer',
+                            icon: Icons.person_rounded,
+                            color: DuruhaColorHelper.getColor(
+                              context,
+                              'consumer',
+                            ),
+                            onColor: DuruhaColorHelper.getColor(
+                              context,
+                              'consumer',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Location row
+                if (locationParts.isNotEmpty)
+                  _InfoRow(
+                    icon: Icons.location_on_outlined,
+                    text: locationParts,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                if (profile.landmark != null && profile.landmark!.isNotEmpty)
+                  _InfoRow(
+                    icon: Icons.place_outlined,
+                    text: profile.landmark!,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                if (profile.latitude != null && profile.longitude != null)
+                  _InfoRow(
+                    icon: Icons.gps_fixed_rounded,
+                    text:
+                        '${profile.latitude!.toStringAsFixed(5)}, ${profile.longitude!.toStringAsFixed(5)}',
+                    color: scheme.onSecondary.withValues(alpha: 0.5),
+                  ),
+                _InfoRow(
+                  icon: Icons.calendar_today_outlined,
+                  text: 'Joined $joinedLabel',
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── Overview ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _ConsumerOverview(profile: profile, tierName: tierName),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Menu Options ────────────────────────────────────────────────
+          const DuruhaThemeToggleButton(),
+          _MenuOption(
+            icon: Icons.person_outline_rounded,
+            title: 'Edit Profile',
+            onTap: () async {
+              final updated = await Navigator.push<ConsumerProfile>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => EditProfileScreen(profile: profile),
+                ),
+              );
+              if (updated != null) onProfileUpdated(updated);
+            },
+          ),
+          _MenuOption(
+            icon: Icons.payments_outlined,
+            title: 'Subscriptions',
+            onTap: () =>
+                Navigator.pushNamed(context, '/consumer/subscriptions'),
+          ),
+          _MenuOption(
+            icon: Icons.help_outline_rounded,
+            title: 'Help & Support',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DuruhaChatScreen()),
+            ),
+          ),
+
+          const Divider(height: 32, indent: 24, endIndent: 24),
+
+          _MenuOption(
+            icon: Icons.logout_rounded,
+            title: 'Log Out',
+            isDestructive: true,
+            onTap: () =>
+                Navigator.pushNamedAndRemoveUntil(context, '/', (r) => false),
+          ),
+          const SizedBox(height: 48),
+        ],
+      ),
     );
   }
+}
 
-  Widget _buildDetailsCardContent(
-    BuildContext context,
-    ConsumerProfile profile,
-    ThemeData theme,
-    String tierName,
-  ) {
+class _RoleBadge extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color onColor;
+
+  const _RoleBadge({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  const _InfoRow({required this.icon, required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConsumerOverview extends StatelessWidget {
+  final ConsumerProfile profile;
+  final String tierName;
+
+  const _ConsumerOverview({required this.profile, required this.tierName});
+
+  @override
+  Widget build(BuildContext context) {
     final items = [
-      _DetailItem(
-        'Joined',
-        DateFormat('MMM d yyyy').format(DateTime.now()),
-        Icons.history,
+      _Item(
+        Icons.language_rounded,
+        profile.dialect.isNotEmpty ? profile.dialect[0] : 'None',
+        'Dialect',
+        null,
       ),
-      _DetailItem('Dialect', profile.dialect[0], Icons.language),
-      _DetailItem(
-        'Segment',
-        profile.consumerSegment ?? 'Household',
+      _Item(
         Icons.group_outlined,
+        profile.consumerSegment ?? 'Household',
+        'Segment',
+        null,
       ),
-      _DetailItem(
-        'Frequency',
+      _Item(
+        Icons.restaurant_menu_rounded,
         profile.cookingFrequency ?? 'Daily',
-        Icons.restaurant_menu,
+        'Frequency',
+        null,
       ),
-      _DetailItem('Quality', tierName, Icons.workspace_premium_outlined),
-      _DetailItem(
-        'Interests',
-        '${profile.consumerFavProduce.length} Crops',
+      _Item(Icons.workspace_premium_outlined, tierName, 'Quality', null),
+      _Item(
         Icons.eco_outlined,
+        '${profile.consumerFavProduce.length} Crops',
+        'Interests',
+        null,
       ),
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Overview",
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 2.5,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: items
-                .map((item) => _buildStatItem(context, item))
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(BuildContext context, _DetailItem item) {
-    final theme = Theme.of(context);
-    return Row(
+    return DuruhaSectionContainer(
+      title: 'Overview',
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            item.icon,
-            size: 20,
-            color: theme.colorScheme.onSecondary,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                item.value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-          ),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 2.8,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          children: items.map((item) => _OverviewCell(item: item)).toList(),
         ),
       ],
     );
   }
+}
 
-  Widget _buildMenuOption(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    bool isDestructive = false,
-  }) {
+class _Item {
+  final IconData icon;
+  final String value;
+  final String label;
+  final VoidCallback? onTap;
+
+  _Item(this.icon, this.value, this.label, this.onTap);
+}
+
+class _OverviewCell extends StatelessWidget {
+  final _Item item;
+
+  const _OverviewCell({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return DuruhaInkwell(
+      onTap: item.onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(item.icon, size: 18, color: scheme.onPrimaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    item.value,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    item.label,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (item.onTap != null)
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 14,
+                color: scheme.onSurface.withValues(alpha: 0.3),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _MenuOption({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = isDestructive
         ? theme.colorScheme.error
@@ -434,99 +500,71 @@ class _ConsumerProfileScreenState extends State<ConsumerProfileScreen> {
     return DuruhaInkwell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 24),
+            Icon(icon, color: color, size: 22),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 16,
+                style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.w500,
                   color: color,
                 ),
               ),
             ),
             Icon(
-              Icons.chevron_right,
-              color: theme.colorScheme.secondary,
-              size: 20,
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
             ),
           ],
         ),
       ),
     );
   }
-
-  Future<void> _pickAndUploadImage(ConsumerProfile profile) async {
-    final picker = ImagePicker();
-    try {
-      final XFile? image = await showModalBottomSheet<XFile?>(
-        context: context,
-        builder: (BuildContext context) {
-          return SafeArea(
-            child: Wrap(
-              children: <Widget>[
-                ListTile(
-                  leading: const Icon(Icons.photo_library),
-                  title: const Text('Photo Library'),
-                  onTap: () async {
-                    Navigator.of(
-                      context,
-                    ).pop(await picker.pickImage(source: ImageSource.gallery));
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_camera),
-                  title: const Text('Camera'),
-                  onTap: () async {
-                    Navigator.of(
-                      context,
-                    ).pop(await picker.pickImage(source: ImageSource.camera));
-                  },
-                ),
-              ],
-            ),
-          );
-        },
-      );
-
-      if (image != null) {
-        if (!mounted) return;
-        DuruhaSnackBar.showInfo(context, "Uploading image...");
-
-        final newImageUrl = await ConsumerProfileRepositoryImpl()
-            .uploadProfileImage(File(image.path));
-
-        if (!mounted) return;
-        setState(() {
-          _profileFuture = Future.value(
-            profile.copyWith(imageUrl: newImageUrl),
-          );
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          DuruhaSnackBar.showSuccess(
-            context,
-            "Profile picture updated successfully!",
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        DuruhaSnackBar.showError(context, "Failed to upload image: $e");
-      }
-    }
-  }
 }
 
-class _DetailItem {
-  final String label;
-  final String value;
-  final IconData icon;
+class _ErrorState extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
 
-  _DetailItem(this.label, this.value, this.icon);
+  const _ErrorState({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 48,
+              color: theme.colorScheme.error,
+            ),
+            const SizedBox(height: 12),
+            Text('Could not load profile', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              error,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

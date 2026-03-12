@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 class UserAddress {
   final String addressId;
   final String? userId;
@@ -33,11 +35,25 @@ class UserAddress {
     double? lat;
     double? lng;
 
-    if (json['location'] != null && json['location'] is Map) {
-      final coords = json['location']['coordinates'];
-      if (coords != null && coords is List && coords.length >= 2) {
-        lng = (coords[0] as num?)?.toDouble();
-        lat = (coords[1] as num?)?.toDouble();
+    if (json['location'] != null) {
+      if (json['location'] is Map) {
+        final coords = json['location']['coordinates'];
+        if (coords != null && coords is List && coords.length >= 2) {
+          lng = (coords[0] as num?)?.toDouble();
+          lat = (coords[1] as num?)?.toDouble();
+        }
+      } else if (json['location'] is String) {
+        final locStr = json['location'] as String;
+        // PostGIS geography WKB hex: little-endian, starts with '01'
+        // With SRID: 0101000020E6100000... (10 char prefix before coords)
+        // Without SRID: 0101000000... (9 char prefix before coords = 18 hex chars)
+        if (locStr.startsWith('01')) {
+          final parsed = _parseWkbHex(locStr);
+          if (parsed != null) {
+            lng = parsed[0];
+            lat = parsed[1];
+          }
+        }
       }
     }
 
@@ -55,9 +71,61 @@ class UserAddress {
       region: json['region'] as String?,
       postalCode: json['postal_code'] as String?,
       country: json['country'] as String?,
-      latitude: lat,
-      longitude: lng,
+      latitude: lat ?? (json['latitude'] as num?)?.toDouble(),
+      longitude: lng ?? (json['longitude'] as num?)?.toDouble(),
     );
+  }
+
+  /// Parses a PostGIS WKB/EWKB Hex String into [longitude, latitude].
+  /// EWKB with SRID (geography): 01 + 01000020 + E6100000 + X(8 bytes) + Y(8 bytes)
+  ///   byte order(1) + type(4) + srid(4) = 9 bytes = 18 hex chars before coords
+  /// Plain WKB (geometry): 01 + 01000000 + X(8 bytes) + Y(8 bytes)
+  ///   byte order(1) + type(4) = 5 bytes = 10 hex chars before coords
+  static List<double>? _parseWkbHex(String hex) {
+    if (hex.length < 42) return null;
+    try {
+      if (!hex.startsWith('01')) return null;
+
+      // Type is 4 bytes little-endian at hex[2..9].
+      // Read as LE: reverse byte pairs then parse.
+      // e.g. "01000020" LE → bytes [01,00,00,20] → BE "20000001" → 0x20000001
+      final typeLeHex = hex.substring(2, 10);
+      String typeBeHex = '';
+      for (int i = typeLeHex.length - 2; i >= 0; i -= 2) {
+        typeBeHex += typeLeHex.substring(i, i + 2);
+      }
+      final typeInt = int.parse(typeBeHex, radix: 16);
+      final hasSrid = (typeInt & 0x20000000) != 0;
+      // EWKB layout: 1(endian) + 4(type) + 4(srid if present) = 9 or 5 bytes = 18 or 10 hex chars
+      final int offset = hasSrid ? 18 : 10;
+
+      if (hex.length < offset + 32) return null;
+
+      final xHex = hex.substring(offset, offset + 16);
+      final yHex = hex.substring(offset + 16, offset + 32);
+
+      return [_hexToDouble(xHex), _hexToDouble(yHex)];
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static double _hexToDouble(String hex) {
+    // Reverse byte order since it's little endian
+    String reversed = '';
+    for (int i = hex.length - 2; i >= 0; i -= 2) {
+      reversed += hex.substring(i, i + 2);
+    }
+    
+    // Parse to int, then use bitwise conversion to double
+    int bits = int.parse(reversed, radix: 16);
+    return _bitsToDouble(bits);
+  }
+  
+  static double _bitsToDouble(int bits) {
+    var buffer = ByteData(8);
+    buffer.setUint64(0, bits);
+    return buffer.getFloat64(0);
   }
 
   Map<String, dynamic> toJson() {

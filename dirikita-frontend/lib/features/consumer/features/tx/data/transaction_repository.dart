@@ -350,17 +350,19 @@ class TransactionRepository {
       final authUser = supabase.auth.currentUser;
       if (authUser == null) return [];
 
-      final List response = await supabase
-          .from('users_addresses')
-          .select()
-          .eq('user_id', authUser.id)
-          .order('created_at', ascending: false);
+      final response = await supabase.rpc(
+        'manage_profile',
+        params: {'p_mode': 'get_addresses'},
+      );
 
-      if (response.isNotEmpty) {
-        return response.map((addr) {
-          final model = UserAddress.fromJson(Map<String, dynamic>.from(addr));
-          return model;
-        }).toList();
+      if (response != null) {
+        final list = response as List;
+        if (list.isNotEmpty) {
+          return list
+              .map((addr) =>
+                  UserAddress.fromJson(Map<String, dynamic>.from(addr as Map)))
+              .toList();
+        }
       }
 
       // ── Fallback to Profile ───────────────────────────────────────────────
@@ -390,31 +392,60 @@ class TransactionRepository {
     }
   }
 
-  /// Creates a new address entry in users_addresses.
-  Future<UserAddress?> createUserAddress(UserAddress address) async {
+  /// Upserts a user address entry via the manage_profile RPC (insert_address mode).
+  /// This correctly handles the location::geography conversion via ST_MakePoint.
+  Future<UserAddress?> upsertUserAddress(
+    UserAddress address, {
+    bool setAsActive = false,
+  }) async {
     try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return null;
+      final isNew = address.addressId.isEmpty || address.addressId == 'new';
 
-      final payload = address.toJson();
-      // Remove address_id to let database generate it, or keep if it's a UUID
-      // Usually better to let the DB handle IDs if not specified.
-      if (payload['address_id'] == 'new' || payload['address_id'] == '') {
-        payload.remove('address_id');
-      }
-      payload['user_id'] = user.id;
+      final pData = <String, dynamic>{
+        if (!isNew) 'address_id': address.addressId,
+        'address_line_1': address.addressLine1,
+        'address_line_2': address.addressLine2,
+        'city': address.city,
+        'province': address.province,
+        'landmark': address.landmark,
+        'region': address.region,
+        'postal_code': address.postalCode,
+        'country': address.country,
+        if (address.latitude != null) 'latitude': address.latitude,
+        if (address.longitude != null) 'longitude': address.longitude,
+        'set_as_active': setAsActive,
+      };
 
-      final List response = await supabase
-          .from('users_addresses')
-          .insert(payload)
-          .select();
+      final result = await supabase.rpc(
+        'manage_profile',
+        params: {'p_mode': 'insert_address', 'p_data': pData},
+      );
 
-      if (response.isNotEmpty) {
-        return UserAddress.fromJson(Map<String, dynamic>.from(response.first));
-      }
-      return null;
+      final savedId = result['address_id'] as String?;
+      if (savedId == null) return null;
+
+      // Re-fetch via RPC so lat/lng are returned as decoded numbers (not WKB).
+      final allAddresses = await fetchAllUserAddresses();
+      final saved = allAddresses.where((a) => a.addressId == savedId).firstOrNull;
+      if (saved != null) return saved;
+
+      // Fallback: return address without coordinates if RPC fetch fails.
+      return UserAddress(
+        addressId: savedId,
+        createdAt: DateTime.now(),
+        addressLine1: address.addressLine1,
+        addressLine2: address.addressLine2,
+        city: address.city,
+        province: address.province,
+        region: address.region,
+        country: address.country,
+        landmark: address.landmark,
+        postalCode: address.postalCode,
+        latitude: address.latitude,
+        longitude: address.longitude,
+      );
     } catch (e) {
-      debugPrint('❌ [CREATE ADDRESS ERROR]: $e');
+      debugPrint('❌ [UPSERT ADDRESS ERROR]: $e');
       rethrow;
     }
   }

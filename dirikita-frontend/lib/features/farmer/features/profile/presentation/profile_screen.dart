@@ -1,12 +1,9 @@
-import 'dart:io';
-
+import 'package:duruha/core/helpers/duruha_color_helper.dart';
 import 'package:duruha/core/helpers/duruha_formatter.dart';
-import 'package:duruha/core/services/session_service.dart';
 import 'package:duruha/core/widgets/duruha_widgets.dart';
+import 'package:duruha/core/widgets/duruha_user_profile.dart';
 import 'package:duruha/features/farmer/features/profile/domain/profile_model.dart';
-import 'package:duruha/shared/user/presentation/faq_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:duruha/features/farmer/shared/presentation/widgets/navigation.dart';
 import 'package:duruha/features/farmer/features/profile/data/profile_repository.dart';
@@ -34,8 +31,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
   }
 
   Future<FarmerProfile> _loadProfile() async {
-    final userId = await SessionService.getUserId();
-    return _repo.getFarmerProfile(userId!);
+    return _repo.getFarmerProfile();
   }
 
   void _refresh() {
@@ -146,9 +142,21 @@ class _ProfileBody extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Avatar + camera button
-                    _AvatarWithCamera(
-                      profile: profile,
-                      onTap: () => _pickAndUploadImage(context, profile),
+                    DuruhaUserProfile(
+                      imageUrl: profile.imageUrl,
+                      userName: profile.name,
+                      radius: 44.0,
+                      allowUpload: true,
+                      bucketName: 'avatars',
+                      onImageUploaded: (url) {
+                        onImageUpdated(profile.copyWith(imageUrl: url));
+                        // No need to manually call repo.updateProfile here
+                        // as the parent usually handles the state update,
+                        // but we should probably ensure it's saved.
+                        // In ConsumerProfileScreen we saved it immediately.
+                        // Let's do the same here to be sure.
+                        repo.updateProfile(profile.copyWith(imageUrl: url));
+                      },
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -173,8 +181,14 @@ class _ProfileBody extends StatelessWidget {
                           _RoleBadge(
                             label: 'Farmer',
                             icon: Icons.agriculture_rounded,
-                            color: scheme.onTertiary,
-                            onColor: scheme.tertiary,
+                            color: DuruhaColorHelper.getColor(
+                              context,
+                              'farmer',
+                            ),
+                            onColor: DuruhaColorHelper.getColor(
+                              context,
+                              'farmer',
+                            ),
                           ),
                         ],
                       ),
@@ -194,6 +208,13 @@ class _ProfileBody extends StatelessWidget {
                     icon: Icons.place_outlined,
                     text: profile.landmark!,
                     color: scheme.onSurfaceVariant,
+                  ),
+                if (profile.latitude != null && profile.longitude != null)
+                  _InfoRow(
+                    icon: Icons.gps_fixed_rounded,
+                    text:
+                        '${profile.latitude!.toStringAsFixed(5)}, ${profile.longitude!.toStringAsFixed(5)}',
+                    color: scheme.onSecondary.withValues(alpha: 0.5),
                   ),
                 _InfoRow(
                   icon: Icons.calendar_today_outlined,
@@ -223,7 +244,7 @@ class _ProfileBody extends StatelessWidget {
           const SizedBox(height: 20),
 
           // ── Menu Options ────────────────────────────────────────────────
-          DuruhaThemeToggleButton(),
+          const DuruhaThemeToggleButton(),
           _MenuOption(
             icon: Icons.person_outline_rounded,
             title: 'Edit Profile',
@@ -262,7 +283,7 @@ class _ProfileBody extends StatelessWidget {
             title: 'Help & Support',
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const FaqScreen()),
+              MaterialPageRoute(builder: (_) => const DuruhaChatScreen()),
             ),
           ),
 
@@ -278,105 +299,6 @@ class _ProfileBody extends StatelessWidget {
           const SizedBox(height: 48),
         ],
       ),
-    );
-  }
-
-  Future<void> _pickAndUploadImage(
-    BuildContext context,
-    FarmerProfile profile,
-  ) async {
-    final picker = ImagePicker();
-    try {
-      final source = await showModalBottomSheet<ImageSource>(
-        context: context,
-        builder: (_) => SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library_rounded),
-                title: const Text('Photo Library'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_rounded),
-                title: const Text('Camera'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (source == null) return;
-
-      final image = await picker.pickImage(source: source);
-      if (image == null || !context.mounted) return;
-
-      DuruhaSnackBar.showInfo(context, 'Uploading image…');
-      final url = await repo.uploadProfileImage(File(image.path));
-
-      if (!context.mounted) return;
-      onImageUpdated(profile.copyWith(imageUrl: url));
-      DuruhaSnackBar.showSuccess(context, 'Profile picture updated!');
-    } catch (e) {
-      if (context.mounted) {
-        DuruhaSnackBar.showError(context, 'Failed to upload image: $e');
-      }
-    }
-  }
-}
-
-// ─── Sub-Widgets ──────────────────────────────────────────────────────────────
-
-class _AvatarWithCamera extends StatelessWidget {
-  final FarmerProfile profile;
-  final VoidCallback onTap;
-
-  const _AvatarWithCamera({required this.profile, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final hasImage = profile.imageUrl != null && profile.imageUrl!.isNotEmpty;
-
-    return Stack(
-      children: [
-        CircleAvatar(
-          radius: 44,
-          backgroundColor: scheme.primaryContainer,
-          backgroundImage: hasImage ? NetworkImage(profile.imageUrl!) : null,
-          child: !hasImage
-              ? Text(
-                  profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '?',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: scheme.onPrimaryContainer,
-                  ),
-                )
-              : null,
-        ),
-        Positioned(
-          bottom: 0,
-          right: 0,
-          child: DuruhaInkwell(
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: scheme.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: scheme.surface, width: 2),
-              ),
-              child: Icon(
-                Icons.camera_alt_rounded,
-                size: 14,
-                color: scheme.onPrimary,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -607,6 +529,7 @@ class _FarmOverview extends StatelessWidget {
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
+          padding: EdgeInsets.zero,
           physics: const NeverScrollableScrollPhysics(),
           childAspectRatio: 2.8,
           mainAxisSpacing: 8,

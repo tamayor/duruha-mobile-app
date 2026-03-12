@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:duruha/shared/produce/domain/produce_model.dart';
 import 'package:duruha/shared/user/domain/user_models.dart';
 
@@ -12,7 +10,9 @@ class FarmerProfile extends UserProfile {
     required super.phone,
     required super.city,
     required super.landmark,
-    required super.province,
+    super.province,
+    super.region,
+    super.country,
     required super.postalCode,
     super.imageUrl,
     super.latitude,
@@ -56,7 +56,9 @@ class FarmerProfile extends UserProfile {
       phone: user.phone,
       city: user.city,
       province: user.province,
+      region: user.region,
       postalCode: user.postalCode,
+      country: user.country,
       landmark: user.landmark,
       imageUrl: user.imageUrl,
       latitude: user.latitude,
@@ -140,6 +142,7 @@ class FarmerProfile extends UserProfile {
     return json;
   }
 
+  @override
   FarmerProfile copyWith({
     String? id,
     String? joinedAt,
@@ -148,9 +151,12 @@ class FarmerProfile extends UserProfile {
     String? phone,
     String? city,
     String? province,
+    String? region,
     String? landmark,
     String? postalCode,
+    String? country,
     String? imageUrl,
+    UserRole? role,
     double? latitude,
     double? longitude,
     List<String>? dialect,
@@ -177,8 +183,10 @@ class FarmerProfile extends UserProfile {
       phone: phone ?? this.phone,
       city: city ?? this.city,
       province: province ?? this.province,
+      region: region ?? this.region,
       landmark: landmark ?? this.landmark,
       postalCode: postalCode ?? this.postalCode,
+      country: country ?? this.country,
       imageUrl: imageUrl ?? this.imageUrl,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
@@ -202,8 +210,7 @@ class FarmerProfile extends UserProfile {
 }
 
 abstract class FarmerProfileRepository {
-  Future<FarmerProfile> getFarmerProfile(String farmerId);
-  Future<String> uploadProfileImage(File file); // Returns the URL
+  Future<FarmerProfile> getFarmerProfile();
   Future<void> updateProfile(FarmerProfile profile);
-  Future<String?> deleteAddress(String userId, String addressId);
+  Future<String?> deleteAddress(String addressId);
 }

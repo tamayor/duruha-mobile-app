@@ -6,11 +6,11 @@ import 'package:duruha/features/consumer/features/profile/domain/profile_model.d
 /// Handles both GET and UPDATE operations for consumers.
 class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
   @override
-  Future<ConsumerProfile> getConsumerProfile(String userId) async {
+  Future<ConsumerProfile> getConsumerProfile() async {
     try {
       final response = await supabase.rpc(
         'manage_profile',
-        params: {'p_user_id': userId, 'p_mode': 'get'},
+        params: {'p_mode': 'get'},
       );
 
       return ConsumerProfile.fromJson(
@@ -22,19 +22,11 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
   }
 
   @override
-  Future<String> uploadProfileImage(File file) async {
-    // Mock implementation – replace with Supabase Storage upload
-    await Future.delayed(const Duration(seconds: 2));
-    return 'https://i.pravatar.cc/300?img=${DateTime.now().millisecond % 70}';
-  }
-
-  @override
-  Future<String?> deleteAddress(String userId, String addressId) async {
+  Future<String?> deleteAddress(String addressId) async {
     try {
       final response = await supabase.rpc(
         'manage_profile',
         params: {
-          'p_user_id': userId,
           'p_mode': 'delete_address',
           'p_data': {'address_id': addressId},
         },
@@ -58,6 +50,8 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
         'address_line_2': profile.addressLine2,
         'city': profile.city,
         'province': profile.province,
+        'region': profile.region,
+        'country': profile.country,
         'postal_code': profile.postalCode,
         'landmark': profile.landmark,
         'image_url': profile.imageUrl,
@@ -76,11 +70,7 @@ class ConsumerProfileRepositoryImpl implements ConsumerProfileRepository {
 
       await supabase.rpc(
         'manage_profile',
-        params: {
-          'p_user_id': profile.id,
-          'p_mode': 'update',
-          'p_data': payload,
-        },
+        params: {'p_mode': 'update', 'p_data': payload},
       );
     } catch (e) {
       throw Exception('Failed to update consumer profile: $e');

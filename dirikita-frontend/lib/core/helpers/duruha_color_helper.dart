@@ -122,9 +122,11 @@ class DuruhaColorHelper {
       // Market type
       case 'national':
       case 'hybrid':
+      case 'consumer':
         return isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
       case 'local':
       case 'native':
+      case 'farmer':
         return isDark ? const Color(0xFFA3E635) : const Color(0xFF4D7C0F);
 
       default:

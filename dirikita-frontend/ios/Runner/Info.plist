@@ -51,6 +51,13 @@
 	<string>This app needs access to location to improve logistics.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app needs access to location to improve logistics.</string>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
 	<key>CFBundleURLTypes</key>
 <array>
     <dict>

@@ -24,3 +24,5 @@ export 'duruha_wheel_picker.dart';
 export 'duruha_section_sliver.dart';
 export 'text/duruha_text_emphasis.dart';
 export 'duruha_grid_view.dart';
+export 'duruha_user_profile.dart';
+export 'duruha_chat_widget.dart';

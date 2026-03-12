@@ -342,36 +342,37 @@ class _ConsumerManageScreenState extends State<ConsumerManageScreen>
             ),
           ),
         ),
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            IconButton(
-              icon: Icon(_getCartIcon()),
-              onPressed: _togglePaymentMethodFilter,
-            ),
-            if (unpaidCount > 0)
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.error,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: BoxConstraints(minWidth: 16, minHeight: 16),
-                  child: Text(
-                    unpaidCount.toString(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onError,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+
+        GestureDetector(
+          onTap: _togglePaymentMethodFilter,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(_getCartIcon()),
+              if (unpaidCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.error,
+                      shape: BoxShape.circle,
                     ),
-                    textAlign: TextAlign.center,
+                    constraints: BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      unpaidCount.toString(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onError,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(width: 16),
       ],

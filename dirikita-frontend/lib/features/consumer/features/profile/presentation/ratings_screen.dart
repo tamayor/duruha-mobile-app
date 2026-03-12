@@ -20,7 +20,6 @@ class FarmerProfileRatingsScreen extends StatelessWidget {
 
     return FutureBuilder<List<dynamic>>(
       future: Future.wait([
-        FarmerProfileRepositoryImpl().getFarmerProfile('current_user'),
         PerformanceRepositoryImpl().getPerformanceStats('current_user'),
       ]),
       builder: (context, snapshot) {

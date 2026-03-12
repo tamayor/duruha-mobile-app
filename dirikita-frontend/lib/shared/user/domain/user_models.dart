@@ -11,8 +11,10 @@ class UserProfile {
   final String? addressLine2;
   final String? city;
   final String? province;
+  final String? region;
   final String? landmark;
   final String? postalCode;
+  final String? country;
   final String? imageUrl;
   final double? latitude;
   final double? longitude;
@@ -30,8 +32,10 @@ class UserProfile {
     this.addressLine2,
     this.city,
     this.province,
+    this.region,
     this.landmark,
     this.postalCode,
+    this.country,
     this.imageUrl,
     this.latitude,
     this.longitude,
@@ -39,6 +43,49 @@ class UserProfile {
     this.dialect = const [],
   });
 
+  UserProfile copyWith({
+    String? id,
+    String? joinedAt,
+    String? name,
+    String? email,
+    String? phone,
+    String? addressId,
+    String? addressLine1,
+    String? addressLine2,
+    String? city,
+    String? province,
+    String? region,
+    String? landmark,
+    String? postalCode,
+    String? country,
+    String? imageUrl,
+    double? latitude,
+    double? longitude,
+    UserRole? role,
+    List<String>? dialect,
+  }) {
+    return UserProfile(
+      id: id ?? this.id,
+      joinedAt: joinedAt ?? this.joinedAt,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      addressId: addressId ?? this.addressId,
+      addressLine1: addressLine1 ?? this.addressLine1,
+      addressLine2: addressLine2 ?? this.addressLine2,
+      city: city ?? this.city,
+      province: province ?? this.province,
+      region: region ?? this.region,
+      landmark: landmark ?? this.landmark,
+      postalCode: postalCode ?? this.postalCode,
+      country: country ?? this.country,
+      imageUrl: imageUrl ?? this.imageUrl,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      role: role ?? this.role,
+      dialect: dialect ?? this.dialect,
+    );
+  }
   bool get isFarmer => role == UserRole.farmer;
   bool get isConsumer => role == UserRole.consumer;
   bool get isAdmin => role == UserRole.admin;
@@ -56,8 +103,10 @@ class UserProfile {
       'address_line_2': addressLine2,
       'city': city,
       'province': province,
+      'region': region,
       'landmark': landmark,
       'postal_code': postalCode,
+      'country': country,
       'image_url': imageUrl,
       'location': latitude != null && longitude != null
           ? 'POINT($longitude $latitude)'
@@ -97,8 +146,10 @@ class UserProfile {
       addressLine2: json['address_line_2'] as String?,
       city: json['city'] as String? ?? '',
       province: json['province'] as String? ?? '',
+      region: json['region'] as String? ?? '',
       landmark: json['landmark'] as String? ?? '',
       postalCode: json['postal_code'] as String? ?? '',
+      country: json['country'] as String? ?? '',
       imageUrl: json['image_url'] as String?,
       latitude: lat,
       longitude: lng,
